@@ -1,0 +1,38 @@
+from pathlib import Path
+
+import pytest
+
+from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
+
+JAR_PATH = Path("./lib/symboleo-cli-1.0.0-all.jar")
+FIXTURES = Path("tests/fixtures")
+
+
+@pytest.fixture(scope="module")
+def wrapper() -> SymboleoWrapper:
+    return SymboleoWrapper(jar_path=JAR_PATH)
+
+
+@pytest.mark.skipif(not JAR_PATH.exists(), reason="JAR not present")
+def test_valid_contract_returns_no_errors(wrapper: SymboleoWrapper) -> None:
+    code = (FIXTURES / "valid.sl").read_text(encoding="utf-8")
+    issues = wrapper.validate(code)
+    assert issues == []
+
+
+@pytest.mark.skipif(not JAR_PATH.exists(), reason="JAR not present")
+def test_invalid_contract_returns_errors(wrapper: SymboleoWrapper) -> None:
+    code = (FIXTURES / "invalid.sl").read_text(encoding="utf-8")
+    issues = wrapper.validate(code)
+    assert len(issues) > 0
+
+
+@pytest.mark.skipif(not JAR_PATH.exists(), reason="JAR not present")
+def test_invalid_contract_error_has_expected_fields(wrapper: SymboleoWrapper) -> None:
+    code = (FIXTURES / "invalid.sl").read_text(encoding="utf-8")
+    issues = wrapper.validate(code)
+    issue = issues[0]
+    assert issue.severity in ("ERROR", "WARNING")
+    assert isinstance(issue.line, int)
+    assert isinstance(issue.column, int)
+    assert isinstance(issue.message, str) and len(issue.message) > 0

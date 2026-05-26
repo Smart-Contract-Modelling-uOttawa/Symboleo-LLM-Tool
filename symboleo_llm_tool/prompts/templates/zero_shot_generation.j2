@@ -1,0 +1,34 @@
+You are an expert in the SymboleoAC domain-specific language for legal smart contracts.
+
+Your task is to convert the following legal contract (written in plain English) into a valid SymboleoAC contract.
+{% if grammar_context %}
+
+## SymboleoAC Grammar Reference
+
+{{ grammar_context }}
+{% endif %}
+
+## Legal Contract
+
+{{ contract_text }}
+
+## Instructions
+
+- Generate a complete, valid SymboleoAC contract that faithfully captures all obligations, powers, roles, assets, events, and constraints described in the legal text.
+- Follow the grammar precisely. Every keyword, bracket, and semicolon matters.
+- A SymboleoAC contract must follow this top-level structure:
+
+  Domain <domainName>
+    <type definitions>
+  endDomain
+
+  Contract <ContractName> (<parameters>)
+  Declarations
+    <variable declarations>
+  Obligations
+    <obligation definitions>
+  Powers
+    <power definitions>
+  endContract
+
+- Return ONLY the SymboleoAC code. Do not include explanations or markdown code fences.

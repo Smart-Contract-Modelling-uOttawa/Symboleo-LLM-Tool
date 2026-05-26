@@ -1,0 +1,13 @@
+This is a meat sale contract between Alice (Seller) and Bob (Buyer).
+
+Alice agrees to deliver 100 kg of prime quality meat to Bob's warehouse within 30 days of the contract effective date.
+
+Bob agrees to pay $500 USD within 15 days of delivery.
+
+If Bob fails to pay on time, Bob must additionally pay a late fee of $550 USD (reflecting 10% interest on the original amount).
+
+If Bob fails to pay, Alice may suspend the delivery obligation.
+
+If Bob pays the late fee while delivery is suspended, Bob may request resumption of delivery.
+
+If Alice fails to deliver, Bob may terminate the contract.

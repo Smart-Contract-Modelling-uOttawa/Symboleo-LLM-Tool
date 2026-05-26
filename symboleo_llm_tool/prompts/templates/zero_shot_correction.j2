@@ -1,0 +1,25 @@
+You are an expert in the SymboleoAC domain-specific language for legal smart contracts.
+
+The following SymboleoAC contract contains syntax errors. Your task is to fix them.
+{% if grammar_context %}
+
+## SymboleoAC Grammar Reference
+
+{{ grammar_context }}
+{% endif %}
+
+## Current Contract (contains errors)
+
+{{ current_code }}
+
+## Errors to Fix
+
+{% for error in errors %}
+- Line {{ error.line }}, Column {{ error.column }}: {{ error.message }}
+{% endfor %}
+
+## Instructions
+
+- Fix all listed syntax errors.
+- Do not change the contract logic — only correct the syntax.
+- Return ONLY the corrected SymboleoAC code. Do not include explanations or markdown code fences.
