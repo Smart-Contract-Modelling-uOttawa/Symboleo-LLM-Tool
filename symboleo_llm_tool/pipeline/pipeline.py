@@ -3,7 +3,8 @@ from importlib import resources
 
 import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
 from symboleo_llm_tool.config.models import PipelineConfig
-from symboleo_llm_tool.llm.litellm_adapter import LiteLLMAdapter
+from symboleo_llm_tool.llm.base import LLMAdapter
+from symboleo_llm_tool.llm.factory import create_adapter
 from symboleo_llm_tool.output.models import CandidateResult, IterationRecord, PipelineResult
 from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
@@ -13,8 +14,8 @@ from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
 def run(contract_text: str, config: PipelineConfig, input_file: str = "") -> PipelineResult:
     wrapper = SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable)
-    gen_llm = LiteLLMAdapter(config.generation.llm)
-    corr_llm = LiteLLMAdapter(config.correction.llm)
+    gen_llm = create_adapter(config.generation.llm)
+    corr_llm = create_adapter(config.correction.llm)
     gen_strategy = get_strategy(config.generation.strategy, config.generation.strategy_params)
     corr_strategy = get_strategy(config.correction.strategy, config.correction.strategy_params)
 
@@ -50,8 +51,8 @@ def _run_candidate(
     contract_text: str,
     config: PipelineConfig,
     wrapper: SymboleoWrapper,
-    gen_llm: LiteLLMAdapter,
-    corr_llm: LiteLLMAdapter,
+    gen_llm: LLMAdapter,
+    corr_llm: LLMAdapter,
     gen_strategy: PromptStrategy,
     corr_strategy: PromptStrategy,
     grammar_context: str | None,

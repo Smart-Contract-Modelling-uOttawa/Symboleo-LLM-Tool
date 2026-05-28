@@ -1,0 +1,27 @@
+# TEMPORARY — for manual testing without an API key.
+# To remove: delete this file, mock_adapter.py, and the "mock" branch in factory.py.
+
+pipeline:
+  num_candidates: 1
+  max_iterations: 5
+  stop_on_first_convergence: false
+
+generation:
+  llm:
+    provider: mock
+    model: mock
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: false
+
+correction:
+  llm:
+    provider: mock
+    model: mock
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: false
+
+output:
+  directory: ./output
+  save_intermediates: true

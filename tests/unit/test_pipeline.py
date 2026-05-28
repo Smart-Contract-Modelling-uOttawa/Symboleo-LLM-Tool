@@ -32,7 +32,7 @@ def mock_deps(tmp_path):
     with (
         patch("shutil.which", return_value="/usr/bin/java"),
         patch("symboleo_llm_tool.pipeline.pipeline.SymboleoWrapper") as mock_wrapper_cls,
-        patch("symboleo_llm_tool.pipeline.pipeline.LiteLLMAdapter") as mock_llm_cls,
+        patch("symboleo_llm_tool.pipeline.pipeline.create_adapter") as mock_llm_cls,
         patch("symboleo_llm_tool.pipeline.pipeline.get_strategy") as mock_get_strategy,
         patch("symboleo_llm_tool.pipeline.pipeline._load_grammar", return_value=""),
     ):
