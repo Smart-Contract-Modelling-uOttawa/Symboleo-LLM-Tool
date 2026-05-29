@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 from dotenv import load_dotenv
@@ -15,25 +16,41 @@ app = typer.Typer(help="LLM-assisted SymboleoAC contract generation and correcti
 console = Console()
 
 
+def _fatal(message: str) -> NoReturn:
+    console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(1)
+
+
 @app.command()
 def run(
     input_file: Path = typer.Argument(..., help="Path to the .txt legal contract"),
     config_file: Path = typer.Option(..., "--config", "-c", help="Path to YAML config file"),
 ) -> None:
     if not input_file.exists():
-        console.print(f"[red]Error:[/red] Input file not found: {input_file}")
-        raise typer.Exit(1)
+        _fatal(f"Input file not found: {input_file}")
     if not config_file.exists():
-        console.print(f"[red]Error:[/red] Config file not found: {config_file}")
-        raise typer.Exit(1)
+        _fatal(f"Config file not found: {config_file}")
 
-    config = load_config(config_file)
-    contract_text = input_file.read_text(encoding="utf-8")
+    try:
+        config = load_config(config_file)
+    except Exception as e:
+        _fatal(f"Config error: {e}")
 
-    with console.status("[bold green]Running pipeline...[/bold green]"):
-        result = pipeline.run(contract_text, config, str(input_file))
+    try:
+        contract_text = input_file.read_text(encoding="utf-8")
+    except Exception as e:
+        _fatal(f"Could not read input file: {e}")
 
-    run_dir = write_results(result, config, config_file)
+    try:
+        with console.status("[bold green]Running pipeline...[/bold green]"):
+            result = pipeline.run(contract_text, config, str(input_file))
+    except Exception as e:
+        _fatal(str(e))
+
+    try:
+        run_dir = write_results(result, config, config_file)
+    except Exception as e:
+        _fatal(f"Could not write results: {e}")
 
     status = "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
     console.print(f"\n[bold]Result:[/bold] {status}")

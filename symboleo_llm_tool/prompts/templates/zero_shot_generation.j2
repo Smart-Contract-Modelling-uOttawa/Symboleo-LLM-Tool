@@ -1,13 +1,6 @@
-You are an expert in the SymboleoAC domain-specific language for legal smart contracts.
-
+{% include '_system_header.j2' %}
 Your task is to convert the following legal contract (written in plain English) into a valid SymboleoAC contract.
-{% if grammar_context %}
-
-## SymboleoAC Grammar Reference
-
-{{ grammar_context }}
-{% endif %}
-
+{% include '_grammar_section.j2' %}
 ## Legal Contract
 
 {{ contract_text }}

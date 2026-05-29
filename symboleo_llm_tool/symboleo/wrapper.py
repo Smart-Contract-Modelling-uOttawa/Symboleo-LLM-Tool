@@ -45,6 +45,11 @@ class SymboleoWrapper:
             raise RuntimeError(f"SymboleoAC CLI error: {result.stderr.strip()}")
 
         stdout = result.stdout.strip()
+        if result.returncode == 1 and not stdout:
+            raise RuntimeError(
+                f"SymboleoAC CLI exited with errors but produced no output. "
+                f"stderr: {result.stderr.strip()}"
+            )
         if not stdout:
             return []
 

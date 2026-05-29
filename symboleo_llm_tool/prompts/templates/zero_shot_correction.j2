@@ -1,13 +1,6 @@
-You are an expert in the SymboleoAC domain-specific language for legal smart contracts.
-
+{% include '_system_header.j2' %}
 The following SymboleoAC contract contains syntax errors. Your task is to fix them.
-{% if grammar_context %}
-
-## SymboleoAC Grammar Reference
-
-{{ grammar_context }}
-{% endif %}
-
+{% include '_grammar_section.j2' %}
 ## Current Contract (contains errors)
 
 {{ current_code }}

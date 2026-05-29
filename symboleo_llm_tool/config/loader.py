@@ -6,6 +6,7 @@ from symboleo_llm_tool.config.models import PipelineConfig
 
 
 def load_config(path: Path) -> PipelineConfig:
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Config file must be a YAML mapping.")
     return PipelineConfig(**data)
