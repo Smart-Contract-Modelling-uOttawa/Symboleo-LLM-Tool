@@ -1,5 +1,6 @@
 # TEMPORARY — mock LLM for manual testing without an API key.
-# To remove: delete this file, remove the "mock" branch in factory.py, and delete configs/mock.yaml.
+# To remove: delete this file, remove the "mock" branch in factory.py,
+# and delete configs/mock.yaml.
 from pathlib import Path
 
 from symboleo_llm_tool.config.models import LLMConfig

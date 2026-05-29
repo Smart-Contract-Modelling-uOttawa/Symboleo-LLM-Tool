@@ -5,21 +5,35 @@ import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy 
 from symboleo_llm_tool.config.models import PipelineConfig
 from symboleo_llm_tool.llm.base import LLMAdapter
 from symboleo_llm_tool.llm.factory import create_adapter
-from symboleo_llm_tool.output.models import CandidateResult, IterationRecord, PipelineResult
+from symboleo_llm_tool.output.models import (
+    CandidateResult,
+    IterationRecord,
+    PipelineResult,
+)
 from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.registry import get_strategy
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
 
-def run(contract_text: str, config: PipelineConfig, input_file: str = "") -> PipelineResult:
+def run(
+    contract_text: str, config: PipelineConfig, input_file: str = ""
+) -> PipelineResult:
     wrapper = SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable)
     gen_llm = create_adapter(config.generation.llm)
     corr_llm = create_adapter(config.correction.llm)
-    gen_strategy = get_strategy(config.generation.strategy, config.generation.strategy_params)
-    corr_strategy = get_strategy(config.correction.strategy, config.correction.strategy_params)
+    gen_strategy = get_strategy(
+        config.generation.strategy, config.generation.strategy_params
+    )
+    corr_strategy = get_strategy(
+        config.correction.strategy, config.correction.strategy_params
+    )
 
-    grammar_context = _load_grammar() if (config.generation.include_grammar or config.correction.include_grammar) else None
+    grammar_context = (
+        _load_grammar()
+        if (config.generation.include_grammar or config.correction.include_grammar)
+        else None
+    )
 
     candidates: list[CandidateResult] = []
     for i in range(config.pipeline.num_candidates):
@@ -61,7 +75,8 @@ def _run_candidate(
         contract_text=contract_text,
         grammar_context=grammar_context if config.generation.include_grammar else None,
     )
-    code = _clean_response(gen_llm.generate(gen_strategy.build_generation_prompt(gen_context)))
+    prompt = gen_strategy.build_generation_prompt(gen_context)
+    code = _clean_response(gen_llm.generate(prompt))
 
     errors = wrapper.validate(code)
     error_history = [IterationRecord(iteration=0, code=code, errors=errors)]
@@ -72,12 +87,17 @@ def _run_candidate(
         corr_context = PromptContext(
             current_code=code,
             errors=errors,
-            grammar_context=grammar_context if config.correction.include_grammar else None,
+            grammar_context=(
+                grammar_context if config.correction.include_grammar else None
+            ),
             history=error_history,
         )
-        code = _clean_response(corr_llm.generate(corr_strategy.build_correction_prompt(corr_context)))
+        prompt = corr_strategy.build_correction_prompt(corr_context)
+        code = _clean_response(corr_llm.generate(prompt))
         errors = wrapper.validate(code)
-        error_history.append(IterationRecord(iteration=iteration, code=code, errors=errors))
+        error_history.append(
+            IterationRecord(iteration=iteration, code=code, errors=errors)
+        )
 
     return CandidateResult(
         candidate_id=candidate_id,
@@ -102,7 +122,9 @@ def _clean_response(response: str) -> str:
 
 def _load_grammar() -> str:
     try:
-        grammar_file = resources.files("symboleo_llm_tool.resources").joinpath("Symboleo.xtext")
+        grammar_file = resources.files("symboleo_llm_tool.resources").joinpath(
+            "Symboleo.xtext"
+        )
         return grammar_file.read_text(encoding="utf-8")
     except Exception:
         return ""

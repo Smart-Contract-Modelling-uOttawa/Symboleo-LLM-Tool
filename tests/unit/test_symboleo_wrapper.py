@@ -34,7 +34,15 @@ def test_validate_returns_issues_when_errors_present(wrapper: SymboleoWrapper) -
     payload = {
         "summary": {"total": 1, "warnings": 0, "errors": 1},
         "issues": [
-            {"severity": "ERROR", "code": None, "offset": 10, "line": 2, "column": 5, "length": 3, "message": "missing ';'"}
+            {
+                "severity": "ERROR",
+                "code": None,
+                "offset": 10,
+                "line": 2,
+                "column": 5,
+                "length": 3,
+                "message": "missing ';'",
+            }
         ],
     }
     with patch("subprocess.run", return_value=_mock_result(1, payload)):

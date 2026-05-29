@@ -24,7 +24,9 @@ def _fatal(message: str) -> NoReturn:
 @app.command()
 def run(
     input_file: Path = typer.Argument(..., help="Path to the .txt legal contract"),
-    config_file: Path = typer.Option(..., "--config", "-c", help="Path to YAML config file"),
+    config_file: Path = typer.Option(
+        ..., "--config", "-c", help="Path to YAML config file"
+    ),
 ) -> None:
     if not input_file.exists():
         _fatal(f"Input file not found: {input_file}")
@@ -52,7 +54,9 @@ def run(
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 
-    status = "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
+    status = (
+        "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
+    )
     console.print(f"\n[bold]Result:[/bold] {status}")
 
     table = Table(show_header=True, header_style="bold")

@@ -2,7 +2,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, RunConfig, StageConfig
+from symboleo_llm_tool.config.models import (
+    LLMConfig,
+    PipelineConfig,
+    RunConfig,
+    StageConfig,
+)
 from symboleo_llm_tool.pipeline import pipeline
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
@@ -21,7 +26,13 @@ def _make_config(**pipeline_kwargs: object) -> PipelineConfig:
 
 def _make_error() -> SymboleoIssue:
     return SymboleoIssue(
-        severity="ERROR", code=None, offset=0, line=1, column=1, length=1, message="syntax error"
+        severity="ERROR",
+        code=None,
+        offset=0,
+        line=1,
+        column=1,
+        length=1,
+        message="syntax error",
     )
 
 
@@ -31,7 +42,9 @@ def mock_deps(tmp_path):
     jar.touch()
     with (
         patch("shutil.which", return_value="/usr/bin/java"),
-        patch("symboleo_llm_tool.pipeline.pipeline.SymboleoWrapper") as mock_wrapper_cls,
+        patch(
+            "symboleo_llm_tool.pipeline.pipeline.SymboleoWrapper"
+        ) as mock_wrapper_cls,
         patch("symboleo_llm_tool.pipeline.pipeline.create_adapter") as mock_llm_cls,
         patch("symboleo_llm_tool.pipeline.pipeline.get_strategy") as mock_get_strategy,
         patch("symboleo_llm_tool.pipeline.pipeline._load_grammar", return_value=""),

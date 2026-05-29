@@ -16,7 +16,9 @@ _TEMPLATE_NAMES = [
 
 def _build_env() -> Environment:
     pkg = resources.files("symboleo_llm_tool.prompts.templates")
-    templates = {n: pkg.joinpath(n).read_text(encoding="utf-8") for n in _TEMPLATE_NAMES}
+    templates = {
+        n: pkg.joinpath(n).read_text(encoding="utf-8") for n in _TEMPLATE_NAMES
+    }
     return Environment(loader=DictLoader(templates))
 
 
