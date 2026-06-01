@@ -97,6 +97,13 @@ def run(
     console.print(table)
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
+    if config.observability.langsmith.enabled:
+        try:
+            from langsmith import Client
+            Client().flush()
+        except Exception:
+            pass
+
 
 def main() -> None:
     app()

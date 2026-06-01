@@ -33,5 +33,5 @@ output:
 
 observability:
   langsmith:
-    enabled: false
+    enabled: true
     project: symboleo-research

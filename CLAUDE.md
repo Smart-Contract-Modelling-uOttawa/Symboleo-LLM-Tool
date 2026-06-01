@@ -127,7 +127,9 @@ Input .txt
 ## Known Issues / Future Flags
 
 ### Privacy — LangSmith
-LangSmith sends prompt data (including contract text) to third-party servers. Currently acceptable because contracts are synthetic/fake for research. **Must be removed or replaced (e.g., MLflow, local logging) before use with real legal contracts.**
+LangSmith sends prompt data (including contract text) to LangChain's servers. Currently acceptable because contracts are synthetic/fake for research. **Must be migrated to self-hosted LangFuse before use with real legal contracts.**
+
+LangFuse is the planned replacement: open source, Docker-based, near-identical feature set to LangSmith, and LiteLLM has native integration — the migration is a config change, not a code change.
 
 ### Grammar Context Size
 The full Xtext grammar may push against LLM context window limits or significantly increase token costs across many iterations. Starting point is full grammar injection; selective/relevant excerpt injection is a future optimization.
