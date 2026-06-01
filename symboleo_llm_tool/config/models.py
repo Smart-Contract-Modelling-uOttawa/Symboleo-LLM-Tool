@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -13,7 +14,7 @@ class LLMConfig(BaseModel):
 class StageConfig(BaseModel):
     llm: LLMConfig
     strategy: str
-    strategy_params: dict = Field(default_factory=dict)
+    strategy_params: dict[str, Any] = Field(default_factory=dict)
     include_grammar: bool = True
 
 

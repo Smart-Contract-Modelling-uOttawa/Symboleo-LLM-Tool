@@ -101,6 +101,9 @@ output/run_20260601_143022/
 ## Development
 
 ```bash
+# Install with dev dependencies
+uv sync --extra dev
+
 # Run tests
 uv run pytest
 
@@ -108,5 +111,5 @@ uv run pytest
 uv run ruff check .
 
 # Type check
-uv run mypy .
+uv run mypy symboleo_llm_tool
 ```

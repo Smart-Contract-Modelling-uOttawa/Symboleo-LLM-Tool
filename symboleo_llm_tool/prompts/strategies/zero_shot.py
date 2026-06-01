@@ -1,4 +1,5 @@
 from importlib import resources
+from typing import Any
 
 from jinja2 import DictLoader, Environment
 
@@ -27,7 +28,7 @@ _env = _build_env()
 
 @registry.register("zero_shot")
 class ZeroShotStrategy(PromptStrategy):
-    def __init__(self, params: dict) -> None:
+    def __init__(self, params: dict[str, Any]) -> None:
         super().__init__(params)
         self._generation_template = _env.get_template("zero_shot_generation.j2")
         self._correction_template = _env.get_template("zero_shot_correction.j2")

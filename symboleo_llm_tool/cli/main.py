@@ -9,6 +9,7 @@ from rich.table import Table
 from symboleo_llm_tool.config.loader import load_config
 from symboleo_llm_tool.output.writer import write_results
 from symboleo_llm_tool.pipeline import pipeline
+from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 load_dotenv()
 
@@ -46,7 +47,7 @@ def run(
     num_candidates = config.pipeline.num_candidates
     max_iterations = config.pipeline.max_iterations
 
-    def _progress(candidate_id: int, iteration: int, errors: list) -> None:
+    def _progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
         prefix = (
             f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] "
             if num_candidates > 1
