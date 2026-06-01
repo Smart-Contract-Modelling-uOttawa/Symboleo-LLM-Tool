@@ -1,0 +1,8 @@
+services:
+  symboleo-tool:
+    build: .
+    env_file: .env
+    volumes:
+      - ./contracts:/app/contracts:ro
+      - ./configs:/app/configs:ro
+      - ./output:/app/output
