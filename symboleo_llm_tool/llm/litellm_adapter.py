@@ -1,4 +1,5 @@
 import litellm
+from langsmith import traceable
 
 from symboleo_llm_tool.config.models import LLMConfig
 from symboleo_llm_tool.llm.base import LLMAdapter
@@ -8,6 +9,7 @@ class LiteLLMAdapter(LLMAdapter):
     def __init__(self, config: LLMConfig) -> None:
         self._config = config
 
+    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
         response = litellm.completion(
             model=f"{self._config.provider}/{self._config.model}",

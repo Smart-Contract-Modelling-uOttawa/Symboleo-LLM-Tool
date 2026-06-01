@@ -5,8 +5,8 @@ pipeline:
 
 generation:
   llm:
-    provider: anthropic
-    model: claude-sonnet-4-6
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.7
     max_tokens: 4096
   strategy: zero_shot
@@ -15,8 +15,8 @@ generation:
 
 correction:
   llm:
-    provider: anthropic
-    model: claude-sonnet-4-6
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.3
     max_tokens: 4096
   strategy: zero_shot
@@ -29,9 +29,9 @@ symboleo:
 
 output:
   directory: ./output
-  save_intermediates: false
+  save_intermediates: true
 
 observability:
   langsmith:
-    enabled: false
+    enabled: true
     project: symboleo-research
