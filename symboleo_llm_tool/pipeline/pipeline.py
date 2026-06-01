@@ -140,5 +140,8 @@ def _load_grammar() -> str:
             "Symboleo.xtext"
         )
         return grammar_file.read_text(encoding="utf-8")
-    except Exception:
-        return ""
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load Symboleo grammar resource: {e}. "
+            "Ensure Symboleo.xtext is present in symboleo_llm_tool/resources/."
+        ) from e

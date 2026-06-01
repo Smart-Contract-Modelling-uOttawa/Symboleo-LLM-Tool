@@ -33,7 +33,7 @@ uv sync
 
 # 3. Configure API keys
 cp .env.example .env
-# Edit .env and fill in your API key
+# Edit .env and fill in your keys (LLM provider + LangSmith if needed)
 ```
 
 ## Usage

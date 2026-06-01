@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import NoReturn
 
@@ -72,6 +73,10 @@ def run(
         console.print(
             _format_progress(candidate_id, iteration, errors, num_candidates, max_iterations)
         )
+
+    if config.observability.langsmith.enabled:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGSMITH_PROJECT"] = config.observability.langsmith.project
 
     console.print("[bold green]Running pipeline...[/bold green]")
     try:
