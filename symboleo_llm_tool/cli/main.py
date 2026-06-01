@@ -43,9 +43,32 @@ def run(
     except Exception as e:
         _fatal(f"Could not read input file: {e}")
 
+    num_candidates = config.pipeline.num_candidates
+    max_iterations = config.pipeline.max_iterations
+
+    def _progress(candidate_id: int, iteration: int, errors: list) -> None:
+        prefix = (
+            f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] "
+            if num_candidates > 1
+            else ""
+        )
+        if iteration == 0:
+            console.print(f"  {prefix}Generated — {len(errors)} error(s)")
+        elif errors:
+            console.print(
+                f"  {prefix}Correction {iteration}/{max_iterations}"
+                f" — {len(errors)} error(s) remaining"
+            )
+        else:
+            console.print(
+                f"  {prefix}Correction {iteration}/{max_iterations} — converged"
+            )
+
+    console.print("[bold green]Running pipeline...[/bold green]")
     try:
-        with console.status("[bold green]Running pipeline...[/bold green]"):
-            result = pipeline.run(contract_text, config, str(input_file))
+        result = pipeline.run(
+            contract_text, config, str(input_file), on_progress=_progress
+        )
     except Exception as e:
         _fatal(str(e))
 
@@ -66,7 +89,7 @@ def run(
 
     for c in result.candidates:
         table.add_row(
-            str(c.candidate_id),
+            str(c.candidate_id + 1),
             "[green]Yes[/green]" if c.converged else "[red]No[/red]",
             str(c.iterations_used),
         )

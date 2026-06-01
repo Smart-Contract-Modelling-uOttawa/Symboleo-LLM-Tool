@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime
 from importlib import resources
 
@@ -13,11 +14,17 @@ from symboleo_llm_tool.output.models import (
 from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.registry import get_strategy
+from symboleo_llm_tool.symboleo.models import SymboleoIssue
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
+
+ProgressCallback = Callable[[int, int, list[SymboleoIssue]], None]
 
 
 def run(
-    contract_text: str, config: PipelineConfig, input_file: str = ""
+    contract_text: str,
+    config: PipelineConfig,
+    input_file: str = "",
+    on_progress: ProgressCallback | None = None,
 ) -> PipelineResult:
     wrapper = SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable)
     gen_llm = create_adapter(config.generation.llm)
@@ -47,6 +54,7 @@ def run(
             gen_strategy=gen_strategy,
             corr_strategy=corr_strategy,
             grammar_context=grammar_context,
+            on_progress=on_progress,
         )
         candidates.append(candidate)
         if config.pipeline.stop_on_first_convergence and candidate.converged:
@@ -70,6 +78,7 @@ def _run_candidate(
     gen_strategy: PromptStrategy,
     corr_strategy: PromptStrategy,
     grammar_context: str | None,
+    on_progress: ProgressCallback | None = None,
 ) -> CandidateResult:
     gen_context = PromptContext(
         contract_text=contract_text,
@@ -80,6 +89,8 @@ def _run_candidate(
 
     errors = wrapper.validate(code)
     error_history = [IterationRecord(iteration=0, code=code, errors=errors)]
+    if on_progress:
+        on_progress(candidate_id, 0, errors)
 
     for iteration in range(1, config.pipeline.max_iterations + 1):
         if not errors:
@@ -98,6 +109,8 @@ def _run_candidate(
         error_history.append(
             IterationRecord(iteration=iteration, code=code, errors=errors)
         )
+        if on_progress:
+            on_progress(candidate_id, iteration, errors)
 
     return CandidateResult(
         candidate_id=candidate_id,

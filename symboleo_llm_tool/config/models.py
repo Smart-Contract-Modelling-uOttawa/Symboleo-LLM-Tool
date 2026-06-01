@@ -24,7 +24,7 @@ class RunConfig(BaseModel):
 
 
 class SymboleoConfig(BaseModel):
-    jar_path: Path = Path("./lib/symboleo-cli-1.0.0-all.jar")
+    jar_path: Path = Path("./lib/symboleo-cli.jar")
     java_executable: str = "java"
 
 

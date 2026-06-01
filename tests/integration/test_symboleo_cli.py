@@ -4,7 +4,7 @@ import pytest
 
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
-JAR_PATH = Path("./lib/symboleo-cli-1.0.0-all.jar")
+JAR_PATH = Path("./lib/symboleo-cli.jar")
 FIXTURES = Path("tests/fixtures")
 
 
