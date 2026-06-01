@@ -34,14 +34,15 @@ A Python CLI tool that:
 ### Module Structure
 
 ```
-symboleo_tool/
+symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext dataclass
 ├── symboleo/       # Subprocess wrapper around the SymboleoAC headless CLI JAR
 ├── config/         # Pydantic config models + YAML loader
-└── output/         # PipelineResult, CandidateResult, IterationRecord models
+├── output/         # PipelineResult, CandidateResult, IterationRecord models
+└── resources/      # Bundled assets: Symboleo.xtext grammar file
 ```
 
 ### Pipeline Flow
@@ -108,7 +109,8 @@ Input .txt
 
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 11+ as a system prerequisite. Check for Java at startup and fail with a clear, actionable error message.
-- **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates Java prerequisite for end users
+- **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates Java prerequisite for end users. `Dockerfile` and `docker-compose.yml` are in the project root.
+- **JAR naming convention:** The JAR is stored as `lib/symboleo-cli.jar` (no version in the filename). When updating the JAR, replace the file in place — the version lives in the file content and git history, not the filename. This keeps the default `jar_path` in `SymboleoConfig` stable across releases.
 
 ### Testing Strategy
 - **Unit tests:** Mock both LLM adapter and CLI subprocess wrapper. Focus on pipeline loop logic (iteration bounds, early stopping, error passing).
@@ -130,20 +132,11 @@ LangSmith sends prompt data (including contract text) to third-party servers. Cu
 ### Grammar Context Size
 The full Xtext grammar may push against LLM context window limits or significantly increase token costs across many iterations. Starting point is full grammar injection; selective/relevant excerpt injection is a future optimization.
 
-### Strategy Registry
-How `strategy: "basic"` in config maps to a `BasicStrategy()` instance needs a clean registration mechanism — even a simple decorator — so adding new strategies stays purely additive without touching a central list.
-
 ### Malformed LLM Responses
-The LLM may return markdown code blocks, explanations, or partial output instead of valid Symboleo. The JAR may crash rather than return structured errors in extreme cases. The pipeline needs a pre-validation/cleaning step before passing LLM output to the CLI wrapper.
-
-### JAR Error Output Format
-The exact stdout/stderr format of the SymboleoAC headless CLI is unknown until inspected. The entire correction loop depends on reliable error parsing — **investigate this first before building the subprocess wrapper.**
+The LLM may return markdown code blocks, explanations, or partial output instead of valid Symboleo. `_clean_response()` in `pipeline.py` handles markdown code fences, but more exotic malformed output (partial contracts, explanatory prose, mixed content) is not yet handled. A more robust pre-validation step may be needed as strategies are developed.
 
 ### CLI `--set` Override
 Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred until core pipeline is stable.**
-
-### Headless CLI Export Format — VERIFY BEFORE FINALIZING WRAPPER
-User believes the SymboleoAC CLI was exported as a self-contained fat JAR (not a full headless Eclipse product). This must be confirmed — a headless Eclipse product requires significantly more complex invocation and packaging. **Verify before implementing the `symboleo/` wrapper.**
 
 ---
 
@@ -156,6 +149,6 @@ If a frontend becomes a firm requirement, Option B can be added on top of Option
 1. **Add `api/` directory** — FastAPI routes that accept a file upload + config JSON body and call the same `pipeline.run()` the CLI calls. The core is untouched.
 2. **Wrap the sync pipeline for async** — the pipeline involves subprocess and LLM calls; wrap in `asyncio.run_in_executor` at the API layer (~5 lines, no core changes).
 3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI. No backend changes required.
-4. **Switch to Docker Compose** — bundles JRE, JAR, Python app, and optional frontend. CLI still works natively outside Docker.
+4. **Extend Docker Compose** — `docker-compose.yml` already exists for the CLI. Adding the API service means adding a second entry under `services:` and exposing a port. The CLI service is unchanged.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
