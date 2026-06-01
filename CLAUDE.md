@@ -38,7 +38,7 @@ symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
-├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext dataclass
+├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
 ├── symboleo/       # Subprocess wrapper around the SymboleoAC headless CLI JAR
 ├── config/         # Pydantic config models + YAML loader
 ├── output/         # PipelineResult, CandidateResult, IterationRecord models
@@ -93,6 +93,7 @@ Input .txt
 ### Output Format
 - Timestamped run directories (e.g., `output/run_20260526_143022/`) — prevents experiment overwrites
 - Each run directory contains: `report.json`, `config.yaml` (copy), `contract_final.sl`, optionally `intermediates/`
+- Multi-candidate runs use a `_candidate_N` suffix consistently: `contract_candidate_0_final.sl`, `intermediates_candidate_0/`
 - `report.json` captures: success, iterations per candidate, full error history per iteration
 - Console prints a human-readable summary; full detail is in `report.json`
 
@@ -120,7 +121,9 @@ Input .txt
 
 ### Observability
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default
-- Integrated at the `LLMAdapter` base class level so all adapters get tracing automatically
+- Tracing applied conditionally at adapter construction time — `tracing_enabled` flows from `pipeline.run()` → `create_adapter()` → `LiteLLMAdapter.__init__()`. Only `LiteLLMAdapter` is traced; mock adapter is not.
+- `observability.langsmith.project` controls the LangSmith project — the CLI sets `LANGSMITH_PROJECT` and `LANGCHAIN_TRACING_V2` env vars from config at runtime. `.env` only needs `LANGSMITH_API_KEY`.
+- **Data model consistency rule:** data passed between layers uses Pydantic `BaseModel`; internal service-object bundles (e.g., `_RunContext` in `pipeline.py`) use `@dataclass(frozen=True)`.
 
 ---
 

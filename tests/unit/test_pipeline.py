@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -124,3 +124,39 @@ def test_all_candidates_run_when_stop_on_first_convergence_false(mock_deps):
     )
 
     assert len(result.candidates) == 3
+
+
+def test_on_progress_called_after_generation(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = "valid"
+    mock_wrapper.validate.return_value = []
+
+    progress = MagicMock()
+    pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
+
+    progress.assert_called_once_with(0, 0, [])
+
+
+def test_on_progress_called_after_each_correction(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = "invalid"
+    error = _make_error()
+    mock_wrapper.validate.side_effect = [[error], [error], []]
+
+    progress = MagicMock()
+    pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
+
+    assert progress.call_args_list == [
+        call(0, 0, [error]),
+        call(0, 1, [error]),
+        call(0, 2, []),
+    ]
+
+
+def test_grammar_load_failure_propagates(mock_deps):
+    with patch(
+        "symboleo_llm_tool.pipeline.pipeline._load_grammar",
+        side_effect=RuntimeError("Failed to load Symboleo grammar resource"),
+    ):
+        with pytest.raises(RuntimeError, match="Failed to load Symboleo grammar resource"):
+            pipeline.run("contract text", _make_config())

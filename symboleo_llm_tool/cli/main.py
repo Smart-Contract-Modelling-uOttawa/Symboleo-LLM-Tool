@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import NoReturn
 
@@ -20,6 +21,27 @@ console = Console()
 def _fatal(message: str) -> NoReturn:
     console.print(f"[red]Error:[/red] {message}")
     raise typer.Exit(1)
+
+
+def _format_progress(
+    candidate_id: int,
+    iteration: int,
+    errors: list[SymboleoIssue],
+    num_candidates: int,
+    max_iterations: int,
+) -> str:
+    prefix = (
+        f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] "
+        if num_candidates > 1
+        else ""
+    )
+    if iteration == 0 and errors:
+        return f"  {prefix}Generated — {len(errors)} error(s)"
+    if iteration == 0:
+        return f"  {prefix}Generated — converged"
+    if errors:
+        return f"  {prefix}Correction {iteration}/{max_iterations} — {len(errors)} error(s) remaining"
+    return f"  {prefix}Correction {iteration}/{max_iterations} — converged"
 
 
 @app.command()
@@ -48,22 +70,13 @@ def run(
     max_iterations = config.pipeline.max_iterations
 
     def _progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
-        prefix = (
-            f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] "
-            if num_candidates > 1
-            else ""
+        console.print(
+            _format_progress(candidate_id, iteration, errors, num_candidates, max_iterations)
         )
-        if iteration == 0:
-            console.print(f"  {prefix}Generated — {len(errors)} error(s)")
-        elif errors:
-            console.print(
-                f"  {prefix}Correction {iteration}/{max_iterations}"
-                f" — {len(errors)} error(s) remaining"
-            )
-        else:
-            console.print(
-                f"  {prefix}Correction {iteration}/{max_iterations} — converged"
-            )
+
+    if config.observability.langsmith.enabled:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGSMITH_PROJECT"] = config.observability.langsmith.project
 
     console.print("[bold green]Running pipeline...[/bold green]")
     try:
@@ -96,14 +109,19 @@ def run(
         )
 
     console.print(table)
+
+    if config.pipeline.stop_on_first_convergence and len(result.candidates) < num_candidates:
+        skipped = num_candidates - len(result.candidates)
+        console.print(f"[dim]Stopped after first convergence — {skipped} candidate(s) skipped.[/dim]")
+
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
     if config.observability.langsmith.enabled:
         try:
             from langsmith import Client
             Client().flush()
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
 
 
 def main() -> None:
