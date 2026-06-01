@@ -27,8 +27,9 @@ def run(
     on_progress: ProgressCallback | None = None,
 ) -> PipelineResult:
     wrapper = SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable)
-    gen_llm = create_adapter(config.generation.llm)
-    corr_llm = create_adapter(config.correction.llm)
+    tracing = config.observability.langsmith.enabled
+    gen_llm = create_adapter(config.generation.llm, tracing_enabled=tracing)
+    corr_llm = create_adapter(config.correction.llm, tracing_enabled=tracing)
     gen_strategy = get_strategy(
         config.generation.strategy, config.generation.strategy_params
     )

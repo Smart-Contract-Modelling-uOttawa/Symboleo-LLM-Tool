@@ -3,9 +3,9 @@ from symboleo_llm_tool.llm.base import LLMAdapter
 from symboleo_llm_tool.llm.litellm_adapter import LiteLLMAdapter
 
 
-def create_adapter(config: LLMConfig) -> LLMAdapter:
+def create_adapter(config: LLMConfig, tracing_enabled: bool = False) -> LLMAdapter:
     if config.provider == "mock":
         # TEMPORARY — remove this branch when mock_adapter.py is deleted
         from symboleo_llm_tool.llm.mock_adapter import MockLLMAdapter
         return MockLLMAdapter(config)
-    return LiteLLMAdapter(config)
+    return LiteLLMAdapter(config, tracing_enabled=tracing_enabled)

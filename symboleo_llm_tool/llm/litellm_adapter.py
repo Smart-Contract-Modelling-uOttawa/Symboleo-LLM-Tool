@@ -1,16 +1,26 @@
+from collections.abc import Callable
+
 import litellm
-from langsmith import traceable
 
 from symboleo_llm_tool.config.models import LLMConfig
 from symboleo_llm_tool.llm.base import LLMAdapter
 
 
 class LiteLLMAdapter(LLMAdapter):
-    def __init__(self, config: LLMConfig) -> None:
+    def __init__(self, config: LLMConfig, tracing_enabled: bool = False) -> None:
         self._config = config
+        if tracing_enabled:
+            from langsmith import traceable
+            self._invoke: Callable[[str], str] = traceable(run_type="llm")(
+                self._litellm_call
+            )
+        else:
+            self._invoke = self._litellm_call
 
-    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
+        return self._invoke(prompt)
+
+    def _litellm_call(self, prompt: str) -> str:
         response = litellm.completion(
             model=f"{self._config.provider}/{self._config.model}",
             messages=[{"role": "user", "content": prompt}],
