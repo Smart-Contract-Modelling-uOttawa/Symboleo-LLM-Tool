@@ -17,3 +17,7 @@ def get_strategy(name: str, params: dict[str, Any]) -> PromptStrategy:
         available = list(_registry.keys())
         raise ValueError(f"Unknown strategy '{name}'. Available: {available}")
     return _registry[name](params)
+
+
+def list_strategies() -> list[str]:
+    return list(_registry.keys())
