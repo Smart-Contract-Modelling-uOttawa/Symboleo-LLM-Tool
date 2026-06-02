@@ -1,10 +1,13 @@
 import asyncio
 import uuid
+from collections.abc import AsyncGenerator
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
@@ -43,6 +46,12 @@ def init_router(ui_config: dict[str, Any]) -> None:
         for provider, models in ui_config.get("models", {}).items()
         for model in models
     }
+
+
+def reset_router() -> None:
+    global _ui_config, _model_to_provider
+    _ui_config = {}
+    _model_to_provider = {}
 
 
 # ---------------------------------------------------------------------------
@@ -106,14 +115,17 @@ async def generate(req: GenerateRequest) -> RunCreatedResponse:
     available = list_strategies()
 
     if req.generation.strategy not in available:
-        raise HTTPException(422, detail=f"Unknown strategy: {req.generation.strategy!r}")
+        raise HTTPException(
+            422, detail=f"Unknown strategy: {req.generation.strategy!r}"
+        )
 
     corr_req = req.correction or req.generation
     if corr_req.strategy not in available:
         raise HTTPException(422, detail=f"Unknown strategy: {corr_req.strategy!r}")
 
     _validate_examples(req.generation.strategy_params)
-    _validate_examples(corr_req.strategy_params)
+    if req.correction is not None:
+        _validate_examples(req.correction.strategy_params)
 
     gen_provider = _resolve_provider(req.generation.model)
     corr_provider = _resolve_provider(corr_req.model)
@@ -154,8 +166,6 @@ async def _run_pipeline(
     config: PipelineConfig,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
-    from datetime import datetime
-
     def on_progress(
         candidate_id: int, iteration: int, errors: list[SymboleoIssue]
     ) -> None:
@@ -188,9 +198,11 @@ async def _run_pipeline(
 async def stream_run(run_id: str, request: Request) -> StreamingResponse:
     job = get_job(run_id)
     if job is None:
-        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found or expired")
+        raise HTTPException(
+            status_code=404, detail=f"Run {run_id!r} not found or expired"
+        )
 
-    async def event_generator():  # type: ignore[return]
+    async def event_generator() -> AsyncGenerator[str, None]:
         if job.is_complete:
             if job.result is not None:
                 yield _sse(CompleteEvent(result=job.result))
@@ -224,7 +236,7 @@ def _sse(event: ProgressEvent | CompleteEvent | ErrorEvent) -> str:
 # GET /options
 # ---------------------------------------------------------------------------
 
-_PARAM_SOURCES: dict[str, tuple[type, str]] = {
+_PARAM_SOURCES: dict[str, tuple[type[BaseModel], str]] = {
     "num_candidates": (RunConfig, "num_candidates"),
     "max_iterations": (RunConfig, "max_iterations"),
     "stop_on_first_convergence": (RunConfig, "stop_on_first_convergence"),

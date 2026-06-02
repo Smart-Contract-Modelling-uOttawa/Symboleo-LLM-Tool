@@ -6,6 +6,8 @@ from pathlib import Path
 
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
+_SUBPROCESS_TIMEOUT_SECONDS = 60
+
 
 class SymboleoWrapper:
     def __init__(self, jar_path: Path, java_executable: str = "java") -> None:
@@ -38,7 +40,12 @@ class SymboleoWrapper:
                 [self._java, "-jar", str(self._jar), str(tmp_path), "-f", "json", "-q"],
                 capture_output=True,
                 text=True,
+                timeout=_SUBPROCESS_TIMEOUT_SECONDS,
             )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                f"SymboleoAC CLI timed out after {_SUBPROCESS_TIMEOUT_SECONDS} seconds"
+            ) from e
         finally:
             tmp_path.unlink(missing_ok=True)
 
@@ -54,5 +61,10 @@ class SymboleoWrapper:
         if not stdout:
             return []
 
-        data = json.loads(stdout)
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"SymboleoAC CLI returned non-JSON output: {stdout!r}"
+            ) from e
         return [SymboleoIssue(**issue) for issue in data.get("issues", [])]

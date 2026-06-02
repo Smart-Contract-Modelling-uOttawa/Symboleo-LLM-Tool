@@ -2,7 +2,7 @@
 
 ## What This Tool Does
 
-A Python CLI tool that:
+A Python CLI and FastAPI web service that:
 1. Takes a `.txt` legal contract in English
 2. Uses an LLM to generate one or more SymboleoAC contract(s)
 3. Runs the SymboleoAC headless CLI to extract syntax errors
@@ -23,9 +23,10 @@ A Python CLI tool that:
 | LLM abstraction | LiteLLM |
 | Observability | LangSmith (opt-in) |
 | Prompt templating | Jinja2 |
+| Web framework | FastAPI + uvicorn |
 | Linting/formatting | Ruff |
 | Type checking | mypy |
-| Testing | pytest + pytest-mock |
+| Testing | pytest + pytest-mock + httpx |
 
 ---
 
@@ -36,6 +37,7 @@ A Python CLI tool that:
 ```
 symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
+├── api/            # FastAPI adapter layer: routes, job store, SSE events, request/response models
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
@@ -93,7 +95,7 @@ Input .txt
 - `output.save_intermediates` saves each iteration's `.sl` output — off by default
 - `stop_on_first_convergence` flag — default `false` (full research data), flip to `true` to save tokens
 - Input file is a CLI argument, not a config concern
-- CLI override support (`--set key=value`) for quick experiments — **deferred until core pipeline is stable**
+- CLI override support (`--set key=value`) for quick experiments — **deferred; low priority given the API provides a more ergonomic interface for per-run config**
 
 ### Multi-Candidate Behavior
 - Success = any candidate converges (one correct output is sufficient)
@@ -112,22 +114,26 @@ Input .txt
 - Never let prompt strategies become provider-aware — that creates N×M classes
 - Prompt strategies produce text; LLM adapters handle provider-specific formatting
 
-### Option A → Option B Migration Path
-- The pipeline core must be I/O-agnostic: `pipeline.run(contract_text: str, config: PipelineConfig) → PipelineResult`
+### Entry Point Architecture
+- The pipeline core is I/O-agnostic: `pipeline.run(contract_text: str, config: PipelineConfig) → PipelineResult`
 - The CLI is a thin adapter: parse args → read file → call pipeline → format output
-- Adding FastAPI later means adding an `api/` directory calling the same core — no core changes
+- The API is a thin adapter: parse request body → call pipeline → stream SSE events
+- Both entry points call the same core with no core-layer changes
 - Config as Pydantic models means the same object can be populated from YAML or a JSON request body
 
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 11+ as a system prerequisite. Check for Java at startup and fail with a clear, actionable error message.
 - **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates Java prerequisite for end users. `Dockerfile` and `docker-compose.yml` are in the project root.
+- **Running the API from Docker (not yet wired up):** The current `Dockerfile` has two gaps for API use: (1) `configs/` is not copied into the image — the lifespan handler loads `configs/ui_config.yaml` on startup and fails immediately if it's missing; (2) port 8000 is not exposed. Fix: add `COPY configs/ ./configs/` and `EXPOSE 8000` to the Dockerfile, then run with `docker run -p 8000:8000 --entrypoint uvicorn <image> symboleo_llm_tool.api.app:app --host 0.0.0.0 --port 8000`. API keys must be passed via `-e ANTHROPIC_API_KEY=...` (or equivalent).
 - **JAR naming convention:** The JAR is stored as `lib/symboleo-cli.jar` (no version in the filename). When updating the JAR, replace the file in place — the version lives in the file content and git history, not the filename. This keeps the default `jar_path` in `SymboleoConfig` stable across releases.
+- **JAR/grammar coupling:** `lib/symboleo-cli.jar` and `symboleo_llm_tool/resources/Symboleo.xtext` must always be updated together in the same commit. If the SymboleoAC language evolves and only the JAR is replaced, the LLM generates code against the old grammar while the validator enforces new rules — the correction loop will spin through all iterations without converging. Treat them as a single atomic change.
 
 ### Testing Strategy
 - **Unit tests:** Mock both LLM adapter and CLI subprocess wrapper. Focus on pipeline loop logic (iteration bounds, early stopping, error passing).
 - **Integration tests:** Run the real JAR against known fixture files (valid `.sl`, invalid `.sl` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
 - **No full e2e in CI** — manual smoke test before releases.
 - `tests/fixtures/` contains: sample `.txt` contract, known-valid `.sl`, known-invalid `.sl`
+- **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures) and `test_routes.py` (12 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution.
 
 ### Observability
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default
@@ -151,20 +157,20 @@ The full Xtext grammar may push against LLM context window limits or significant
 The LLM may return markdown code blocks, explanations, or partial output instead of valid Symboleo. `_clean_response()` in `pipeline.py` handles markdown code fences, but more exotic malformed output (partial contracts, explanatory prose, mixed content) is not yet handled. A more robust pre-validation step may be needed as strategies are developed.
 
 ### CLI `--set` Override
-Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred until core pipeline is stable.**
+Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred — low priority given the API now provides a more ergonomic interface for per-run config.**
 
 ---
 
 ## Future Directions
 
-### Option B: FastAPI Web Service
+### FastAPI Web Service — Current State and Remaining Work
 
-If a frontend becomes a firm requirement, Option B can be added on top of Option A without touching the core. The migration is additive:
+The API layer is implemented. The remaining steps toward a full web service are:
 
-1. **Add `api/` directory** — FastAPI routes that call the same `pipeline.run()` the CLI calls. The core is untouched.
-2. **Wrap the sync pipeline for async** — wrap in `asyncio.run_in_executor` at the API layer (~5 lines, no core changes).
-3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI.
-4. **Extend Docker Compose** — add a second service entry, expose a port. The CLI service is unchanged.
+1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
+2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
+3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI. Not yet started.
+4. **Wire up Docker for API** — `Dockerfile` needs `COPY configs/ ./configs/` and `EXPOSE 8000`; Docker Compose needs a second service entry for uvicorn. See the Docker note under Java Dependency.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
 
