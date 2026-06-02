@@ -169,11 +169,48 @@ If a frontend becomes a firm requirement, Option B can be added on top of Option
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
 
 **Endpoint design (decided):**
-- `POST /generate` — body: `{ contract_text, config_name, overrides? }` → returns `{ job_id }`
-- `GET /jobs/{job_id}/stream` — SSE stream of progress events + final `PipelineResult`
-- `GET /options` — returns available strategies (from registry), config presets (from `configs/`), and UI metadata (from `configs/ui_config.yaml`)
-- `GET /configs` — lists available named config presets
+- `POST /generate` — body: `GenerateRequest` (see below) → returns `{ run_id }`
+- `GET /runs/{run_id}/stream` — SSE stream of typed events (see below)
+- `GET /options` — returns everything the frontend needs at page load (see below)
 
-**`configs/ui_config.yaml`** — lives alongside pipeline run configs (same Docker volume mount). Single source of truth for frontend form rendering: model dropdowns and parameter constraints (min/max/default). Strategies are served from the registry, not this file. Update without a code or frontend deploy.
+**SSE event schema:**
+- `ProgressEvent` — fired after each generation/correction iteration; contains `candidate_id`, `iteration`, `error_count`
+- `CompleteEvent` — final event; embeds the full `PipelineResult`
+- `ErrorEvent` — fatal pipeline error; contains `message`
+- Reconnect behavior: if job complete → send `CompleteEvent` immediately; if still running → resume live stream; if TTL expired → 404
 
-**Job storage:** in-memory dict with TTL for research/single-server use. Migrate to Redis before any public deployment (see [[project-fastapi-architecture]]).
+**Async bridge (sync pipeline → async SSE):**
+- `asyncio.Queue` + `loop.call_soon_threadsafe(queue.put_nowait, event)` — the `on_progress` callback, created in async context before thread launch, posts events thread-safely onto the queue
+- `run_in_threadpool` (Starlette) runs `pipeline.run()` in a thread pool without blocking the event loop
+- `asyncio.create_task` fires the pipeline task as fire-and-forget; the SSE generator independently drains the queue
+- Disconnect detection: `asyncio.wait_for(queue.get(), timeout=1.0)` + `await request.is_disconnected()` — the timeout (~1–2 s) is required so the generator can poll for disconnect between events
+- Exception handling: pipeline task must catch all exceptions and push an `ErrorEvent` onto the queue to avoid silent failures
+
+**`GenerateRequest` shape:**
+```
+contract_text: str                          # required
+generation: StageRequest                    # required
+  model: str                                # e.g. "gpt-4o-mini"
+  strategy: str                             # e.g. "zero_shot"
+  include_grammar: bool | None              # defaults from Pydantic
+  strategy_params: dict                     # e.g. {"example_files": ["sale_contract"]}
+correction: StageRequest | None             # defaults to generation if omitted
+num_candidates: int | None                  # defaults from Pydantic
+max_iterations: int | None                  # defaults from Pydantic
+temperature: float | None                   # defaults from Pydantic
+save_intermediates: bool | None             # defaults from Pydantic
+stop_on_first_convergence: bool | None      # defaults from Pydantic
+```
+Provider is derived from model name via `configs/ui_config.yaml`. For `few_shot`, `strategy_params.example_files` takes example names (not full paths) — the API resolves them to `examples/<name>.yaml` before starting the job (validation at request time, not inside the thread).
+
+**`GET /options` response:**
+```
+strategies: list[str]          # from registry
+models: dict[str, list[str]]   # from configs/ui_config.yaml
+parameters: dict               # type + min/max from ui_config.yaml; defaults from Pydantic models
+examples: list[str]            # names of .yaml files in examples/ (without extension)
+```
+
+**`configs/ui_config.yaml`** — lives alongside pipeline run configs (same Docker volume mount). Holds model lists and parameter constraints (min/max/type). Defaults come from Pydantic, not this file. Update without a code or frontend deploy.
+
+**Job storage:** in-memory dict with TTL (~5 min after completion). TTL cleanup runs as a background task started in the FastAPI lifespan handler. Migrate to Redis before any public deployment (see [[project-fastapi-architecture]]).
