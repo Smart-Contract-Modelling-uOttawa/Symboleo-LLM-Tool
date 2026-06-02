@@ -128,6 +128,7 @@ Input .txt
 - **Integration tests:** Run the real JAR against known fixture files (valid `.sl`, invalid `.sl` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
 - **No full e2e in CI** — manual smoke test before releases.
 - `tests/fixtures/` contains: sample `.txt` contract, known-valid `.sl`, known-invalid `.sl`
+- **API layer tests not yet written** — `tests/unit/api/` does not exist. Use `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app that includes `routes.router` directly (bypassing the lifespan). Call `init_router(test_ui_config)` and `reset_store()` in an `autouse` fixture to isolate shared global state between tests. Patch `_run_pipeline` with a no-op async function for happy-path POST tests to avoid real pipeline execution.
 
 ### Observability
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default

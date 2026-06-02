@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
@@ -114,7 +115,9 @@ async def generate(req: GenerateRequest) -> RunCreatedResponse:
     available = list_strategies()
 
     if req.generation.strategy not in available:
-        raise HTTPException(422, detail=f"Unknown strategy: {req.generation.strategy!r}")
+        raise HTTPException(
+            422, detail=f"Unknown strategy: {req.generation.strategy!r}"
+        )
 
     corr_req = req.correction or req.generation
     if corr_req.strategy not in available:
@@ -195,7 +198,9 @@ async def _run_pipeline(
 async def stream_run(run_id: str, request: Request) -> StreamingResponse:
     job = get_job(run_id)
     if job is None:
-        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found or expired")
+        raise HTTPException(
+            status_code=404, detail=f"Run {run_id!r} not found or expired"
+        )
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if job.is_complete:
@@ -231,7 +236,7 @@ def _sse(event: ProgressEvent | CompleteEvent | ErrorEvent) -> str:
 # GET /options
 # ---------------------------------------------------------------------------
 
-_PARAM_SOURCES: dict[str, tuple[type, str]] = {
+_PARAM_SOURCES: dict[str, tuple[type[BaseModel], str]] = {
     "num_candidates": (RunConfig, "num_candidates"),
     "max_iterations": (RunConfig, "max_iterations"),
     "stop_on_first_convergence": (RunConfig, "stop_on_first_convergence"),

@@ -36,12 +36,12 @@ def _format_progress(
         else ""
     )
     if iteration == 0 and errors:
-        return f"  {prefix}Generated — {len(errors)} error(s)"
+        return f"{prefix}Generated — {len(errors)} error(s)"
     if iteration == 0:
-        return f"  {prefix}Generated — converged"
+        return f"{prefix}Generated — converged"
     if errors:
-        return f"  {prefix}Correction {iteration}/{max_iterations} — {len(errors)} error(s) remaining"
-    return f"  {prefix}Correction {iteration}/{max_iterations} — converged"
+        return f"{prefix}Correction {iteration}/{max_iterations} — {len(errors)} error(s) remaining"
+    return f"{prefix}Correction {iteration}/{max_iterations} — converged"
 
 
 @app.command()
@@ -71,7 +71,7 @@ def run(
 
     def _progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
         console.print(
-            _format_progress(candidate_id, iteration, errors, num_candidates, max_iterations)
+            "  " + _format_progress(candidate_id, iteration, errors, num_candidates, max_iterations)
         )
 
     if config.observability.langsmith.enabled:
@@ -112,7 +112,10 @@ def run(
 
     if config.pipeline.stop_on_first_convergence and len(result.candidates) < num_candidates:
         skipped = num_candidates - len(result.candidates)
-        console.print(f"[dim]Stopped after first convergence — {skipped} candidate(s) skipped.[/dim]")
+        console.print(
+            f"Stopped after first convergence — {skipped} candidate(s) skipped.",
+            style="dim",
+        )
 
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
