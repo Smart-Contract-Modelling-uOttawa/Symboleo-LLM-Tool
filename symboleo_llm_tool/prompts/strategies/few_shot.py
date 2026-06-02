@@ -56,6 +56,8 @@ class FewShotStrategy(PromptStrategy):
         example_files = params.get("example_files", [])
         if not isinstance(example_files, list):
             raise ValueError("few_shot strategy: 'example_files' must be a list")
+        if not example_files:
+            raise ValueError("few_shot strategy: 'example_files' must not be empty")
         self._examples = _load_examples(example_files)
         self._generation_template = _env.get_template("few_shot_generation.j2")
         self._correction_template = _env.get_template("few_shot_correction.j2")

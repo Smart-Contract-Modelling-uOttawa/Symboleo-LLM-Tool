@@ -9,27 +9,27 @@ from symboleo_llm_tool.prompts.strategies.few_shot import FewShotStrategy
 from symboleo_llm_tool.prompts.strategies.zero_shot import ZeroShotStrategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
-
-@pytest.fixture(
-    params=[
-        ZeroShotStrategy({}),
-        FewShotStrategy({}),
-        CoTStrategy({}),
-    ],
-    ids=["zero_shot", "few_shot", "cot"],
+_EXAMPLE_CONTENT = (
+    "contract_text: 'Buyer shall pay $100.'\n"
+    "symboleo_code: 'Contract Example(...) ...'\n"
 )
-def any_strategy(request: pytest.FixtureRequest) -> PromptStrategy:
-    return request.param  # type: ignore[return-value]
+
+
+@pytest.fixture(params=["zero_shot", "few_shot", "cot"])
+def any_strategy(request: pytest.FixtureRequest, tmp_path: Path) -> PromptStrategy:
+    if request.param == "zero_shot":
+        return ZeroShotStrategy({})
+    if request.param == "few_shot":
+        example_file = tmp_path / "example.yaml"
+        example_file.write_text(_EXAMPLE_CONTENT, encoding="utf-8")
+        return FewShotStrategy({"example_files": [str(example_file)]})
+    return CoTStrategy({})
 
 
 @pytest.fixture
 def few_shot(tmp_path: Path) -> FewShotStrategy:
     example_file = tmp_path / "example.yaml"
-    example_file.write_text(
-        "contract_text: 'Buyer shall pay $100.'\n"
-        "symboleo_code: 'Contract Example(...) ...'\n",
-        encoding="utf-8",
-    )
+    example_file.write_text(_EXAMPLE_CONTENT, encoding="utf-8")
     return FewShotStrategy({"example_files": [str(example_file)]})
 
 
@@ -84,12 +84,9 @@ def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> Non
     assert "Contract Example" in prompt
 
 
-def test_few_shot_generation_without_examples_still_works() -> None:
-    strategy = FewShotStrategy({})
-    ctx = PromptContext(contract_text="contract text", grammar_context=None)
-    prompt = strategy.build_generation_prompt(ctx)
-    assert "contract text" in prompt
-    assert "## Examples" not in prompt
+def test_few_shot_empty_example_files_raises() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        FewShotStrategy({})
 
 
 def test_few_shot_invalid_example_files_param_raises() -> None:
