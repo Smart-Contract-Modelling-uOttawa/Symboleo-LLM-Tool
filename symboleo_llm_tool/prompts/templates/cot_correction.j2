@@ -1,0 +1,18 @@
+{% include '_system_header.j2' %}
+The following SymboleoAC contract contains syntax errors. Your task is to fix them.
+{% include '_grammar_section.j2' %}
+## Current Contract (contains errors)
+
+{{ current_code }}
+
+## Errors to Fix
+
+{% for error in errors %}
+- Line {{ error.line }}, Column {{ error.column }}: {{ error.message }}
+{% endfor %}
+
+## Instructions
+
+Before correcting, reason through each error: what construct is wrong, what the grammar requires, and what the fix should be.
+
+Then output ONLY the corrected SymboleoAC contract. Do not include your reasoning, explanations, or markdown code fences.
