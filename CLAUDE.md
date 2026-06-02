@@ -72,9 +72,19 @@ Input .txt
 ### Prompt Strategies
 - `PromptStrategy` ABC with two methods: `build_generation_prompt(context)` and `build_correction_prompt(context)`
 - All strategies receive a `PromptContext` parameter object — strategies read only what they need
-- Strategy-specific data (e.g., few-shot examples) comes from `strategy_params` in config, passed to the strategy constructor
+- Strategy-specific data comes from `strategy_params` in config, passed to the strategy constructor
 - Prompt text lives in Jinja2 `.j2` templates, separate from Python logic
-- Zero/few-shot distinction refers to whether **examples** are included, not whether grammar context is included — grammar is baseline for all strategies
+- Grammar is baseline for all strategies — `include_grammar` is a per-stage flag, not a strategy characteristic
+- Adding a new strategy: add templates to `prompts/templates/`, add a strategy class decorated with `@registry.register("name")` in `prompts/strategies/`, import it in `prompts/strategies/__init__.py`
+
+**Available strategies:**
+| Strategy | Key `strategy_params` | Notes |
+|---|---|---|
+| `zero_shot` | none | Baseline — grammar + contract, no examples |
+| `few_shot` | `example_files: [list of paths]` | Loads `contract_text`/`symboleo_code` pairs from external YAML files in `examples/` |
+| `cot` | none | Adds step-by-step reasoning instructions before generation; output is still code-only (Option A) |
+
+**CoT Option B (future flag):** Currently CoT uses Option A — the model reasons internally but outputs only code. Option B would add a `post_process_response()` hook to `PromptStrategy` so strategies can extract code from a mixed reasoning+code response, preserving reasoning in `report.json`. Deferred until research value is confirmed.
 
 ### Config Schema
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)

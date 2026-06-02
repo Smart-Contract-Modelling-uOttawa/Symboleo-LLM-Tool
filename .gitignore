@@ -10,4 +10,5 @@ dist/
 *.egg-info/
 output/
 contracts/
+examples/
 .claude/

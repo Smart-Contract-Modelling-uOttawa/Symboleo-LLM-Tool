@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from symboleo_llm_tool.prompts.base import PromptStrategy
@@ -21,15 +23,14 @@ def any_strategy(request: pytest.FixtureRequest) -> PromptStrategy:
 
 
 @pytest.fixture
-def few_shot() -> FewShotStrategy:
-    return FewShotStrategy({
-        "examples": [
-            {
-                "contract_text": "Buyer shall pay $100.",
-                "symboleo_code": "Contract Example(...) ...",
-            }
-        ]
-    })
+def few_shot(tmp_path: Path) -> FewShotStrategy:
+    example_file = tmp_path / "example.yaml"
+    example_file.write_text(
+        "contract_text: 'Buyer shall pay $100.'\n"
+        "symboleo_code: 'Contract Example(...) ...'\n",
+        encoding="utf-8",
+    )
+    return FewShotStrategy({"example_files": [str(example_file)]})
 
 
 @pytest.fixture
@@ -91,9 +92,21 @@ def test_few_shot_generation_without_examples_still_works() -> None:
     assert "## Examples" not in prompt
 
 
-def test_few_shot_invalid_examples_param_raises() -> None:
+def test_few_shot_invalid_example_files_param_raises() -> None:
     with pytest.raises(ValueError, match="must be a list"):
-        FewShotStrategy({"examples": "not a list"})
+        FewShotStrategy({"example_files": "not a list"})
+
+
+def test_few_shot_missing_example_file_raises() -> None:
+    with pytest.raises(ValueError, match="not found"):
+        FewShotStrategy({"example_files": ["./nonexistent.yaml"]})
+
+
+def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
+    bad_file = tmp_path / "bad.yaml"
+    bad_file.write_text("wrong_key: value\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must have"):
+        FewShotStrategy({"example_files": [str(bad_file)]})
 
 
 # --- CoT specific ---

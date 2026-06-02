@@ -1,6 +1,8 @@
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
+import yaml
 from jinja2 import DictLoader, Environment
 
 from symboleo_llm_tool.prompts import registry
@@ -26,14 +28,35 @@ def _build_env() -> Environment:
 _env = _build_env()
 
 
+def _load_examples(example_files: list[str]) -> list[dict[str, str]]:
+    examples = []
+    for path_str in example_files:
+        path = Path(path_str)
+        if not path.exists():
+            raise ValueError(f"few_shot strategy: example file not found: {path}")
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(data, dict)
+            or "contract_text" not in data
+            or "symboleo_code" not in data
+        ):
+            raise ValueError(
+                f"few_shot strategy: {path} must have 'contract_text' and 'symboleo_code' keys"
+            )
+        examples.append(
+            {"contract_text": data["contract_text"], "symboleo_code": data["symboleo_code"]}
+        )
+    return examples
+
+
 @registry.register("few_shot")
 class FewShotStrategy(PromptStrategy):
     def __init__(self, params: dict[str, Any]) -> None:
         super().__init__(params)
-        examples = params.get("examples", [])
-        if not isinstance(examples, list):
-            raise ValueError("few_shot strategy: 'examples' must be a list")
-        self._examples = examples
+        example_files = params.get("example_files", [])
+        if not isinstance(example_files, list):
+            raise ValueError("few_shot strategy: 'example_files' must be a list")
+        self._examples = _load_examples(example_files)
         self._generation_template = _env.get_template("few_shot_generation.j2")
         self._correction_template = _env.get_template("few_shot_correction.j2")
 
