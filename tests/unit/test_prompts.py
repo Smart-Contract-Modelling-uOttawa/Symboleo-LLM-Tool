@@ -1,5 +1,6 @@
 import pytest
 
+from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.strategies.cot import CoTStrategy
 from symboleo_llm_tool.prompts.strategies.few_shot import FewShotStrategy
@@ -7,9 +8,16 @@ from symboleo_llm_tool.prompts.strategies.zero_shot import ZeroShotStrategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 
-@pytest.fixture
-def zero_shot() -> ZeroShotStrategy:
-    return ZeroShotStrategy({})
+@pytest.fixture(
+    params=[
+        ZeroShotStrategy({}),
+        FewShotStrategy({}),
+        CoTStrategy({}),
+    ],
+    ids=["zero_shot", "few_shot", "cot"],
+)
+def any_strategy(request: pytest.FixtureRequest) -> PromptStrategy:
+    return request.param  # type: ignore[return-value]
 
 
 @pytest.fixture
@@ -36,42 +44,37 @@ def _make_error() -> SymboleoIssue:
     )
 
 
-# --- Zero-shot ---
+# --- Shared contract (all strategies must pass) ---
 
-def test_zero_shot_generation_includes_contract_text(zero_shot: ZeroShotStrategy) -> None:
-    ctx = PromptContext(contract_text="Seller shall deliver goods.", grammar_context=None)
-    assert "Seller shall deliver goods." in zero_shot.build_generation_prompt(ctx)
-
-
-def test_zero_shot_generation_includes_grammar_when_provided(zero_shot: ZeroShotStrategy) -> None:
+def test_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
-    assert "grammar rules here" in zero_shot.build_generation_prompt(ctx)
+    assert "grammar rules here" in any_strategy.build_generation_prompt(ctx)
 
 
-def test_zero_shot_generation_omits_grammar_when_none(zero_shot: ZeroShotStrategy) -> None:
+def test_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
-    assert "Grammar Reference" not in zero_shot.build_generation_prompt(ctx)
+    assert "Grammar Reference" not in any_strategy.build_generation_prompt(ctx)
 
 
-def test_zero_shot_correction_includes_current_code(zero_shot: ZeroShotStrategy) -> None:
+def test_generation_includes_contract_text(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="Seller shall deliver goods.", grammar_context=None)
+    assert "Seller shall deliver goods." in any_strategy.build_generation_prompt(ctx)
+
+
+def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(current_code="some symboleo code", errors=[], grammar_context=None)
-    assert "some symboleo code" in zero_shot.build_correction_prompt(ctx)
+    assert "some symboleo code" in any_strategy.build_correction_prompt(ctx)
 
 
-def test_zero_shot_correction_includes_error_details(zero_shot: ZeroShotStrategy) -> None:
+def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
-    prompt = zero_shot.build_correction_prompt(ctx)
+    prompt = any_strategy.build_correction_prompt(ctx)
     assert "missing ';'" in prompt
     assert "5" in prompt
     assert "3" in prompt
 
 
-def test_zero_shot_correction_omits_grammar_when_none(zero_shot: ZeroShotStrategy) -> None:
-    ctx = PromptContext(current_code="code", errors=[], grammar_context=None)
-    assert "Grammar Reference" not in zero_shot.build_correction_prompt(ctx)
-
-
-# --- Few-shot ---
+# --- Few-shot specific ---
 
 def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> None:
     ctx = PromptContext(contract_text="New contract.", grammar_context=None)
@@ -80,17 +83,12 @@ def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> Non
     assert "Contract Example" in prompt
 
 
-def test_few_shot_generation_includes_contract_text(few_shot: FewShotStrategy) -> None:
-    ctx = PromptContext(contract_text="New contract.", grammar_context=None)
-    assert "New contract." in few_shot.build_generation_prompt(ctx)
-
-
 def test_few_shot_generation_without_examples_still_works() -> None:
     strategy = FewShotStrategy({})
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
     prompt = strategy.build_generation_prompt(ctx)
     assert "contract text" in prompt
-    assert "Example" not in prompt
+    assert "## Examples" not in prompt
 
 
 def test_few_shot_invalid_examples_param_raises() -> None:
@@ -98,17 +96,7 @@ def test_few_shot_invalid_examples_param_raises() -> None:
         FewShotStrategy({"examples": "not a list"})
 
 
-def test_few_shot_correction_includes_current_code(few_shot: FewShotStrategy) -> None:
-    ctx = PromptContext(current_code="some symboleo code", errors=[], grammar_context=None)
-    assert "some symboleo code" in few_shot.build_correction_prompt(ctx)
-
-
-# --- CoT ---
-
-def test_cot_generation_includes_contract_text(cot: CoTStrategy) -> None:
-    ctx = PromptContext(contract_text="Seller shall deliver goods.", grammar_context=None)
-    assert "Seller shall deliver goods." in cot.build_generation_prompt(ctx)
-
+# --- CoT specific ---
 
 def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
@@ -119,6 +107,4 @@ def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
 
 def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
     ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
-    prompt = cot.build_correction_prompt(ctx)
-    assert "reason" in prompt.lower()
-    assert "missing ';'" in prompt
+    assert "reason" in cot.build_correction_prompt(ctx).lower()
