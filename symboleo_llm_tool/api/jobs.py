@@ -6,10 +6,6 @@ from symboleo_llm_tool.output.models import PipelineResult
 
 TTL = timedelta(minutes=5)
 
-# Union of all event types — imported here to avoid circular imports in routes.py
-# Callers import Job and the store functions; event types come from models.py.
-_AnyEvent = object  # runtime type is ProgressEvent | CompleteEvent | ErrorEvent
-
 
 @dataclass
 class Job:
@@ -48,3 +44,7 @@ def cleanup_expired() -> None:
     ]
     for run_id in expired:
         del _store[run_id]
+
+
+def reset_store() -> None:
+    _store.clear()

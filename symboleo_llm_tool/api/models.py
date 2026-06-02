@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from symboleo_llm_tool.output.models import PipelineResult
 
@@ -22,21 +22,28 @@ class GenerateRequest(BaseModel):
     save_intermediates: bool | None = None
     stop_on_first_convergence: bool | None = None
 
+    @field_validator("contract_text")
+    @classmethod
+    def _validate_contract_text(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("contract_text must not be empty or whitespace-only")
+        return v
+
 
 class ProgressEvent(BaseModel):
-    type: str = "progress"
+    type: Literal["progress"] = "progress"
     candidate_id: int
     iteration: int
     error_count: int
 
 
 class CompleteEvent(BaseModel):
-    type: str = "complete"
+    type: Literal["complete"] = "complete"
     result: PipelineResult
 
 
 class ErrorEvent(BaseModel):
-    type: str = "error"
+    type: Literal["error"] = "error"
     message: str
 
 
