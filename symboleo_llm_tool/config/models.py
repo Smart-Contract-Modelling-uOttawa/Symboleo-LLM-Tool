@@ -20,7 +20,7 @@ class StageConfig(BaseModel):
 
 class RunConfig(BaseModel):
     num_candidates: int = 1
-    max_iterations: int = 5
+    max_iterations: int = 3
     stop_on_first_convergence: bool = False
 
 
