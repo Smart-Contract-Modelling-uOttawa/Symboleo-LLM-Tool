@@ -161,9 +161,19 @@ Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and
 
 If a frontend becomes a firm requirement, Option B can be added on top of Option A without touching the core. The migration is additive:
 
-1. **Add `api/` directory** — FastAPI routes that accept a file upload + config JSON body and call the same `pipeline.run()` the CLI calls. The core is untouched.
-2. **Wrap the sync pipeline for async** — the pipeline involves subprocess and LLM calls; wrap in `asyncio.run_in_executor` at the API layer (~5 lines, no core changes).
-3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI. No backend changes required.
-4. **Extend Docker Compose** — `docker-compose.yml` already exists for the CLI. Adding the API service means adding a second entry under `services:` and exposing a port. The CLI service is unchanged.
+1. **Add `api/` directory** — FastAPI routes that call the same `pipeline.run()` the CLI calls. The core is untouched.
+2. **Wrap the sync pipeline for async** — wrap in `asyncio.run_in_executor` at the API layer (~5 lines, no core changes).
+3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI.
+4. **Extend Docker Compose** — add a second service entry, expose a port. The CLI service is unchanged.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
+
+**Endpoint design (decided):**
+- `POST /generate` — body: `{ contract_text, config_name, overrides? }` → returns `{ job_id }`
+- `GET /jobs/{job_id}/stream` — SSE stream of progress events + final `PipelineResult`
+- `GET /options` — returns available strategies (from registry), config presets (from `configs/`), and UI metadata (from `configs/ui_config.yaml`)
+- `GET /configs` — lists available named config presets
+
+**`configs/ui_config.yaml`** — lives alongside pipeline run configs (same Docker volume mount). Single source of truth for frontend form rendering: model dropdowns and parameter constraints (min/max/default). Strategies are served from the registry, not this file. Update without a code or frontend deploy.
+
+**Job storage:** in-memory dict with TTL for research/single-server use. Migrate to Redis before any public deployment (see [[project-fastapi-architecture]]).
