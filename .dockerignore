@@ -2,6 +2,7 @@
 output/
 tests/
 configs/
+examples/
 .git/
 .gitignore
 __pycache__/

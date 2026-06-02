@@ -5,4 +5,5 @@ services:
     volumes:
       - ./contracts:/app/contracts:ro
       - ./configs:/app/configs:ro
+      - ./examples:/app/examples:ro
       - ./output:/app/output

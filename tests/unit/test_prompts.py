@@ -1,69 +1,123 @@
+from pathlib import Path
+
 import pytest
 
+from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
+from symboleo_llm_tool.prompts.strategies.cot import CoTStrategy
+from symboleo_llm_tool.prompts.strategies.few_shot import FewShotStrategy
 from symboleo_llm_tool.prompts.strategies.zero_shot import ZeroShotStrategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 
+@pytest.fixture(
+    params=[
+        ZeroShotStrategy({}),
+        FewShotStrategy({}),
+        CoTStrategy({}),
+    ],
+    ids=["zero_shot", "few_shot", "cot"],
+)
+def any_strategy(request: pytest.FixtureRequest) -> PromptStrategy:
+    return request.param  # type: ignore[return-value]
+
+
 @pytest.fixture
-def strategy() -> ZeroShotStrategy:
-    return ZeroShotStrategy({})
-
-
-def test_generation_prompt_includes_contract_text(strategy: ZeroShotStrategy) -> None:
-    ctx = PromptContext(
-        contract_text="Seller shall deliver goods.", grammar_context=None
+def few_shot(tmp_path: Path) -> FewShotStrategy:
+    example_file = tmp_path / "example.yaml"
+    example_file.write_text(
+        "contract_text: 'Buyer shall pay $100.'\n"
+        "symboleo_code: 'Contract Example(...) ...'\n",
+        encoding="utf-8",
     )
-    prompt = strategy.build_generation_prompt(ctx)
-    assert "Seller shall deliver goods." in prompt
+    return FewShotStrategy({"example_files": [str(example_file)]})
 
 
-def test_generation_prompt_includes_grammar_when_provided(
-    strategy: ZeroShotStrategy,
-) -> None:
-    ctx = PromptContext(
-        contract_text="contract text", grammar_context="grammar rules here"
-    )
-    prompt = strategy.build_generation_prompt(ctx)
-    assert "grammar rules here" in prompt
+@pytest.fixture
+def cot() -> CoTStrategy:
+    return CoTStrategy({})
 
 
-def test_generation_prompt_omits_grammar_section_when_none(
-    strategy: ZeroShotStrategy,
-) -> None:
-    ctx = PromptContext(contract_text="contract text", grammar_context=None)
-    prompt = strategy.build_generation_prompt(ctx)
-    assert "Grammar Reference" not in prompt
-
-
-def test_correction_prompt_includes_current_code(strategy: ZeroShotStrategy) -> None:
-    ctx = PromptContext(
-        current_code="some symboleo code", errors=[], grammar_context=None
-    )
-    prompt = strategy.build_correction_prompt(ctx)
-    assert "some symboleo code" in prompt
-
-
-def test_correction_prompt_includes_error_details(strategy: ZeroShotStrategy) -> None:
-    error = SymboleoIssue(
-        severity="ERROR",
-        code=None,
-        offset=0,
-        line=5,
-        column=3,
-        length=1,
+def _make_error() -> SymboleoIssue:
+    return SymboleoIssue(
+        severity="ERROR", code=None, offset=0, line=5, column=3, length=1,
         message="missing ';'",
     )
-    ctx = PromptContext(current_code="code", errors=[error], grammar_context=None)
-    prompt = strategy.build_correction_prompt(ctx)
+
+
+# --- Shared contract (all strategies must pass) ---
+
+def test_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
+    assert "grammar rules here" in any_strategy.build_generation_prompt(ctx)
+
+
+def test_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    assert "Grammar Reference" not in any_strategy.build_generation_prompt(ctx)
+
+
+def test_generation_includes_contract_text(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="Seller shall deliver goods.", grammar_context=None)
+    assert "Seller shall deliver goods." in any_strategy.build_generation_prompt(ctx)
+
+
+def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(current_code="some symboleo code", errors=[], grammar_context=None)
+    assert "some symboleo code" in any_strategy.build_correction_prompt(ctx)
+
+
+def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
+    prompt = any_strategy.build_correction_prompt(ctx)
     assert "missing ';'" in prompt
     assert "5" in prompt
     assert "3" in prompt
 
 
-def test_correction_prompt_omits_grammar_section_when_none(
-    strategy: ZeroShotStrategy,
-) -> None:
-    ctx = PromptContext(current_code="code", errors=[], grammar_context=None)
-    prompt = strategy.build_correction_prompt(ctx)
-    assert "Grammar Reference" not in prompt
+# --- Few-shot specific ---
+
+def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> None:
+    ctx = PromptContext(contract_text="New contract.", grammar_context=None)
+    prompt = few_shot.build_generation_prompt(ctx)
+    assert "Buyer shall pay $100." in prompt
+    assert "Contract Example" in prompt
+
+
+def test_few_shot_generation_without_examples_still_works() -> None:
+    strategy = FewShotStrategy({})
+    ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    prompt = strategy.build_generation_prompt(ctx)
+    assert "contract text" in prompt
+    assert "## Examples" not in prompt
+
+
+def test_few_shot_invalid_example_files_param_raises() -> None:
+    with pytest.raises(ValueError, match="must be a list"):
+        FewShotStrategy({"example_files": "not a list"})
+
+
+def test_few_shot_missing_example_file_raises() -> None:
+    with pytest.raises(ValueError, match="not found"):
+        FewShotStrategy({"example_files": ["./nonexistent.yaml"]})
+
+
+def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
+    bad_file = tmp_path / "bad.yaml"
+    bad_file.write_text("wrong_key: value\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must have"):
+        FewShotStrategy({"example_files": [str(bad_file)]})
+
+
+# --- CoT specific ---
+
+def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    prompt = cot.build_generation_prompt(ctx)
+    assert "Identify all parties" in prompt
+    assert "obligation" in prompt
+
+
+def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
+    ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
+    assert "reason" in cot.build_correction_prompt(ctx).lower()

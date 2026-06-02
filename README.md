@@ -78,6 +78,7 @@ generation:
     provider: openai
     model: gpt-4o-mini
     temperature: 0.7
+  strategy: zero_shot     # zero_shot | few_shot | cot
   include_grammar: true   # inject SymboleoAC grammar into the prompt
 
 output:
@@ -85,6 +86,41 @@ output:
 ```
 
 API keys are read from `.env` — never put them in config files.
+
+### Prompting strategies
+
+| Strategy | Description |
+|---|---|
+| `zero_shot` | Baseline — grammar + contract, no examples |
+| `few_shot` | Includes example contract→Symboleo pairs loaded from `examples/` |
+| `cot` | Adds step-by-step reasoning instructions before generation |
+
+**Few-shot setup:** create `examples/your_example.yaml` at the project root:
+
+```yaml
+contract_text: |
+  Seller shall deliver 100 units to Buyer within 30 days.
+  Buyer shall pay $5,000 upon delivery.
+symboleo_code: |
+  Domain SalesDomain
+    ...
+  endDomain
+  Contract SalesContract(...)
+    ...
+  endContract
+```
+
+Then reference it in your config:
+
+```yaml
+generation:
+  strategy: few_shot
+  strategy_params:
+    example_files:
+      - ./examples/your_example.yaml
+```
+
+The `examples/` directory is gitignored and mounted as a read-only volume in Docker — same pattern as `contracts/` and `configs/`.
 
 ## Output
 

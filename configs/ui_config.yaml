@@ -1,0 +1,38 @@
+# Frontend UI configuration — served by GET /options, consumed by the frontend.
+# Update this file to add/remove models or adjust parameter constraints.
+# No code change or frontend deploy required.
+
+models:
+  openai:
+    - gpt-4o
+    - gpt-4o-mini
+  anthropic:
+    - claude-opus-4-8
+    - claude-sonnet-4-6
+    - claude-haiku-4-5-20251001
+
+parameters:
+  num_candidates:
+    type: integer
+    min: 1
+    max: 10
+    default: 1
+  max_iterations:
+    type: integer
+    min: 1
+    max: 20
+    default: 3
+  temperature:
+    type: float
+    min: 0.0
+    max: 1.0
+    default: 0.7
+  stop_on_first_convergence:
+    type: boolean
+    default: false
+  include_grammar:
+    type: boolean
+    default: true
+  save_intermediates:
+    type: boolean
+    default: false
