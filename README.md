@@ -13,10 +13,13 @@ A Python CLI and FastAPI web service that converts plain-English legal contracts
 
 ## Prerequisites
 
-**Native usage:**
+**CLI usage:**
 - Python 3.11+
 - Java 11+ ([Adoptium](https://adoptium.net/))
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+**Frontend dev server:**
+- Node.js 18+
 
 **Docker usage:**
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
@@ -34,17 +37,19 @@ uv sync
 # 3. Configure API keys
 cp .env.example .env
 # Edit .env and fill in your keys (LLM provider + LangSmith if needed)
+
+# For the frontend dev server, also see the Frontend section below.
 ```
 
 ## Usage
 
-### Native
+### CLI (Native)
 
 ```bash
 uv run symboleo-tool <contract.txt> --config configs/openai.yaml
 ```
 
-### Docker
+### CLI (Docker)
 
 ```bash
 # Build the image (once, or after code changes)
@@ -64,7 +69,6 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 |---|---|
 | `example.yaml` | Reference template — documents all available fields |
 | `openai.yaml` | OpenAI (`gpt-4o-mini`) configuration |
-| `mock.yaml` | Mock LLM for testing without an API key (temporary) |
 
 Key config options:
 
@@ -144,6 +148,8 @@ The FastAPI server exposes three endpoints:
 
 ### Running the API
 
+The API requires `configs/ui_config.yaml` at startup — it defines the model list and parameter constraints exposed to the frontend. Update it to add or remove models without a code change.
+
 **Locally:**
 ```bash
 uv run uvicorn symboleo_llm_tool.api.app:app --reload
@@ -158,7 +164,26 @@ Interactive API docs are available at `http://localhost:8000/docs` once the serv
 
 ### Frontend
 
-A React/Vite + shadcn/ui + Tailwind CSS frontend is planned, served as static files from FastAPI (`GET /`). Not yet started.
+A React/Vite + shadcn/ui + Tailwind CSS frontend. In development, run the Vite dev server alongside the API:
+
+```bash
+# Terminal 1 — API
+uv run uvicorn symboleo_llm_tool.api.app:app --reload
+
+# Terminal 2 — frontend dev server (proxies /api → localhost:8000)
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite dev server runs at `http://localhost:5173`. All `/api` requests are proxied to the FastAPI server.
+
+For production, build the frontend first, then start the API — `frontend/dist/` is mounted as a read-only volume (same pattern as `configs/`):
+
+```bash
+cd frontend && npm run build && cd ..
+docker compose up symboleo-api
+```
 
 ## Development
 
@@ -177,4 +202,22 @@ uv run ruff check .
 
 # Type check
 uv run mypy symboleo_llm_tool
+```
+
+**Frontend:**
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Dev server
+npm run dev
+
+# Build
+npm run build
+
+# Generate TypeScript types from the live API schema (requires API running)
+npm run generate-types
 ```

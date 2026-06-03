@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 import yaml
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from symboleo_llm_tool.api import routes
 from symboleo_llm_tool.api.jobs import cleanup_expired
@@ -59,3 +60,7 @@ app.add_middleware(
 )
 
 app.include_router(routes.router, prefix="/api")
+
+_frontend_dist = Path("frontend/dist")
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
