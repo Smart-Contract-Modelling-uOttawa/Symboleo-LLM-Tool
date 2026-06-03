@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -9,30 +10,18 @@ from symboleo_llm_tool.config.models import (
     StageConfig,
 )
 from symboleo_llm_tool.pipeline import pipeline
-from symboleo_llm_tool.symboleo.models import SymboleoIssue
+from tests.helpers import make_issue
 
 
-def _make_config(**pipeline_kwargs: object) -> PipelineConfig:
+def _make_config(**pipeline_kwargs: Any) -> PipelineConfig:
     stage = StageConfig(
         llm=LLMConfig(provider="anthropic", model="claude-haiku-4-5"),
         strategy="zero_shot",
     )
     return PipelineConfig(
-        pipeline=RunConfig(**pipeline_kwargs),  # type: ignore[arg-type]
+        pipeline=RunConfig(**pipeline_kwargs),
         generation=stage,
         correction=stage,
-    )
-
-
-def _make_error() -> SymboleoIssue:
-    return SymboleoIssue(
-        severity="ERROR",
-        code=None,
-        offset=0,
-        line=1,
-        column=1,
-        length=1,
-        message="syntax error",
     )
 
 
@@ -79,7 +68,7 @@ def test_converges_immediately_when_no_errors(mock_deps):
 def test_stops_at_max_iterations_when_always_errors(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = "invalid"
-    mock_wrapper.validate.return_value = [_make_error()]
+    mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=3))
 
@@ -91,7 +80,7 @@ def test_stops_at_max_iterations_when_always_errors(mock_deps):
 def test_error_history_length_matches_iterations(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = "invalid"
-    mock_wrapper.validate.return_value = [_make_error()]
+    mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=2))
 
@@ -140,7 +129,7 @@ def test_on_progress_called_after_generation(mock_deps):
 def test_on_progress_called_after_each_correction(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = "invalid"
-    error = _make_error()
+    error = make_issue()
     mock_wrapper.validate.side_effect = [[error], [error], []]
 
     progress = MagicMock()
@@ -160,3 +149,23 @@ def test_grammar_load_failure_propagates(mock_deps):
     ):
         with pytest.raises(RuntimeError, match="Failed to load Symboleo grammar resource"):
             pipeline.run("contract text", _make_config())
+
+
+def test_clean_response_strips_markdown_fences(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = "```symboleo\nContract Test() {}\n```"
+    mock_wrapper.validate.return_value = []
+
+    result = pipeline.run("contract text", _make_config())
+
+    assert result.candidates[0].final_code == "Contract Test() {}"
+
+
+def test_clean_response_strips_plain_fences(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = "```\nContract Test() {}\n```"
+    mock_wrapper.validate.return_value = []
+
+    result = pipeline.run("contract text", _make_config())
+
+    assert result.candidates[0].final_code == "Contract Test() {}"

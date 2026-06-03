@@ -1,15 +1,9 @@
 from symboleo_llm_tool.cli.main import _format_progress
-from symboleo_llm_tool.symboleo.models import SymboleoIssue
-
-
-def _make_error() -> SymboleoIssue:
-    return SymboleoIssue(
-        severity="ERROR", code=None, offset=0, line=1, column=1, length=1, message="err"
-    )
+from tests.helpers import make_issue
 
 
 def test_generation_with_errors():
-    msg = _format_progress(0, 0, [_make_error()], num_candidates=1, max_iterations=3)
+    msg = _format_progress(0, 0, [make_issue(message="err")], num_candidates=1, max_iterations=3)
     assert "Generated" in msg
     assert "1 error(s)" in msg
 
@@ -21,7 +15,7 @@ def test_generation_converged():
 
 
 def test_correction_with_errors_remaining():
-    msg = _format_progress(0, 2, [_make_error(), _make_error()], num_candidates=1, max_iterations=3)
+    msg = _format_progress(0, 2, [make_issue(message="err"), make_issue(message="err")], num_candidates=1, max_iterations=3)
     assert "Correction 2/3" in msg
     assert "2 error(s) remaining" in msg
 

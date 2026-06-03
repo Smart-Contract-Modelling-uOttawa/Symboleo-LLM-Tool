@@ -1,5 +1,7 @@
+import asyncio
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -7,6 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from symboleo_llm_tool.api.jobs import create_job
+from symboleo_llm_tool.api.models import CompleteEvent, ErrorEvent, ProgressEvent
+from symboleo_llm_tool.api.routes import _run_pipeline, init_router
+from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.output.models import CandidateResult, PipelineResult
 
 # ---------------------------------------------------------------------------
@@ -48,6 +53,19 @@ def _parse_sse(text: str) -> dict[str, Any]:
     raise AssertionError(f"No SSE data frame found in: {text!r}")
 
 
+def _parse_all_sse(text: str) -> list[dict[str, Any]]:
+    return [
+        json.loads(line[len("data: "):])
+        for line in text.splitlines()
+        if line.startswith("data: ")
+    ]
+
+
+def _make_pipeline_config() -> PipelineConfig:
+    stage = StageConfig(llm=LLMConfig(provider="openai", model="gpt-4o-mini"), strategy="zero_shot")
+    return PipelineConfig(generation=stage, correction=stage)
+
+
 # ---------------------------------------------------------------------------
 # POST /generate
 # ---------------------------------------------------------------------------
@@ -85,7 +103,7 @@ def test_generate_whitespace_contract_text_returns_422(client: TestClient) -> No
 
 
 def test_generate_missing_example_returns_422(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)  # tmp_path has no examples/ dir
     body = {
@@ -159,8 +177,159 @@ def test_options_returns_models_from_config(client: TestClient) -> None:
 
 
 def test_options_examples_empty_when_no_examples_dir(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)  # tmp_path has no examples/ dir
     response = client.get("/options")
     assert response.json()["examples"] == []
+
+
+def test_options_returns_parameter_defaults(client: TestClient) -> None:
+    init_router({
+        "models": {"openai": ["gpt-4o-mini"], "anthropic": ["claude-haiku-4-5"]},
+        "parameters": {
+            "num_candidates": {"type": "int", "min": 1, "max": 10},
+            "temperature": {"type": "float", "min": 0.0, "max": 2.0},
+        },
+    })
+    response = client.get("/options")
+    params = response.json()["parameters"]
+    assert params["num_candidates"]["default"] == 1
+    assert params["temperature"]["default"] == pytest.approx(0.7)
+
+
+# ---------------------------------------------------------------------------
+# POST /generate: correction stage
+# ---------------------------------------------------------------------------
+
+
+def test_generate_with_unknown_correction_strategy_returns_422(client: TestClient) -> None:
+    body = {**_VALID_BODY, "correction": {**_VALID_STAGE, "strategy": "telepathy"}}
+    response = client.post("/generate", json=body)
+    assert response.status_code == 422
+    assert "Unknown strategy" in response.json()["detail"]
+
+
+def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClient) -> None:
+    body = {**_VALID_BODY, "correction": _VALID_STAGE}
+    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
+        response = client.post("/generate", json=body)
+    assert response.status_code == 200
+    assert "run_id" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# POST /generate: optional stage and pipeline fields
+# ---------------------------------------------------------------------------
+
+
+def test_generate_with_temperature_and_include_grammar(client: TestClient) -> None:
+    body = {
+        **_VALID_BODY,
+        "generation": {**_VALID_STAGE, "temperature": 0.5, "include_grammar": False},
+    }
+    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
+        response = client.post("/generate", json=body)
+    assert response.status_code == 200
+
+
+def test_generate_with_optional_pipeline_kwargs(client: TestClient) -> None:
+    body = {
+        **_VALID_BODY,
+        "num_candidates": 2,
+        "max_iterations": 5,
+        "stop_on_first_convergence": True,
+        "save_intermediates": True,
+    }
+    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
+        response = client.post("/generate", json=body)
+    assert response.status_code == 200
+    assert "run_id" in response.json()
+
+
+def test_generate_with_valid_few_shot_example(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    examples_dir = tmp_path / "examples"
+    examples_dir.mkdir()
+    (examples_dir / "my_example.yaml").write_text(
+        "contract_text: 'Buyer pays.'\nsymboleo_code: 'Contract C(){}'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    body = {
+        **_VALID_BODY,
+        "generation": {
+            **_VALID_STAGE,
+            "strategy": "few_shot",
+            "strategy_params": {"example_files": ["my_example"]},
+        },
+    }
+    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
+        response = client.post("/generate", json=body)
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# GET /runs/{run_id}/stream: live path
+# ---------------------------------------------------------------------------
+
+
+def test_stream_in_progress_job_yields_progress_then_complete(client: TestClient) -> None:
+    job = create_job("test-run-live")
+    result = _make_pipeline_result(success=True)
+    job.queue.put_nowait(ProgressEvent(candidate_id=0, iteration=0, error_count=2))
+    job.queue.put_nowait(CompleteEvent(result=result))
+
+    response = client.get("/runs/test-run-live/stream")
+
+    assert response.status_code == 200
+    events = _parse_all_sse(response.text)
+    assert len(events) == 2
+    assert events[0]["type"] == "progress"
+    assert events[0]["error_count"] == 2
+    assert events[1]["type"] == "complete"
+
+
+# ---------------------------------------------------------------------------
+# _run_pipeline: async bridge
+# ---------------------------------------------------------------------------
+
+
+def test_run_pipeline_puts_complete_event_on_queue() -> None:
+    job = create_job("pipe-complete")
+    result = _make_pipeline_result(success=True)
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with patch(
+            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
+        ) as mock_tp:
+            mock_tp.return_value = result
+            await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
+
+    asyncio.run(run())
+
+    assert job.result is result
+    assert job.completed_at is not None
+    event = job.queue.get_nowait()
+    assert isinstance(event, CompleteEvent)
+
+
+def test_run_pipeline_puts_error_event_on_exception() -> None:
+    job = create_job("pipe-error")
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with patch(
+            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
+        ) as mock_tp:
+            mock_tp.side_effect = RuntimeError("pipeline boom")
+            await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
+
+    asyncio.run(run())
+
+    assert job.error == "pipeline boom"
+    assert job.completed_at is not None
+    event = job.queue.get_nowait()
+    assert isinstance(event, ErrorEvent)

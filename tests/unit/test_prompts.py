@@ -7,7 +7,7 @@ from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.strategies.cot import CoTStrategy
 from symboleo_llm_tool.prompts.strategies.few_shot import FewShotStrategy
 from symboleo_llm_tool.prompts.strategies.zero_shot import ZeroShotStrategy
-from symboleo_llm_tool.symboleo.models import SymboleoIssue
+from tests.helpers import make_issue
 
 _EXAMPLE_CONTENT = (
     "contract_text: 'Buyer shall pay $100.'\n"
@@ -38,13 +38,6 @@ def cot() -> CoTStrategy:
     return CoTStrategy({})
 
 
-def _make_error() -> SymboleoIssue:
-    return SymboleoIssue(
-        severity="ERROR", code=None, offset=0, line=5, column=3, length=1,
-        message="missing ';'",
-    )
-
-
 # --- Shared contract (all strategies must pass) ---
 
 def test_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
@@ -68,7 +61,7 @@ def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
 
 
 def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
-    ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
+    ctx = PromptContext(current_code="code", errors=[make_issue(line=5, column=3, message="missing ';'")], grammar_context=None)
     prompt = any_strategy.build_correction_prompt(ctx)
     assert "missing ';'" in prompt
     assert "5" in prompt
@@ -116,5 +109,5 @@ def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
 
 
 def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
-    ctx = PromptContext(current_code="code", errors=[_make_error()], grammar_context=None)
+    ctx = PromptContext(current_code="code", errors=[make_issue(line=5, column=3, message="missing ';'")], grammar_context=None)
     assert "reason" in cot.build_correction_prompt(ctx).lower()
