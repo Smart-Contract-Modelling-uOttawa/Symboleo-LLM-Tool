@@ -198,12 +198,12 @@ contract_text: str                          # required
 generation: StageRequest                    # required
   model: str                                # e.g. "gpt-4o-mini"
   strategy: str                             # e.g. "zero_shot"
+  temperature: float | None                 # defaults from Pydantic; per-stage
   include_grammar: bool | None              # defaults from Pydantic
   strategy_params: dict                     # e.g. {"example_files": ["sale_contract"]}
 correction: StageRequest | None             # defaults to generation if omitted
 num_candidates: int | None                  # defaults from Pydantic
 max_iterations: int | None                  # defaults from Pydantic
-temperature: float | None                   # defaults from Pydantic
 save_intermediates: bool | None             # defaults from Pydantic
 stop_on_first_convergence: bool | None      # defaults from Pydantic
 ```

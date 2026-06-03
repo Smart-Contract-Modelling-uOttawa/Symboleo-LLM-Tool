@@ -99,14 +99,10 @@ def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
-def _build_stage_config(
-    stage_req: StageRequest,
-    temperature: float | None,
-    provider: str,
-) -> StageConfig:
+def _build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:
     llm_kwargs: dict[str, Any] = {"provider": provider, "model": stage_req.model}
-    if temperature is not None:
-        llm_kwargs["temperature"] = temperature
+    if stage_req.temperature is not None:
+        llm_kwargs["temperature"] = stage_req.temperature
 
     stage_kwargs: dict[str, Any] = {
         "llm": LLMConfig(**llm_kwargs),
@@ -131,8 +127,8 @@ async def generate(req: GenerateRequest) -> RunCreatedResponse:
     gen_provider = _resolve_provider(req.generation.model)
     corr_provider = _resolve_provider(req.effective_correction.model)
 
-    gen_stage = _build_stage_config(req.generation, req.temperature, gen_provider)
-    corr_stage = _build_stage_config(req.effective_correction, req.temperature, corr_provider)
+    gen_stage = _build_stage_config(req.generation, gen_provider)
+    corr_stage = _build_stage_config(req.effective_correction, corr_provider)
 
     run_kwargs: dict[str, Any] = {}
     if req.num_candidates is not None:
