@@ -128,12 +128,11 @@ def _build_stage_config(
 async def generate(req: GenerateRequest) -> RunCreatedResponse:
     _validate_stages(req)
 
-    corr_req = req.correction or req.generation
     gen_provider = _resolve_provider(req.generation.model)
-    corr_provider = _resolve_provider(corr_req.model)
+    corr_provider = _resolve_provider(req.effective_correction.model)
 
     gen_stage = _build_stage_config(req.generation, req.temperature, gen_provider)
-    corr_stage = _build_stage_config(corr_req, req.temperature, corr_provider)
+    corr_stage = _build_stage_config(req.effective_correction, req.temperature, corr_provider)
 
     run_kwargs: dict[str, Any] = {}
     if req.num_candidates is not None:

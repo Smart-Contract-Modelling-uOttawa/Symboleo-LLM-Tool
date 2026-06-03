@@ -22,6 +22,10 @@ class GenerateRequest(BaseModel):
     save_intermediates: bool | None = None
     stop_on_first_convergence: bool | None = None
 
+    @property
+    def effective_correction(self) -> StageRequest:
+        return self.correction if self.correction is not None else self.generation
+
     @field_validator("contract_text")
     @classmethod
     def _validate_contract_text(cls, v: str) -> str:
