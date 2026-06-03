@@ -156,6 +156,10 @@ docker compose up symboleo-api
 
 Interactive API docs are available at `http://localhost:8000/docs` once the server is running.
 
+### Frontend
+
+A React/Vite + shadcn/ui + Tailwind CSS frontend is planned, served as static files from FastAPI (`GET /`). Not yet started.
+
 ## Development
 
 ```bash
@@ -164,6 +168,9 @@ uv sync --extra dev
 
 # Run tests
 uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing
 
 # Lint
 uv run ruff check .

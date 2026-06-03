@@ -26,7 +26,7 @@ A Python CLI and FastAPI web service that:
 | Web framework | FastAPI + uvicorn |
 | Linting/formatting | Ruff |
 | Type checking | mypy |
-| Testing | pytest + pytest-mock + httpx |
+| Testing | pytest + pytest-mock + httpx + pytest-cov |
 
 ---
 
@@ -133,7 +133,10 @@ Input .txt
 - **Integration tests:** Run the real JAR against known fixture files (valid `.sl`, invalid `.sl` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
 - **No full e2e in CI** — manual smoke test before releases.
 - `tests/fixtures/` contains: sample `.txt` contract, known-valid `.sl`, known-invalid `.sl`
-- **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures) and `test_routes.py` (12 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution.
+- **`tests/helpers.py`** — shared `make_issue()` factory returning a `SymboleoIssue` with keyword-only defaults. All unit test files import from here; no per-file `_make_error()` helpers.
+- **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (20 tests), and `test_jobs.py` (3 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution. `test_jobs.py` covers `cleanup_expired()` with expired, recent, and in-progress job cases.
+- **`tests/unit/test_writer.py`** — 5 tests covering `write_results()`: timestamped directory naming, `report.json`/`config.yaml` content, single vs. multi-candidate filename suffixes, and `save_intermediates` directory layout.
+- **Coverage:** 75 tests, ~80% line coverage. Run with `uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing`. Intentionally untested: `app.py` lifespan (integration-level) and `litellm_adapter.py` (live LLM calls).
 
 ### Observability
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default
@@ -169,7 +172,7 @@ The API layer is implemented. The remaining steps toward a full web service are:
 
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
-3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI. Not yet started.
+3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Stack decided; not yet started.
 4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
