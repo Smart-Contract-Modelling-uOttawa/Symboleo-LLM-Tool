@@ -137,6 +137,8 @@ Input .txt
 - **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (20 tests), and `test_jobs.py` (3 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution. `test_jobs.py` covers `cleanup_expired()` with expired, recent, and in-progress job cases.
 - **`tests/unit/test_writer.py`** — 5 tests covering `write_results()`: timestamped directory naming, `report.json`/`config.yaml` content, single vs. multi-candidate filename suffixes, and `save_intermediates` directory layout.
 - **Coverage:** 75 tests, ~80% line coverage. Run with `uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing`. Intentionally untested: `app.py` lifespan (integration-level) and `litellm_adapter.py` (live LLM calls).
+- **Frontend tests (Vitest + RTL + MSW):** Vitest is configured in `frontend/vite.config.ts` (`test` block with `environment: jsdom`) — shares the Vite config and alias resolution. React Testing Library for component rendering/interaction. MSW v2 (`msw/node`) stubs all three API endpoints at the network level; default handlers in `frontend/src/test/handlers.ts`, server instance in `frontend/src/test/server.ts`, global setup (jest-dom matchers + MSW lifecycle) in `frontend/src/test/setup.ts`. Test files are co-located with components (`*.test.tsx`). Run with `npm run test` or `npm run test:coverage` from `frontend/`.
+- **Frontend E2E (future):** If a regression suite for the full generate→stream→display flow becomes valuable, add **Playwright** — native SSE support via `page.route()` and first-class Vite integration. Not in CI for now; manual smoke test before releases. No LLM API costs required — Playwright can mock the backend entirely.
 
 ### Observability
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default
@@ -175,7 +177,7 @@ The API layer is implemented. The remaining steps toward a full web service are:
 
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
-3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Stack decided; not yet started.
+3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Scaffold complete (Vite 6, Tailwind v4, shadcn/ui new-york, `@` alias, `/api` proxy, Vitest+RTL+MSW test setup); UI pages not yet built.
 4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
