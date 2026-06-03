@@ -8,6 +8,7 @@ from symboleo_llm_tool.output.models import PipelineResult
 class StageRequest(BaseModel):
     model: str
     strategy: str
+    temperature: float | None = None
     include_grammar: bool | None = None
     strategy_params: dict[str, Any] = Field(default_factory=dict)
 
@@ -18,9 +19,12 @@ class GenerateRequest(BaseModel):
     correction: StageRequest | None = None
     num_candidates: int | None = None
     max_iterations: int | None = None
-    temperature: float | None = None
     save_intermediates: bool | None = None
     stop_on_first_convergence: bool | None = None
+
+    @property
+    def effective_correction(self) -> StageRequest:
+        return self.correction if self.correction is not None else self.generation
 
     @field_validator("contract_text")
     @classmethod

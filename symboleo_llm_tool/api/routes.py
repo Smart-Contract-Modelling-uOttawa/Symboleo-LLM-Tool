@@ -59,6 +59,20 @@ def reset_router() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _validate_strategy(strategy: str, available: list[str]) -> None:
+    if strategy not in available:
+        raise HTTPException(422, detail=f"Unknown strategy: {strategy!r}")
+
+
+def _validate_stages(req: GenerateRequest) -> None:
+    available = list_strategies()
+    _validate_strategy(req.generation.strategy, available)
+    _validate_examples(req.generation.strategy_params)
+    if req.correction is not None:
+        _validate_strategy(req.correction.strategy, available)
+        _validate_examples(req.correction.strategy_params)
+
+
 def _resolve_provider(model: str) -> str:
     if model not in _model_to_provider:
         raise HTTPException(status_code=422, detail=f"Unknown model: {model!r}")
@@ -85,14 +99,10 @@ def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
-def _build_stage_config(
-    stage_req: StageRequest,
-    temperature: float | None,
-    provider: str,
-) -> StageConfig:
+def _build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:
     llm_kwargs: dict[str, Any] = {"provider": provider, "model": stage_req.model}
-    if temperature is not None:
-        llm_kwargs["temperature"] = temperature
+    if stage_req.temperature is not None:
+        llm_kwargs["temperature"] = stage_req.temperature
 
     stage_kwargs: dict[str, Any] = {
         "llm": LLMConfig(**llm_kwargs),
@@ -112,26 +122,13 @@ def _build_stage_config(
 
 @router.post("/generate", response_model=RunCreatedResponse)
 async def generate(req: GenerateRequest) -> RunCreatedResponse:
-    available = list_strategies()
-
-    if req.generation.strategy not in available:
-        raise HTTPException(
-            422, detail=f"Unknown strategy: {req.generation.strategy!r}"
-        )
-
-    corr_req = req.correction or req.generation
-    if corr_req.strategy not in available:
-        raise HTTPException(422, detail=f"Unknown strategy: {corr_req.strategy!r}")
-
-    _validate_examples(req.generation.strategy_params)
-    if req.correction is not None:
-        _validate_examples(req.correction.strategy_params)
+    _validate_stages(req)
 
     gen_provider = _resolve_provider(req.generation.model)
-    corr_provider = _resolve_provider(corr_req.model)
+    corr_provider = _resolve_provider(req.effective_correction.model)
 
-    gen_stage = _build_stage_config(req.generation, req.temperature, gen_provider)
-    corr_stage = _build_stage_config(corr_req, req.temperature, corr_provider)
+    gen_stage = _build_stage_config(req.generation, gen_provider)
+    corr_stage = _build_stage_config(req.effective_correction, corr_provider)
 
     run_kwargs: dict[str, Any] = {}
     if req.num_candidates is not None:

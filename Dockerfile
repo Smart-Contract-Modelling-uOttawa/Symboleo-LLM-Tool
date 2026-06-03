@@ -18,4 +18,6 @@ RUN uv sync --frozen --no-dev
 
 COPY lib/ ./lib/
 
+EXPOSE 8000
+
 ENTRYPOINT ["symboleo-tool"]

@@ -1,6 +1,6 @@
 # Symboleo LLM Tool
 
-A Python CLI tool that converts plain-English legal contracts into valid [SymboleoAC](https://github.com/Smart-Contract-Modelling-uOttawa/Symboleo-IDE) contracts using an LLM, with an automatic syntax-correction loop backed by the SymboleoAC headless CLI.
+A Python CLI and FastAPI web service that converts plain-English legal contracts into valid [SymboleoAC](https://github.com/Smart-Contract-Modelling-uOttawa/Symboleo-IDE) contracts using an LLM, with an automatic syntax-correction loop backed by the SymboleoAC headless CLI.
 
 ## How It Works
 
@@ -133,6 +133,28 @@ output/run_20260601_143022/
 ├── config.yaml           # copy of the config used (for reproducibility)
 └── intermediates/        # per-iteration .sl files (if save_intermediates: true)
 ```
+
+## API (Web Service)
+
+The FastAPI server exposes three endpoints:
+
+- `POST /generate` — submit a contract and config, returns a `run_id`
+- `GET /runs/{run_id}/stream` — SSE stream of progress and final result
+- `GET /options` — available models, strategies, and parameter constraints
+
+### Running the API
+
+**Locally:**
+```bash
+uv run uvicorn symboleo_llm_tool.api.app:app --reload
+```
+
+**Docker Compose:**
+```bash
+docker compose up symboleo-api
+```
+
+Interactive API docs are available at `http://localhost:8000/docs` once the server is running.
 
 ## Development
 
