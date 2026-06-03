@@ -29,5 +29,5 @@ def _reset_state() -> Generator[None, None, None]:
 @pytest.fixture
 def client() -> TestClient:
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(router, prefix="/api")
     return TestClient(app)

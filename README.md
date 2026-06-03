@@ -138,9 +138,9 @@ output/run_20260601_143022/
 
 The FastAPI server exposes three endpoints:
 
-- `POST /generate` — submit a contract and config, returns a `run_id`
-- `GET /runs/{run_id}/stream` — SSE stream of progress and final result
-- `GET /options` — available models, strategies, and parameter constraints
+- `POST /api/generate` — submit a contract and config, returns a `run_id`
+- `GET /api/runs/{run_id}/stream` — SSE stream of progress and final result
+- `GET /api/options` — available models, strategies, and parameter constraints
 
 ### Running the API
 

@@ -73,32 +73,32 @@ def _make_pipeline_config() -> PipelineConfig:
 
 def test_generate_returns_run_id(client: TestClient) -> None:
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/generate", json=_VALID_BODY)
+        response = client.post("/api/generate", json=_VALID_BODY)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
 
 def test_generate_unknown_model_returns_422(client: TestClient) -> None:
     body = {**_VALID_BODY, "generation": {**_VALID_STAGE, "model": "unknown-model"}}
-    response = client.post("/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 422
     assert "Unknown model" in response.json()["detail"]
 
 
 def test_generate_unknown_strategy_returns_422(client: TestClient) -> None:
     body = {**_VALID_BODY, "generation": {**_VALID_STAGE, "strategy": "telepathy"}}
-    response = client.post("/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 422
     assert "Unknown strategy" in response.json()["detail"]
 
 
 def test_generate_empty_contract_text_returns_422(client: TestClient) -> None:
-    response = client.post("/generate", json={**_VALID_BODY, "contract_text": ""})
+    response = client.post("/api/generate", json={**_VALID_BODY, "contract_text": ""})
     assert response.status_code == 422
 
 
 def test_generate_whitespace_contract_text_returns_422(client: TestClient) -> None:
-    response = client.post("/generate", json={**_VALID_BODY, "contract_text": "   "})
+    response = client.post("/api/generate", json={**_VALID_BODY, "contract_text": "   "})
     assert response.status_code == 422
 
 
@@ -114,7 +114,7 @@ def test_generate_missing_example_returns_422(
             "strategy_params": {"example_files": ["any_example"]},
         },
     }
-    response = client.post("/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 422
     assert "Example not found" in response.json()["detail"]
 
@@ -125,7 +125,7 @@ def test_generate_missing_example_returns_422(
 
 
 def test_stream_unknown_run_id_returns_404(client: TestClient) -> None:
-    response = client.get("/runs/does-not-exist/stream")
+    response = client.get("/api/runs/does-not-exist/stream")
     assert response.status_code == 404
 
 
@@ -134,7 +134,7 @@ def test_stream_complete_job_yields_complete_event(client: TestClient) -> None:
     job.result = _make_pipeline_result(success=True)
     job.completed_at = datetime.now()
 
-    response = client.get("/runs/test-run-complete/stream")
+    response = client.get("/api/runs/test-run-complete/stream")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
@@ -148,7 +148,7 @@ def test_stream_error_job_yields_error_event(client: TestClient) -> None:
     job.error = "pipeline exploded"
     job.completed_at = datetime.now()
 
-    response = client.get("/runs/test-run-error/stream")
+    response = client.get("/api/runs/test-run-error/stream")
 
     payload = _parse_sse(response.text)
     assert payload["type"] == "error"
@@ -161,7 +161,7 @@ def test_stream_error_job_yields_error_event(client: TestClient) -> None:
 
 
 def test_options_returns_known_strategies(client: TestClient) -> None:
-    response = client.get("/options")
+    response = client.get("/api/options")
     assert response.status_code == 200
     strategies = response.json()["strategies"]
     assert "zero_shot" in strategies
@@ -170,7 +170,7 @@ def test_options_returns_known_strategies(client: TestClient) -> None:
 
 
 def test_options_returns_models_from_config(client: TestClient) -> None:
-    response = client.get("/options")
+    response = client.get("/api/options")
     models = response.json()["models"]
     assert "gpt-4o-mini" in models["openai"]
     assert "claude-haiku-4-5" in models["anthropic"]
@@ -180,7 +180,7 @@ def test_options_examples_empty_when_no_examples_dir(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)  # tmp_path has no examples/ dir
-    response = client.get("/options")
+    response = client.get("/api/options")
     assert response.json()["examples"] == []
 
 
@@ -192,7 +192,7 @@ def test_options_returns_parameter_defaults(client: TestClient) -> None:
             "temperature": {"type": "float", "min": 0.0, "max": 2.0},
         },
     })
-    response = client.get("/options")
+    response = client.get("/api/options")
     params = response.json()["parameters"]
     assert params["num_candidates"]["default"] == 1
     assert params["temperature"]["default"] == pytest.approx(0.7)
@@ -205,7 +205,7 @@ def test_options_returns_parameter_defaults(client: TestClient) -> None:
 
 def test_generate_with_unknown_correction_strategy_returns_422(client: TestClient) -> None:
     body = {**_VALID_BODY, "correction": {**_VALID_STAGE, "strategy": "telepathy"}}
-    response = client.post("/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 422
     assert "Unknown strategy" in response.json()["detail"]
 
@@ -213,7 +213,7 @@ def test_generate_with_unknown_correction_strategy_returns_422(client: TestClien
 def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClient) -> None:
     body = {**_VALID_BODY, "correction": _VALID_STAGE}
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/generate", json=body)
+        response = client.post("/api/generate", json=body)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
@@ -229,7 +229,7 @@ def test_generate_with_temperature_and_include_grammar(client: TestClient) -> No
         "generation": {**_VALID_STAGE, "temperature": 0.5, "include_grammar": False},
     }
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/generate", json=body)
+        response = client.post("/api/generate", json=body)
     assert response.status_code == 200
 
 
@@ -242,7 +242,7 @@ def test_generate_with_optional_pipeline_kwargs(client: TestClient) -> None:
         "save_intermediates": True,
     }
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/generate", json=body)
+        response = client.post("/api/generate", json=body)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
@@ -266,7 +266,7 @@ def test_generate_with_valid_few_shot_example(
         },
     }
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/generate", json=body)
+        response = client.post("/api/generate", json=body)
     assert response.status_code == 200
 
 
@@ -281,7 +281,7 @@ def test_stream_in_progress_job_yields_progress_then_complete(client: TestClient
     job.queue.put_nowait(ProgressEvent(candidate_id=0, iteration=0, error_count=2))
     job.queue.put_nowait(CompleteEvent(result=result))
 
-    response = client.get("/runs/test-run-live/stream")
+    response = client.get("/api/runs/test-run-live/stream")
 
     assert response.status_code == 200
     events = _parse_all_sse(response.text)

@@ -162,6 +162,9 @@ The LLM may return markdown code blocks, explanations, or partial output instead
 ### CLI `--set` Override
 Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred — low priority given the API now provides a more ergonomic interface for per-run config.**
 
+### Frontend — No Run History
+The frontend has no persistent run history. Once a job's 5-minute TTL expires, it is gone from the in-memory store and the run URL returns 404. Full run data (contract, config, errors, final output) is always available in the timestamped `output/` directory written by the pipeline — the UI is a live view only, not an archive. Migrate job storage to Redis and add a `GET /runs` list endpoint before adding a history page.
+
 ---
 
 ## Future Directions
