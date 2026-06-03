@@ -16,4 +16,5 @@ services:
     volumes:
       - ./configs:/app/configs:ro
       - ./examples:/app/examples:ro
+      - ./frontend/dist:/app/frontend/dist:ro
     entrypoint: ["uvicorn", "symboleo_llm_tool.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

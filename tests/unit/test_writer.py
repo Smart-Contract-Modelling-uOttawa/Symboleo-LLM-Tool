@@ -2,6 +2,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from symboleo_llm_tool.config.models import LLMConfig, OutputConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.output.models import CandidateResult, IterationRecord, PipelineResult
 from symboleo_llm_tool.output.writer import write_results
@@ -38,20 +40,19 @@ def _result(*, num_candidates: int = 1) -> PipelineResult:
     )
 
 
-def test_write_results_creates_timestamped_directory(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("pipeline: {}", encoding="utf-8")
+@pytest.fixture
+def config_path(tmp_path: Path) -> Path:
+    path = tmp_path / "config.yaml"
+    path.write_text("pipeline: {}", encoding="utf-8")
+    return path
 
+
+def test_write_results_creates_timestamped_directory(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(), _config(tmp_path), config_path)
-
-    assert run_dir.exists()
     assert run_dir.name == "run_20260101_120000"
 
 
-def test_write_results_writes_report_and_config(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("pipeline: {}", encoding="utf-8")
-
+def test_write_results_writes_report_and_config(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(), _config(tmp_path), config_path)
 
     report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
@@ -59,20 +60,14 @@ def test_write_results_writes_report_and_config(tmp_path: Path) -> None:
     assert (run_dir / "config.yaml").read_text(encoding="utf-8") == "pipeline: {}"
 
 
-def test_write_results_single_candidate_no_suffix(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("{}", encoding="utf-8")
-
+def test_write_results_single_candidate_no_suffix(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(num_candidates=1), _config(tmp_path), config_path)
 
     assert (run_dir / "contract_final.sl").exists()
     assert not (run_dir / "contract_candidate_0_final.sl").exists()
 
 
-def test_write_results_multi_candidate_uses_suffix(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("{}", encoding="utf-8")
-
+def test_write_results_multi_candidate_uses_suffix(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(num_candidates=2), _config(tmp_path), config_path)
 
     assert (run_dir / "contract_candidate_0_final.sl").exists()
@@ -80,9 +75,7 @@ def test_write_results_multi_candidate_uses_suffix(tmp_path: Path) -> None:
     assert not (run_dir / "contract_final.sl").exists()
 
 
-def test_write_results_saves_intermediates_when_enabled(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text("{}", encoding="utf-8")
+def test_write_results_saves_intermediates_when_enabled(tmp_path: Path, config_path: Path) -> None:
     error = make_issue(message="err")
     result = PipelineResult(
         success=True,
@@ -105,6 +98,5 @@ def test_write_results_saves_intermediates_when_enabled(tmp_path: Path) -> None:
     run_dir = write_results(result, _config(tmp_path, save_intermediates=True), config_path)
 
     inter_dir = run_dir / "intermediates"
-    assert inter_dir.exists()
     assert (inter_dir / "iteration_0.sl").read_text(encoding="utf-8") == "bad code"
     assert (inter_dir / "iteration_1.sl").read_text(encoding="utf-8") == "Contract Fixed() {}"

@@ -1,10 +1,13 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
 import yaml
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from symboleo_llm_tool.api import routes
 from symboleo_llm_tool.api.jobs import cleanup_expired
@@ -42,4 +45,22 @@ async def _ttl_cleanup_loop() -> None:
 
 
 app = FastAPI(title="Symboleo LLM Tool API", version="0.1.0", lifespan=_lifespan)
-app.include_router(routes.router)
+
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(routes.router, prefix="/api")
+
+_frontend_dist = Path("frontend/dist")
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
