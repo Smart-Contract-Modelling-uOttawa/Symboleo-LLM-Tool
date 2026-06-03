@@ -61,7 +61,11 @@ def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
 
 
 def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
-    ctx = PromptContext(current_code="code", errors=[make_issue(line=5, column=3, message="missing ';'")], grammar_context=None)
+    ctx = PromptContext(
+        current_code="code",
+        errors=[make_issue(line=5, column=3, message="missing ';'")],
+        grammar_context=None,
+    )
     prompt = any_strategy.build_correction_prompt(ctx)
     assert "missing ';'" in prompt
     assert "5" in prompt
@@ -109,5 +113,9 @@ def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
 
 
 def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
-    ctx = PromptContext(current_code="code", errors=[make_issue(line=5, column=3, message="missing ';'")], grammar_context=None)
+    ctx = PromptContext(
+        current_code="code",
+        errors=[make_issue(line=5, column=3, message="missing ';'")],
+        grammar_context=None,
+    )
     assert "reason" in cot.build_correction_prompt(ctx).lower()

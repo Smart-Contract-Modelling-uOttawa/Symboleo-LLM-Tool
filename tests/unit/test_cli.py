@@ -15,7 +15,8 @@ def test_generation_converged():
 
 
 def test_correction_with_errors_remaining():
-    msg = _format_progress(0, 2, [make_issue(message="err"), make_issue(message="err")], num_candidates=1, max_iterations=3)
+    errors = [make_issue(message="err"), make_issue(message="err")]
+    msg = _format_progress(0, 2, errors, num_candidates=1, max_iterations=3)
     assert "Correction 2/3" in msg
     assert "2 error(s) remaining" in msg
 
