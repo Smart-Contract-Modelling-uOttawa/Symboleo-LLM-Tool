@@ -124,7 +124,7 @@ Input .txt
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 11+ as a system prerequisite. Check for Java at startup and fail with a clear, actionable error message.
 - **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates Java prerequisite for end users. `Dockerfile` and `docker-compose.yml` are in the project root.
-- **Running the API from Docker (not yet wired up):** The current `Dockerfile` has two gaps for API use: (1) `configs/` is not copied into the image — the lifespan handler loads `configs/ui_config.yaml` on startup and fails immediately if it's missing; (2) port 8000 is not exposed. Fix: add `COPY configs/ ./configs/` and `EXPOSE 8000` to the Dockerfile, then run with `docker run -p 8000:8000 --entrypoint uvicorn <image> symboleo_llm_tool.api.app:app --host 0.0.0.0 --port 8000`. API keys must be passed via `-e ANTHROPIC_API_KEY=...` (or equivalent).
+- **Running the API from Docker:** Preferred: `docker compose up symboleo-api` (handles build, volumes, and env automatically). Standalone: `docker build -t symboleo-llm-tool .` then `docker run -p 8000:8000 --env-file .env -v ./configs:/app/configs:ro --entrypoint uvicorn symboleo-llm-tool symboleo_llm_tool.api.app:app --host 0.0.0.0 --port 8000`. API keys must be passed via `--env-file .env` or `-e ANTHROPIC_API_KEY=...`. `configs/` is intentionally not baked into the image — `ui_config.yaml` must be mountable at runtime so model lists can be updated without a rebuild.
 - **JAR naming convention:** The JAR is stored as `lib/symboleo-cli.jar` (no version in the filename). When updating the JAR, replace the file in place — the version lives in the file content and git history, not the filename. This keeps the default `jar_path` in `SymboleoConfig` stable across releases.
 - **JAR/grammar coupling:** `lib/symboleo-cli.jar` and `symboleo_llm_tool/resources/Symboleo.xtext` must always be updated together in the same commit. If the SymboleoAC language evolves and only the JAR is replaced, the LLM generates code against the old grammar while the validator enforces new rules — the correction loop will spin through all iterations without converging. Treat them as a single atomic change.
 
@@ -170,7 +170,7 @@ The API layer is implemented. The remaining steps toward a full web service are:
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
 3. **Add a frontend** — lightweight React/Vite app or static HTML served from FastAPI. Not yet started.
-4. **Wire up Docker for API** — `Dockerfile` needs `COPY configs/ ./configs/` and `EXPOSE 8000`; Docker Compose needs a second service entry for uvicorn. See the Docker note under Java Dependency.
+4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
 
