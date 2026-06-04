@@ -26,9 +26,7 @@ def _make_config(**pipeline_kwargs: Any) -> PipelineConfig:
 
 
 @pytest.fixture(autouse=True)
-def mock_deps(tmp_path):
-    jar = tmp_path / "test.jar"
-    jar.touch()
+def mock_deps():
     with (
         patch("shutil.which", return_value="/usr/bin/java"),
         patch(
