@@ -71,9 +71,8 @@ def _make_pipeline_config() -> PipelineConfig:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_returns_run_id(client: TestClient) -> None:
-    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/api/generate", json=_VALID_BODY)
+def test_generate_returns_run_id(client: TestClient, patch_run_pipeline: None) -> None:
+    response = client.post("/api/generate", json=_VALID_BODY)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
@@ -150,6 +149,8 @@ def test_stream_error_job_yields_error_event(client: TestClient) -> None:
 
     response = client.get("/api/runs/test-run-error/stream")
 
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
     payload = _parse_sse(response.text)
     assert payload["type"] == "error"
     assert "pipeline exploded" in payload["message"]
@@ -210,10 +211,9 @@ def test_generate_with_unknown_correction_strategy_returns_422(client: TestClien
     assert "Unknown strategy" in response.json()["detail"]
 
 
-def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClient) -> None:
+def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClient, patch_run_pipeline: None) -> None:
     body = {**_VALID_BODY, "correction": _VALID_STAGE}
-    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/api/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
@@ -223,17 +223,16 @@ def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClie
 # ---------------------------------------------------------------------------
 
 
-def test_generate_with_temperature_and_include_grammar(client: TestClient) -> None:
+def test_generate_with_temperature_and_include_grammar(client: TestClient, patch_run_pipeline: None) -> None:
     body = {
         **_VALID_BODY,
         "generation": {**_VALID_STAGE, "temperature": 0.5, "include_grammar": False},
     }
-    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/api/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 200
 
 
-def test_generate_with_optional_pipeline_kwargs(client: TestClient) -> None:
+def test_generate_with_optional_pipeline_kwargs(client: TestClient, patch_run_pipeline: None) -> None:
     body = {
         **_VALID_BODY,
         "num_candidates": 2,
@@ -241,14 +240,13 @@ def test_generate_with_optional_pipeline_kwargs(client: TestClient) -> None:
         "stop_on_first_convergence": True,
         "save_intermediates": True,
     }
-    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/api/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
 
 def test_generate_with_valid_few_shot_example(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, patch_run_pipeline: None
 ) -> None:
     examples_dir = tmp_path / "examples"
     examples_dir.mkdir()
@@ -265,8 +263,7 @@ def test_generate_with_valid_few_shot_example(
             "strategy_params": {"example_files": ["my_example"]},
         },
     }
-    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
-        response = client.post("/api/generate", json=body)
+    response = client.post("/api/generate", json=body)
     assert response.status_code == 200
 
 
@@ -314,6 +311,7 @@ def test_run_pipeline_puts_complete_event_on_queue() -> None:
     assert job.completed_at is not None
     event = job.queue.get_nowait()
     assert isinstance(event, CompleteEvent)
+    assert event.result is result
 
 
 def test_run_pipeline_puts_error_event_on_exception() -> None:

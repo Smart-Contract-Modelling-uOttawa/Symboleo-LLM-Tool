@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +25,12 @@ def _reset_state() -> Generator[None, None, None]:
     yield
     reset_router()
     reset_store()
+
+
+@pytest.fixture
+def patch_run_pipeline() -> Generator[None, None, None]:
+    with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
+        yield
 
 
 @pytest.fixture
