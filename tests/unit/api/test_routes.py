@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from symboleo_llm_tool.api.jobs import create_job
 from symboleo_llm_tool.api.models import CompleteEvent, ErrorEvent, ProgressEvent
-from symboleo_llm_tool.api.routes import _run_pipeline, init_router
+from symboleo_llm_tool.api.routes import _run_pipeline
 from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.output.models import CandidateResult, PipelineResult
 
@@ -185,14 +185,7 @@ def test_options_examples_empty_when_no_examples_dir(
     assert response.json()["examples"] == []
 
 
-def test_options_returns_parameter_defaults(client: TestClient) -> None:
-    init_router({
-        "models": {"openai": ["gpt-4o-mini"], "anthropic": ["claude-haiku-4-5"]},
-        "parameters": {
-            "num_candidates": {"type": "int", "min": 1, "max": 10},
-            "temperature": {"type": "float", "min": 0.0, "max": 2.0},
-        },
-    })
+def test_options_returns_parameter_defaults(client: TestClient, parameters_config: None) -> None:
     response = client.get("/api/options")
     params = response.json()["parameters"]
     assert params["num_candidates"]["default"] == 1
@@ -331,3 +324,4 @@ def test_run_pipeline_puts_error_event_on_exception() -> None:
     assert job.completed_at is not None
     event = job.queue.get_nowait()
     assert isinstance(event, ErrorEvent)
+    assert event.message == "pipeline boom"

@@ -28,6 +28,17 @@ def _reset_state() -> Generator[None, None, None]:
 
 
 @pytest.fixture
+def parameters_config() -> None:
+    init_router({
+        "models": {"openai": ["gpt-4o-mini"], "anthropic": ["claude-haiku-4-5"]},
+        "parameters": {
+            "num_candidates": {"type": "int", "min": 1, "max": 10},
+            "temperature": {"type": "float", "min": 0.0, "max": 2.0},
+        },
+    })
+
+
+@pytest.fixture
 def patch_run_pipeline() -> Generator[None, None, None]:
     with patch("symboleo_llm_tool.api.routes._run_pipeline", new_callable=AsyncMock):
         yield
