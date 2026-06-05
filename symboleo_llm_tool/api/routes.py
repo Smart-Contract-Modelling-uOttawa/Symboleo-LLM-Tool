@@ -191,8 +191,8 @@ async def _run_pipeline(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/runs/{run_id}/stream")
-async def stream_run(run_id: str, request: Request) -> StreamingResponse:
+@router.get("/runs/{run_id}/stream", response_model=ProgressEvent | CompleteEvent | ErrorEvent)
+async def stream_run(run_id: str, request: Request):  # return annotation omitted so response_model reaches the schema
     job = get_job(run_id)
     if job is None:
         raise HTTPException(
