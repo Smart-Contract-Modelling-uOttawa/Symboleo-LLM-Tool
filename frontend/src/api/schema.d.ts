@@ -59,6 +59,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CandidateResult */
+        CandidateResult: {
+            /** Candidate Id */
+            candidate_id: number;
+            /** Final Code */
+            final_code: string;
+            /** Converged */
+            converged: boolean;
+            /** Iterations Used */
+            iterations_used: number;
+            /** Error History */
+            error_history: components["schemas"]["IterationRecord"][];
+        };
+        /** CompleteEvent */
+        CompleteEvent: {
+            /**
+             * Type
+             * @default complete
+             * @constant
+             */
+            type: "complete";
+            result: components["schemas"]["PipelineResult"];
+        };
+        /** ErrorEvent */
+        ErrorEvent: {
+            /**
+             * Type
+             * @default error
+             * @constant
+             */
+            type: "error";
+            /** Message */
+            message: string;
+        };
         /** GenerateRequest */
         GenerateRequest: {
             /** Contract Text */
@@ -79,6 +113,15 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IterationRecord */
+        IterationRecord: {
+            /** Iteration */
+            iteration: number;
+            /** Code */
+            code: string;
+            /** Errors */
+            errors: components["schemas"]["SymboleoIssue"][];
+        };
         /** OptionsResponse */
         OptionsResponse: {
             /** Strategies */
@@ -93,6 +136,35 @@ export interface components {
             };
             /** Examples */
             examples: string[];
+        };
+        /** PipelineResult */
+        PipelineResult: {
+            /** Success */
+            success: boolean;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp: string;
+            /** Input File */
+            input_file: string;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateResult"][];
+        };
+        /** ProgressEvent */
+        ProgressEvent: {
+            /**
+             * Type
+             * @default progress
+             * @constant
+             */
+            type: "progress";
+            /** Candidate Id */
+            candidate_id: number;
+            /** Iteration */
+            iteration: number;
+            /** Error Count */
+            error_count: number;
         };
         /** RunCreatedResponse */
         RunCreatedResponse: {
@@ -113,6 +185,23 @@ export interface components {
             strategy_params?: {
                 [key: string]: unknown;
             };
+        };
+        /** SymboleoIssue */
+        SymboleoIssue: {
+            /** Severity */
+            severity: string;
+            /** Code */
+            code: string | null;
+            /** Offset */
+            offset: number;
+            /** Line */
+            line: number;
+            /** Column */
+            column: number;
+            /** Length */
+            length: number;
+            /** Message */
+            message: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -186,7 +275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProgressEvent"] | components["schemas"]["CompleteEvent"] | components["schemas"]["ErrorEvent"];
                 };
             };
             /** @description Validation Error */

@@ -27,6 +27,9 @@ A Python CLI and FastAPI web service that:
 | Linting/formatting | Ruff |
 | Type checking | mypy |
 | Testing | pytest + pytest-mock + httpx + pytest-cov |
+| Frontend | React 19 + Vite 6 + Tailwind v4 + shadcn/ui + TypeScript |
+| Frontend testing | Vitest + React Testing Library + MSW v2 |
+| Type generation | openapi-typescript |
 
 ---
 
@@ -128,6 +131,14 @@ Input .txt
 - **JAR naming convention:** The JAR is stored as `lib/symboleo-cli.jar` (no version in the filename). When updating the JAR, replace the file in place — the version lives in the file content and git history, not the filename. This keeps the default `jar_path` in `SymboleoConfig` stable across releases.
 - **JAR/grammar coupling:** `lib/symboleo-cli.jar` and `symboleo_llm_tool/resources/Symboleo.xtext` must always be updated together in the same commit. If the SymboleoAC language evolves and only the JAR is replaced, the LLM generates code against the old grammar while the validator enforces new rules — the correction loop will spin through all iterations without converging. Treat them as a single atomic change.
 
+### Frontend Architecture
+- Two-page SPA with React Router: `/` (config form) and `/runs/:id` (results page).
+- **Generated types:** `openapi-typescript` generates `frontend/src/api/schema.d.ts` from the live OpenAPI schema. `frontend/src/api/types.ts` re-exports all frontend-relevant types from this generated file — never hand-write interfaces that mirror backend Pydantic models. Run `npm run generate-types` from `frontend/` whenever backend Pydantic models change; requires the API server running at `localhost:8000`. The SSE endpoint's `response_model` hack (see Known Issues) is what makes the SSE event types appear in the schema.
+- **`StreamStatus` type union:** `'connecting' | 'running' | 'reconnecting' | 'complete' | 'error'` is defined as a TypeScript string union in `useStream.ts`. Do not extract these values into a constants object — the union type itself provides compile-time exhaustiveness checking, making a separate constants file a second source of truth with no safety benefit.
+- **`makeNullableUpdater<T>` factory:** module-level generic in `ConfigPage.tsx` that captures the `prev => prev ? updater(prev) : prev` null-guard pattern. Use it whenever a top-level state type is `T | null` and child handlers only need to update non-null state.
+- **SSE error discrimination in `useStream`:** `hasEverConnected` flag distinguishes a never-connected failure (fail immediately — likely a 404 or server down) from a mid-stream drop (retry up to `MAX_RETRIES=3`). The browser handles reconnect timing automatically via `EventSource`; the hook only tracks retry count and sets `'reconnecting'` status between attempts.
+- **Frontend type checking and linting:** mypy and ruff do not cover `frontend/`. TypeScript (`tsc`, run as part of `npm run build`) handles type safety; ESLint handles linting (`npm run lint`). Both are separate from the Python CI checks.
+
 ### Testing Strategy
 - **Unit tests:** Mock both LLM adapter and CLI subprocess wrapper. Focus on pipeline loop logic (iteration bounds, early stopping, error passing).
 - **Integration tests:** Run the real JAR against known fixture files (valid `.sl`, invalid `.sl` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
@@ -167,6 +178,9 @@ Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and
 ### Frontend — Options Cache Staleness
 `useOptions` caches `GET /api/options` in a module-level variable for the lifetime of the browser tab. If `configs/ui_config.yaml` is changed and the server restarted while a user has the tab open, the frontend will continue showing the old model/parameter list until the user does a hard refresh. The failure mode is benign: submitting a model that no longer exists returns a 422 from the backend, which the frontend already surfaces as an error. Alternatives considered: React Context above the router (more boilerplate, same semantics) and React Query with `staleTime: Infinity` (adds a dependency for a single static endpoint). Neither is warranted for a single-user research tool where config changes are infrequent.
 
+### Frontend — SSE Schema via `response_model` Semantic Hack
+`GET /api/runs/{run_id}/stream` carries `response_model=ProgressEvent | CompleteEvent | ErrorEvent` on its route decorator solely to force FastAPI to include those Pydantic models in `components/schemas`, which lets `openapi-typescript` generate them into `schema.d.ts`. The endpoint actually returns a `StreamingResponse` (`text/event-stream`), not the JSON body the spec implies. The return type annotation is intentionally omitted from the function signature — adding `-> StreamingResponse` causes FastAPI to skip `response_model` during schema generation. Accurate documentation would require a custom `app.openapi()` override; the hack is acceptable for a single-consumer research tool where the spec is only read by `openapi-typescript`. Run `npm run generate-types` from `frontend/` after any change to the SSE event models or their nested types.
+
 ### Frontend — No Run History
 The frontend has no persistent run history. Once a job's 5-minute TTL expires, it is gone from the in-memory store and the run URL returns 404. Full run data (contract, config, errors, final output) is always available in the timestamped `output/` directory written by the pipeline — the UI is a live view only, not an archive. Migrate job storage to Redis and add a `GET /runs` list endpoint before adding a history page.
 
@@ -174,13 +188,13 @@ The frontend has no persistent run history. Once a job's 5-minute TTL expires, i
 
 ## Future Directions
 
-### FastAPI Web Service — Current State and Remaining Work
+### FastAPI Web Service — Implementation Notes
 
-The API layer is implemented. The remaining steps toward a full web service are:
+The web service is fully implemented. All four original milestones are complete:
 
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
-3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Scaffold complete (Vite 6, Tailwind v4, shadcn/ui new-york, `@` alias, `/api` proxy, Vitest+RTL+MSW test setup); UI design decided (see below); pages not yet built.
+3. ~~**Add a frontend**~~ — done. React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Two-page SPA: `/` (config form) and `/runs/:id` (results page with SSE progress stream).
 4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.

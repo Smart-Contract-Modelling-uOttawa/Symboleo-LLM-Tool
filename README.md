@@ -218,6 +218,15 @@ npm run dev
 # Build
 npm run build
 
+# Run tests
+npm run test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Lint
+npm run lint
+
 # Generate TypeScript types from the live API schema (requires API running)
 npm run generate-types
 ```

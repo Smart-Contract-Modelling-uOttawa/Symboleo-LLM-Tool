@@ -46,6 +46,21 @@ interface AdvancedState {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const FEW_SHOT = 'few_shot'
+
+const DEFAULTS = {
+  temperature: 0.7,
+  include_grammar: true,
+  num_candidates: 1,
+  max_iterations: 3,
+  stop_on_first_convergence: false,
+  save_intermediates: false,
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -69,19 +84,24 @@ function makeDefaultStage(options: OptionsResponse): StageState {
   return {
     model: firstModel,
     strategy: firstStrategy,
-    temperature: String(getParamDefault(options.parameters, 'temperature', 0.7)),
-    include_grammar: getParamDefault(options.parameters, 'include_grammar', true),
+    temperature: String(getParamDefault(options.parameters, 'temperature', DEFAULTS.temperature)),
+    include_grammar: getParamDefault(options.parameters, 'include_grammar', DEFAULTS.include_grammar),
     example_files: [],
   }
 }
 
 function makeDefaultAdvanced(options: OptionsResponse): AdvancedState {
   return {
-    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', 1)),
-    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', 3)),
-    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', false),
-    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', false),
+    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', DEFAULTS.num_candidates)),
+    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', DEFAULTS.max_iterations)),
+    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', DEFAULTS.stop_on_first_convergence),
+    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', DEFAULTS.save_intermediates),
   }
+}
+
+function makeNullableUpdater<T>(setter: (fn: (prev: T | null) => T | null) => void) {
+  return (updater: (prev: T) => T) =>
+    setter(prev => (prev ? updater(prev) : prev))
 }
 
 function buildStageRequest(state: StageState) {
@@ -89,9 +109,9 @@ function buildStageRequest(state: StageState) {
   return {
     model: state.model,
     strategy: state.strategy,
-    temperature: isNaN(temp) ? 0.7 : temp,
+    temperature: isNaN(temp) ? DEFAULTS.temperature : temp,
     include_grammar: state.include_grammar,
-    ...(state.strategy === 'few_shot' && {
+    ...(state.strategy === FEW_SHOT && {
       strategy_params: { example_files: state.example_files },
     }),
   }
@@ -140,13 +160,9 @@ export default function ConfigPage() {
     multiple: false,
   })
 
-  function updateGeneration(updater: (prev: StageState) => StageState) {
-    setGeneration(prev => (prev ? updater(prev) : prev))
-  }
-
-  function updateCorrection(updater: (prev: StageState) => StageState) {
-    setCorrection(prev => (prev ? updater(prev) : prev))
-  }
+  const updateGeneration = makeNullableUpdater<StageState>(setGeneration)
+  const updateCorrection = makeNullableUpdater<StageState>(setCorrection)
+  const updateAdvanced = makeNullableUpdater<AdvancedState>(setAdvanced)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -160,8 +176,8 @@ export default function ConfigPage() {
         contract_text: contractText,
         generation: buildStageRequest(generation),
         correction: buildStageRequest(correction),
-        num_candidates: isNaN(numCandidates) ? 1 : numCandidates,
-        max_iterations: isNaN(maxIterations) ? 3 : maxIterations,
+        num_candidates: isNaN(numCandidates) ? DEFAULTS.num_candidates : numCandidates,
+        max_iterations: isNaN(maxIterations) ? DEFAULTS.max_iterations : maxIterations,
         stop_on_first_convergence: advanced.stop_on_first_convergence,
         save_intermediates: advanced.save_intermediates,
       })
@@ -192,8 +208,6 @@ export default function ConfigPage() {
   }
 
   if (!options || !generation || !correction || !advanced) return null
-
-  const hasFewShotExamples = options.examples.length > 0
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
@@ -245,7 +259,6 @@ export default function ConfigPage() {
           onOpenChange={setGenerationOpen}
           state={generation}
           options={options}
-          hasFewShotExamples={hasFewShotExamples}
           onChange={updateGeneration}
         />
 
@@ -257,7 +270,6 @@ export default function ConfigPage() {
           onOpenChange={setCorrectionOpen}
           state={correction}
           options={options}
-          hasFewShotExamples={hasFewShotExamples}
           onChange={updateCorrection}
         />
 
@@ -280,7 +292,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.num_candidates}
                   onChange={e =>
-                    setAdvanced(a => a ? { ...a, num_candidates: e.target.value } : a)
+                    updateAdvanced(prev => ({ ...prev, num_candidates: e.target.value }))
                   }
                 />
               </div>
@@ -292,7 +304,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.max_iterations}
                   onChange={e =>
-                    setAdvanced(a => a ? { ...a, max_iterations: e.target.value } : a)
+                    updateAdvanced(prev => ({ ...prev, max_iterations: e.target.value }))
                   }
                 />
               </div>
@@ -303,7 +315,7 @@ export default function ConfigPage() {
                   id="stop_on_first"
                   checked={advanced.stop_on_first_convergence}
                   onCheckedChange={v =>
-                    setAdvanced(a => a ? { ...a, stop_on_first_convergence: !!v } : a)
+                    updateAdvanced(prev => ({ ...prev, stop_on_first_convergence: !!v }))
                   }
                 />
                 <Label htmlFor="stop_on_first" className="font-normal cursor-pointer">
@@ -315,7 +327,7 @@ export default function ConfigPage() {
                   id="save_intermediates"
                   checked={advanced.save_intermediates}
                   onCheckedChange={v =>
-                    setAdvanced(a => a ? { ...a, save_intermediates: !!v } : a)
+                    updateAdvanced(prev => ({ ...prev, save_intermediates: !!v }))
                   }
                 />
                 <Label htmlFor="save_intermediates" className="font-normal cursor-pointer">
@@ -355,7 +367,6 @@ interface StageSectionProps {
   onOpenChange: (open: boolean) => void
   state: StageState
   options: OptionsResponse
-  hasFewShotExamples: boolean
   onChange: (updater: (prev: StageState) => StageState) => void
 }
 
@@ -366,9 +377,9 @@ function StageSection({
   onOpenChange,
   state,
   options,
-  hasFewShotExamples,
   onChange,
 }: StageSectionProps) {
+  const hasFewShotExamples = options.examples.length > 0
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -422,10 +433,10 @@ function StageSection({
                     <SelectItem
                       key={s}
                       value={s}
-                      disabled={s === 'few_shot' && !hasFewShotExamples}
+                      disabled={s === FEW_SHOT && !hasFewShotExamples}
                     >
                       {s}
-                      {s === 'few_shot' && !hasFewShotExamples ? ' (no examples available)' : ''}
+                      {s === FEW_SHOT && !hasFewShotExamples ? ' (no examples available)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -433,7 +444,7 @@ function StageSection({
             </div>
 
             {/* Example files — shown only for few_shot */}
-            {state.strategy === 'few_shot' && (
+            {state.strategy === FEW_SHOT && (
               <div className="space-y-2">
                 <Label>Example Files</Label>
                 <div className="space-y-1.5 pl-1">
