@@ -240,6 +240,7 @@ export default function ConfigPage() {
         {/* Generation section */}
         <StageSection
           title="Generation"
+          id="generation"
           open={generationOpen}
           onOpenChange={setGenerationOpen}
           state={generation}
@@ -251,6 +252,7 @@ export default function ConfigPage() {
         {/* Correction section */}
         <StageSection
           title="Correction"
+          id="correction"
           open={correctionOpen}
           onOpenChange={setCorrectionOpen}
           state={correction}
@@ -348,6 +350,7 @@ export default function ConfigPage() {
 
 interface StageSectionProps {
   title: string
+  id: string
   open: boolean
   onOpenChange: (open: boolean) => void
   state: StageState
@@ -358,6 +361,7 @@ interface StageSectionProps {
 
 function StageSection({
   title,
+  id: titleId,
   open,
   onOpenChange,
   state,
@@ -365,7 +369,6 @@ function StageSection({
   hasFewShotExamples,
   onChange,
 }: StageSectionProps) {
-  const titleId = title.toLowerCase()
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
