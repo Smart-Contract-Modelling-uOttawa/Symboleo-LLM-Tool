@@ -1,7 +1,16 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import ConfigPage from '@/pages/ConfigPage'
+import ResultsPage from '@/pages/ResultsPage'
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <p className="p-8 text-muted-foreground">Symboleo LLM Tool</p>
-    </div>
+    <BrowserRouter>
+      <div className="min-h-screen bg-background text-foreground">
+        <Routes>
+          <Route path="/" element={<ConfigPage />} />
+          <Route path="/runs/:runId" element={<ResultsPage />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   )
 }
