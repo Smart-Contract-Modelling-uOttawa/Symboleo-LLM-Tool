@@ -46,6 +46,21 @@ interface AdvancedState {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const FEW_SHOT = 'few_shot'
+
+const DEFAULTS = {
+  temperature: 0.7,
+  include_grammar: true,
+  num_candidates: 1,
+  max_iterations: 3,
+  stop_on_first_convergence: false,
+  save_intermediates: false,
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -69,18 +84,18 @@ function makeDefaultStage(options: OptionsResponse): StageState {
   return {
     model: firstModel,
     strategy: firstStrategy,
-    temperature: String(getParamDefault(options.parameters, 'temperature', 0.7)),
-    include_grammar: getParamDefault(options.parameters, 'include_grammar', true),
+    temperature: String(getParamDefault(options.parameters, 'temperature', DEFAULTS.temperature)),
+    include_grammar: getParamDefault(options.parameters, 'include_grammar', DEFAULTS.include_grammar),
     example_files: [],
   }
 }
 
 function makeDefaultAdvanced(options: OptionsResponse): AdvancedState {
   return {
-    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', 1)),
-    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', 3)),
-    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', false),
-    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', false),
+    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', DEFAULTS.num_candidates)),
+    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', DEFAULTS.max_iterations)),
+    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', DEFAULTS.stop_on_first_convergence),
+    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', DEFAULTS.save_intermediates),
   }
 }
 
@@ -94,9 +109,9 @@ function buildStageRequest(state: StageState) {
   return {
     model: state.model,
     strategy: state.strategy,
-    temperature: isNaN(temp) ? 0.7 : temp,
+    temperature: isNaN(temp) ? DEFAULTS.temperature : temp,
     include_grammar: state.include_grammar,
-    ...(state.strategy === 'few_shot' && {
+    ...(state.strategy === FEW_SHOT && {
       strategy_params: { example_files: state.example_files },
     }),
   }
@@ -161,8 +176,8 @@ export default function ConfigPage() {
         contract_text: contractText,
         generation: buildStageRequest(generation),
         correction: buildStageRequest(correction),
-        num_candidates: isNaN(numCandidates) ? 1 : numCandidates,
-        max_iterations: isNaN(maxIterations) ? 3 : maxIterations,
+        num_candidates: isNaN(numCandidates) ? DEFAULTS.num_candidates : numCandidates,
+        max_iterations: isNaN(maxIterations) ? DEFAULTS.max_iterations : maxIterations,
         stop_on_first_convergence: advanced.stop_on_first_convergence,
         save_intermediates: advanced.save_intermediates,
       })
@@ -418,10 +433,10 @@ function StageSection({
                     <SelectItem
                       key={s}
                       value={s}
-                      disabled={s === 'few_shot' && !hasFewShotExamples}
+                      disabled={s === FEW_SHOT && !hasFewShotExamples}
                     >
                       {s}
-                      {s === 'few_shot' && !hasFewShotExamples ? ' (no examples available)' : ''}
+                      {s === FEW_SHOT && !hasFewShotExamples ? ' (no examples available)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -429,7 +444,7 @@ function StageSection({
             </div>
 
             {/* Example files — shown only for few_shot */}
-            {state.strategy === 'few_shot' && (
+            {state.strategy === FEW_SHOT && (
               <div className="space-y-2">
                 <Label>Example Files</Label>
                 <div className="space-y-1.5 pl-1">
