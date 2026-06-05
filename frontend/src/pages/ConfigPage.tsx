@@ -193,8 +193,6 @@ export default function ConfigPage() {
 
   if (!options || !generation || !correction || !advanced) return null
 
-  const hasFewShotExamples = options.examples.length > 0
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-semibold mb-8">Symboleo LLM Tool</h1>
@@ -245,7 +243,6 @@ export default function ConfigPage() {
           onOpenChange={setGenerationOpen}
           state={generation}
           options={options}
-          hasFewShotExamples={hasFewShotExamples}
           onChange={updateGeneration}
         />
 
@@ -257,7 +254,6 @@ export default function ConfigPage() {
           onOpenChange={setCorrectionOpen}
           state={correction}
           options={options}
-          hasFewShotExamples={hasFewShotExamples}
           onChange={updateCorrection}
         />
 
@@ -355,7 +351,6 @@ interface StageSectionProps {
   onOpenChange: (open: boolean) => void
   state: StageState
   options: OptionsResponse
-  hasFewShotExamples: boolean
   onChange: (updater: (prev: StageState) => StageState) => void
 }
 
@@ -366,9 +361,9 @@ function StageSection({
   onOpenChange,
   state,
   options,
-  hasFewShotExamples,
   onChange,
 }: StageSectionProps) {
+  const hasFewShotExamples = options.examples.length > 0
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
