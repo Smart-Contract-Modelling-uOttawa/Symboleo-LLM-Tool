@@ -177,7 +177,7 @@ The API layer is implemented. The remaining steps toward a full web service are:
 
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
-3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Scaffold complete (Vite 6, Tailwind v4, shadcn/ui new-york, `@` alias, `/api` proxy, Vitest+RTL+MSW test setup); UI pages not yet built.
+3. **Add a frontend** — React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Scaffold complete (Vite 6, Tailwind v4, shadcn/ui new-york, `@` alias, `/api` proxy, Vitest+RTL+MSW test setup); UI design decided (see below); pages not yet built.
 4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
@@ -228,3 +228,24 @@ examples: list[str]            # names of .yaml files in examples/ (without exte
 **`configs/ui_config.yaml`** — lives alongside pipeline run configs (same Docker volume mount). Holds model lists and parameter constraints (min/max/type). Defaults come from Pydantic, not this file. Update without a code or frontend deploy.
 
 **Job storage:** in-memory dict with TTL (~5 min after completion). TTL cleanup runs as a background task started in the FastAPI lifespan handler. Migrate to Redis before any public deployment (see [[project-fastapi-architecture]]).
+
+**Frontend UI — Page Design (decided):**
+
+Two-page SPA with React Router:
+- `/` — config form
+- `/runs/:id` — results page; survives a browser refresh within the 5-minute TTL via SSE reconnect behavior
+
+**Page 1 — Config (`/`):**
+- Contract upload: `.txt` only; file input tooling chosen for future format flexibility; contract text preview rendered after upload
+- Generation section (collapsible): model dropdown, strategy dropdown, temperature, include_grammar; `few_shot` disabled when `examples/` is empty; example files multi-select appears when `few_shot` selected (options from `GET /api/options`)
+- Correction section (collapsible): same fields as generation, pre-populated with generation values; user edits only what differs
+- Advanced options (behind toggle): `num_candidates`, `max_iterations`, `stop_on_first_convergence`, `save_intermediates`
+- Submit navigates immediately to `/runs/:id`
+
+**Page 2 — Results (`/runs/:id`):**
+- While running: single spinner + "Candidate X — Iteration Y" counter updated from `ProgressEvent` stream; candidate accordion not rendered until `CompleteEvent` arrives
+- On complete: accordion of candidates, each with: convergence badge (Converged / Failed to converge), plain-text Symboleo code block, Download `.sl` button, Download `report.json` button (contains full error history per iteration)
+- On fatal error: red error card displaying `ErrorEvent.message`
+- "New Run" button → `/` with form reset to defaults
+
+**Syntax highlighting:** plain `<pre><code>` block for now — no Symboleo-specific grammar. Revisit if needed.
