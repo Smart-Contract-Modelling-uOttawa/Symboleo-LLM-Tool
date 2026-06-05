@@ -109,7 +109,6 @@ export default function ConfigPage() {
   const [fileName, setFileName] = useState('')
   const [generation, setGeneration] = useState<StageState | null>(null)
   const [correction, setCorrection] = useState<StageState | null>(null)
-  const [correctionSynced, setCorrectionSynced] = useState(true)
   const [advanced, setAdvanced] = useState<AdvancedState | null>(null)
   const [generationOpen, setGenerationOpen] = useState(true)
   const [correctionOpen, setCorrectionOpen] = useState(true)
@@ -143,14 +142,10 @@ export default function ConfigPage() {
 
   function updateGeneration(updater: (prev: StageState) => StageState) {
     setGeneration(prev => (prev ? updater(prev) : prev))
-    if (correctionSynced) {
-      setCorrection(prev => (prev ? updater(prev) : prev))
-    }
   }
 
   function updateCorrection(updater: (prev: StageState) => StageState) {
     setCorrection(prev => (prev ? updater(prev) : prev))
-    setCorrectionSynced(false)
   }
 
   async function handleSubmit(e: FormEvent) {
