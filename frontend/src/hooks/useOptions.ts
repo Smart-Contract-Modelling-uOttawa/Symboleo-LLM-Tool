@@ -16,7 +16,7 @@ export function useOptions(): UseOptionsResult {
   useEffect(() => {
     fetchOptions()
       .then(setOptions)
-      .catch((err: Error) => setError(err.message))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load options'))
       .finally(() => setLoading(false))
   }, [])
 
