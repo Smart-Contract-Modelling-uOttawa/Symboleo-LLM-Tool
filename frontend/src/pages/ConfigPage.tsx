@@ -49,6 +49,19 @@ interface AdvancedState {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function getParamDefault<T>(
+  parameters: Record<string, unknown>,
+  key: string,
+  fallback: T,
+): T {
+  const entry = parameters[key]
+  if (entry !== null && typeof entry === 'object' && 'default' in entry) {
+    const val = (entry as Record<string, unknown>)['default']
+    return val !== undefined ? (val as T) : fallback
+  }
+  return fallback
+}
+
 function makeDefaultStage(options: OptionsResponse): StageState {
   const firstProvider = Object.keys(options.models)[0]
   const firstModel = (firstProvider && options.models[firstProvider]?.[0]) ?? ''
@@ -56,17 +69,19 @@ function makeDefaultStage(options: OptionsResponse): StageState {
   return {
     model: firstModel,
     strategy: firstStrategy,
-    temperature: '0.7',
-    include_grammar: true,
+    temperature: String(getParamDefault(options.parameters, 'temperature', 0.7)),
+    include_grammar: getParamDefault(options.parameters, 'include_grammar', true),
     example_files: [],
   }
 }
 
-const DEFAULT_ADVANCED: AdvancedState = {
-  num_candidates: '1',
-  max_iterations: '3',
-  stop_on_first_convergence: false,
-  save_intermediates: false,
+function makeDefaultAdvanced(options: OptionsResponse): AdvancedState {
+  return {
+    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', 1)),
+    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', 3)),
+    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', false),
+    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', false),
+  }
 }
 
 function buildStageRequest(state: StageState) {
@@ -95,7 +110,7 @@ export default function ConfigPage() {
   const [generation, setGeneration] = useState<StageState | null>(null)
   const [correction, setCorrection] = useState<StageState | null>(null)
   const [correctionSynced, setCorrectionSynced] = useState(true)
-  const [advanced, setAdvanced] = useState<AdvancedState>(DEFAULT_ADVANCED)
+  const [advanced, setAdvanced] = useState<AdvancedState | null>(null)
   const [generationOpen, setGenerationOpen] = useState(true)
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -107,6 +122,7 @@ export default function ConfigPage() {
       const defaults = makeDefaultStage(options)
       setGeneration(defaults)
       setCorrection(defaults)
+      setAdvanced(makeDefaultAdvanced(options))
     }
   }, [options, generation])
 
@@ -139,7 +155,7 @@ export default function ConfigPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!contractText || !generation || !correction) return
+    if (!contractText || !generation || !correction || !advanced) return
     setSubmitError(null)
     setSubmitting(true)
     try {
@@ -180,7 +196,7 @@ export default function ConfigPage() {
     )
   }
 
-  if (!options || !generation || !correction) return null
+  if (!options || !generation || !correction || !advanced) return null
 
   const hasFewShotExamples = options.examples.length > 0
 
@@ -267,7 +283,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.num_candidates}
                   onChange={e =>
-                    setAdvanced(a => ({ ...a, num_candidates: e.target.value }))
+                    setAdvanced(a => a ? { ...a, num_candidates: e.target.value } : a)
                   }
                 />
               </div>
@@ -279,7 +295,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.max_iterations}
                   onChange={e =>
-                    setAdvanced(a => ({ ...a, max_iterations: e.target.value }))
+                    setAdvanced(a => a ? { ...a, max_iterations: e.target.value } : a)
                   }
                 />
               </div>
@@ -290,7 +306,7 @@ export default function ConfigPage() {
                   id="stop_on_first"
                   checked={advanced.stop_on_first_convergence}
                   onCheckedChange={v =>
-                    setAdvanced(a => ({ ...a, stop_on_first_convergence: !!v }))
+                    setAdvanced(a => a ? { ...a, stop_on_first_convergence: !!v } : a)
                   }
                 />
                 <Label htmlFor="stop_on_first" className="font-normal cursor-pointer">
@@ -302,7 +318,7 @@ export default function ConfigPage() {
                   id="save_intermediates"
                   checked={advanced.save_intermediates}
                   onCheckedChange={v =>
-                    setAdvanced(a => ({ ...a, save_intermediates: !!v }))
+                    setAdvanced(a => a ? { ...a, save_intermediates: !!v } : a)
                   }
                 />
                 <Label htmlFor="save_intermediates" className="font-normal cursor-pointer">
