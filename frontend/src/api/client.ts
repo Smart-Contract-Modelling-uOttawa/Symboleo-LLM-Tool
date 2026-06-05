@@ -1,23 +1,28 @@
 import type { GenerateRequest, RunCreatedResponse, OptionsResponse } from './types'
 
-export async function fetchOptions(): Promise<OptionsResponse> {
-  const response = await fetch('/api/options')
-  if (!response.ok) throw new Error('Failed to load options')
-  return response.json() as Promise<OptionsResponse>
+async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    let message = 'Request failed'
+    try {
+      const data = await response.json() as { detail?: string | Array<{ msg: string }> }
+      const { detail } = data
+      if (typeof detail === 'string') message = detail
+      else if (Array.isArray(detail)) message = detail.map(e => e.msg).join('; ')
+    } catch { /* non-JSON body — keep generic message */ }
+    throw new Error(message)
+  }
+  return response.json() as Promise<T>
 }
 
-export async function submitGenerate(request: GenerateRequest): Promise<RunCreatedResponse> {
-  const response = await fetch('/api/generate', {
+export function fetchOptions(): Promise<OptionsResponse> {
+  return apiFetch<OptionsResponse>('/api/options')
+}
+
+export function submitGenerate(request: GenerateRequest): Promise<RunCreatedResponse> {
+  return apiFetch<RunCreatedResponse>('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   })
-  if (!response.ok) {
-    const data = await response.json() as { detail?: string | Array<{ msg: string }> }
-    const detail = data?.detail
-    if (typeof detail === 'string') throw new Error(detail)
-    if (Array.isArray(detail)) throw new Error(detail.map(e => e.msg).join('; '))
-    throw new Error('Request failed')
-  }
-  return response.json() as Promise<RunCreatedResponse>
 }

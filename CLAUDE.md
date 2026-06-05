@@ -164,6 +164,9 @@ The LLM may return markdown code blocks, explanations, or partial output instead
 ### CLI `--set` Override
 Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred — low priority given the API now provides a more ergonomic interface for per-run config.**
 
+### Frontend — Options Cache Staleness
+`useOptions` caches `GET /api/options` in a module-level variable for the lifetime of the browser tab. If `configs/ui_config.yaml` is changed and the server restarted while a user has the tab open, the frontend will continue showing the old model/parameter list until the user does a hard refresh. The failure mode is benign: submitting a model that no longer exists returns a 422 from the backend, which the frontend already surfaces as an error. Alternatives considered: React Context above the router (more boilerplate, same semantics) and React Query with `staleTime: Infinity` (adds a dependency for a single static endpoint). Neither is warranted for a single-user research tool where config changes are infrequent.
+
 ### Frontend — No Run History
 The frontend has no persistent run history. Once a job's 5-minute TTL expires, it is gone from the in-memory store and the run URL returns 404. Full run data (contract, config, errors, final output) is always available in the timestamped `output/` directory written by the pipeline — the UI is a live view only, not an archive. Migrate job storage to Redis and add a `GET /runs` list endpoint before adding a history page.
 

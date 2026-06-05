@@ -23,7 +23,16 @@ export function useStream(runId: string): UseStreamResult {
     es.onopen = () => setStatus('running')
 
     es.onmessage = (event: MessageEvent<string>) => {
-      const data = JSON.parse(event.data) as SSEEvent
+      let data: SSEEvent
+      try {
+        data = JSON.parse(event.data) as SSEEvent
+      } catch {
+        closed = true
+        setErrorMessage('Received malformed data from server.')
+        setStatus('error')
+        es.close()
+        return
+      }
       if (data.type === 'progress') {
         setStatus('running')
         setProgress({ candidateId: data.candidate_id, iteration: data.iteration })
