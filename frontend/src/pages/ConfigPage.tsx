@@ -84,6 +84,11 @@ function makeDefaultAdvanced(options: OptionsResponse): AdvancedState {
   }
 }
 
+function makeNullableUpdater<T>(setter: (fn: (prev: T | null) => T | null) => void) {
+  return (updater: (prev: T) => T) =>
+    setter(prev => (prev ? updater(prev) : prev))
+}
+
 function buildStageRequest(state: StageState) {
   const temp = parseFloat(state.temperature)
   return {
@@ -140,13 +145,9 @@ export default function ConfigPage() {
     multiple: false,
   })
 
-  function updateGeneration(updater: (prev: StageState) => StageState) {
-    setGeneration(prev => (prev ? updater(prev) : prev))
-  }
-
-  function updateCorrection(updater: (prev: StageState) => StageState) {
-    setCorrection(prev => (prev ? updater(prev) : prev))
-  }
+  const updateGeneration = makeNullableUpdater<StageState>(setGeneration)
+  const updateCorrection = makeNullableUpdater<StageState>(setCorrection)
+  const updateAdvanced = makeNullableUpdater<AdvancedState>(setAdvanced)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -276,7 +277,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.num_candidates}
                   onChange={e =>
-                    setAdvanced(a => a ? { ...a, num_candidates: e.target.value } : a)
+                    updateAdvanced(prev => ({ ...prev, num_candidates: e.target.value }))
                   }
                 />
               </div>
@@ -288,7 +289,7 @@ export default function ConfigPage() {
                   min={1}
                   value={advanced.max_iterations}
                   onChange={e =>
-                    setAdvanced(a => a ? { ...a, max_iterations: e.target.value } : a)
+                    updateAdvanced(prev => ({ ...prev, max_iterations: e.target.value }))
                   }
                 />
               </div>
@@ -299,7 +300,7 @@ export default function ConfigPage() {
                   id="stop_on_first"
                   checked={advanced.stop_on_first_convergence}
                   onCheckedChange={v =>
-                    setAdvanced(a => a ? { ...a, stop_on_first_convergence: !!v } : a)
+                    updateAdvanced(prev => ({ ...prev, stop_on_first_convergence: !!v }))
                   }
                 />
                 <Label htmlFor="stop_on_first" className="font-normal cursor-pointer">
@@ -311,7 +312,7 @@ export default function ConfigPage() {
                   id="save_intermediates"
                   checked={advanced.save_intermediates}
                   onCheckedChange={v =>
-                    setAdvanced(a => a ? { ...a, save_intermediates: !!v } : a)
+                    updateAdvanced(prev => ({ ...prev, save_intermediates: !!v }))
                   }
                 />
                 <Label htmlFor="save_intermediates" className="font-normal cursor-pointer">
