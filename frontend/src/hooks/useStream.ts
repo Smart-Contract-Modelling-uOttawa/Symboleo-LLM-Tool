@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PipelineResult, SSEEvent } from '@/api/types'
 
-type StreamStatus = 'connecting' | 'running' | 'complete' | 'error'
+type StreamStatus = 'connecting' | 'running' | 'reconnecting' | 'complete' | 'error'
 
 interface UseStreamResult {
   status: StreamStatus
@@ -9,6 +9,8 @@ interface UseStreamResult {
   result: PipelineResult | null
   errorMessage: string | null
 }
+
+const MAX_RETRIES = 3
 
 export function useStream(runId: string): UseStreamResult {
   const [status, setStatus] = useState<StreamStatus>('connecting')
@@ -18,9 +20,15 @@ export function useStream(runId: string): UseStreamResult {
 
   useEffect(() => {
     let closed = false
+    let retryCount = 0
+    let hasEverConnected = false
     const es = new EventSource(`/api/runs/${runId}/stream`)
 
-    es.onopen = () => setStatus('running')
+    es.onopen = () => {
+      hasEverConnected = true
+      retryCount = 0
+      setStatus('running')
+    }
 
     es.onmessage = (event: MessageEvent<string>) => {
       let data: SSEEvent
@@ -50,11 +58,28 @@ export function useStream(runId: string): UseStreamResult {
     }
 
     es.onerror = () => {
-      if (!closed) {
+      if (closed) {
+        es.close()
+        return
+      }
+      // Never connected: likely a 404 or server down — fail immediately
+      if (!hasEverConnected) {
+        closed = true
         setErrorMessage('Connection lost or run not found.')
         setStatus('error')
+        es.close()
+        return
       }
-      es.close()
+      // Mid-stream drop: retry up to MAX_RETRIES, browser handles backoff
+      retryCount++
+      if (retryCount >= MAX_RETRIES) {
+        closed = true
+        setErrorMessage('Connection lost or run not found.')
+        setStatus('error')
+        es.close()
+      } else {
+        setStatus('reconnecting')
+      }
     }
 
     return () => {

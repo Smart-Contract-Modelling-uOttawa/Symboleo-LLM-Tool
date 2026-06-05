@@ -30,11 +30,13 @@ export default function ResultsPage() {
         </Button>
       </div>
 
-      {(status === 'connecting' || status === 'running') && (
+      {(status === 'connecting' || status === 'running' || status === 'reconnecting') && (
         <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
           <Loader2 className="animate-spin" size={20} />
           <span>
-            {progress
+            {status === 'reconnecting'
+              ? 'Connection dropped — retrying...'
+              : progress
               ? `Candidate ${progress.candidateId + 1} — Iteration ${progress.iteration + 1}`
               : 'Connecting...'}
           </span>
