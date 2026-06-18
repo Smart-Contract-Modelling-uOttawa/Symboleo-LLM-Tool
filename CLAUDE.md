@@ -40,7 +40,7 @@ A Python CLI and FastAPI web service that:
 ```
 symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
-├── api/            # FastAPI adapter layer: routes, job store, SSE events, request/response models
+├── api/            # FastAPI adapter layer: routes, config_builder, job store, SSE events, request/response models
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
@@ -123,6 +123,8 @@ Input .txt
 - The API is a thin adapter: parse request body → call pipeline → stream SSE events
 - Both entry points call the same core with no core-layer changes
 - Config as Pydantic models means the same object can be populated from YAML or a JSON request body
+- **`ProgressCallback` type:** `Callable[[int, int, list[SymboleoIssue], int, int], None]` — args are `(candidate_id, iteration, errors, total_candidates, total_iterations)`. The pipeline passes `total_candidates` and `total_iterations` so callers (CLI, API) do not need to reach into config themselves.
+- **`api/config_builder.py`** separates config construction (provider resolution, `StageConfig` assembly, example path resolution) from routing logic. Functions raise `ValueError`; `routes.py` converts these to `HTTPException(422)` in a single `try/except` block alongside strategy validation.
 
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 17+ as a system prerequisite (JAR compiled with class file version 61.0). Check for Java at startup and fail with a clear, actionable error message.
@@ -232,7 +234,7 @@ max_iterations: int | None                  # defaults from Pydantic
 save_intermediates: bool | None             # defaults from Pydantic
 stop_on_first_convergence: bool | None      # defaults from Pydantic
 ```
-Provider is derived from model name via `configs/ui_config.yaml`. For `few_shot`, `strategy_params.example_files` takes example names (not full paths) — the API resolves them to `examples/<name>.yaml` before starting the job (validation at request time, not inside the thread).
+Provider is derived from model name via `configs/ui_config.yaml`. For `few_shot`, `strategy_params.example_files` takes example names (not full paths) — `config_builder.py` resolves them to `examples/<name>.yaml`. Early validation is done in `routes.py` by calling `get_strategy()` synchronously before the job thread starts; `ValueError` from the strategy layer (unknown strategy name, missing example file) is caught and converted to `HTTPException(422)`, so errors surface as HTTP 422 rather than an `ErrorEvent` on the SSE stream.
 
 **`GET /options` response:**
 ```
