@@ -61,16 +61,15 @@ def reset_router() -> None:
 
 @router.post("/generate", response_model=RunCreatedResponse)
 async def generate(req: GenerateRequest) -> RunCreatedResponse:
-    gen_provider = resolve_provider(req.generation.model, _model_to_provider)
-    corr_provider = resolve_provider(req.effective_correction.model, _model_to_provider)
-
-    gen_stage = build_stage_config(req.generation, gen_provider)
-    corr_stage = build_stage_config(req.effective_correction, corr_provider)
-
-    # Early validation: instantiate both strategies synchronously so invalid strategy names
-    # or missing example files surface as a 422 rather than an ErrorEvent on the SSE stream.
-    # get_strategy() and strategy constructors already raise ValueError for these cases.
     try:
+        gen_provider = resolve_provider(req.generation.model, _model_to_provider)
+        corr_provider = resolve_provider(req.effective_correction.model, _model_to_provider)
+
+        gen_stage = build_stage_config(req.generation, gen_provider)
+        corr_stage = build_stage_config(req.effective_correction, corr_provider)
+
+        # Early validation: instantiate both strategies synchronously so invalid strategy names
+        # or missing example files surface as a 422 rather than an ErrorEvent on the SSE stream.
         get_strategy(gen_stage.strategy, gen_stage.strategy_params)
         get_strategy(corr_stage.strategy, corr_stage.strategy_params)
     except ValueError as exc:

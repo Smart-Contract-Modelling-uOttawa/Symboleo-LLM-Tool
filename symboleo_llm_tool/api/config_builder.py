@@ -1,15 +1,13 @@
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException
-
 from symboleo_llm_tool.api.models import StageRequest
 from symboleo_llm_tool.config.models import LLMConfig, StageConfig
 
 
 def resolve_provider(model: str, model_to_provider: dict[str, str]) -> str:
     if model not in model_to_provider:
-        raise HTTPException(status_code=422, detail=f"Unknown model: {model!r}")
+        raise ValueError(f"Unknown model: {model!r}")
     return model_to_provider[model]
 
 
