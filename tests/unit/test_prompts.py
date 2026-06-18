@@ -10,8 +10,7 @@ from symboleo_llm_tool.prompts.strategies.zero_shot import ZeroShotStrategy
 from tests.helpers import make_issue
 
 _EXAMPLE_CONTENT = (
-    "contract_text: 'Buyer shall pay $100.'\n"
-    "symboleo_code: 'Contract Example(...) ...'\n"
+    "contract_text: 'Buyer shall pay $100.'\nsymboleo_code: 'Contract Example(...) ...'\n"
 )
 
 
@@ -39,6 +38,7 @@ def cot() -> CoTStrategy:
 
 
 # --- Shared contract (all strategies must pass) ---
+
 
 def test_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
@@ -74,6 +74,7 @@ def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None
 
 # --- Few-shot specific ---
 
+
 def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> None:
     ctx = PromptContext(contract_text="New contract.", grammar_context=None)
     prompt = few_shot.build_generation_prompt(ctx)
@@ -104,6 +105,7 @@ def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
 
 
 # --- CoT specific ---
+
 
 def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context=None)

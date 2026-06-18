@@ -9,6 +9,7 @@ def register(name: str) -> Callable[[type[PromptStrategy]], type[PromptStrategy]
     def decorator(cls: type[PromptStrategy]) -> type[PromptStrategy]:
         _registry[name] = cls
         return cls
+
     return decorator
 
 

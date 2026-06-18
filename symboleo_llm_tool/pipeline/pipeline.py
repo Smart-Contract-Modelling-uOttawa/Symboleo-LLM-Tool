@@ -101,9 +101,7 @@ def _run_candidate(
         corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
         code = _clean_response(ctx.corr_llm.generate(corr_prompt))
         errors = ctx.wrapper.validate(code)
-        error_history.append(
-            IterationRecord(iteration=iteration, code=code, errors=errors)
-        )
+        error_history.append(IterationRecord(iteration=iteration, code=code, errors=errors))
         if ctx.on_progress:
             ctx.on_progress(candidate_id, iteration, errors)
 
@@ -130,9 +128,7 @@ def _clean_response(response: str) -> str:
 
 def _load_grammar() -> str:
     try:
-        grammar_file = resources.files("symboleo_llm_tool.resources").joinpath(
-            "Symboleo.xtext"
-        )
+        grammar_file = resources.files("symboleo_llm_tool.resources").joinpath("Symboleo.xtext")
         return grammar_file.read_text(encoding="utf-8")
     except Exception as e:
         raise RuntimeError(

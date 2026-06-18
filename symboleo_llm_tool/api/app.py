@@ -47,9 +47,7 @@ async def _ttl_cleanup_loop() -> None:
 app = FastAPI(title="Symboleo LLM Tool API", version="0.1.0", lifespan=_lifespan)
 
 _cors_origins = [
-    o.strip()
-    for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
-    if o.strip()
+    o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()
 ]
 app.add_middleware(
     CORSMiddleware,

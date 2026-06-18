@@ -31,9 +31,7 @@ def _format_progress(
     max_iterations: int,
 ) -> str:
     prefix = (
-        f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] "
-        if num_candidates > 1
-        else ""
+        f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] " if num_candidates > 1 else ""
     )
     if iteration == 0 and errors:
         return f"{prefix}Generated — {len(errors)} error(s)"
@@ -47,9 +45,7 @@ def _format_progress(
 @app.command()
 def run(
     input_file: Path = typer.Argument(..., help="Path to the .txt legal contract"),
-    config_file: Path = typer.Option(
-        ..., "--config", "-c", help="Path to YAML config file"
-    ),
+    config_file: Path = typer.Option(..., "--config", "-c", help="Path to YAML config file"),
 ) -> None:
     if not input_file.exists():
         _fatal(f"Input file not found: {input_file}")
@@ -80,9 +76,7 @@ def run(
 
     console.print("[bold green]Running pipeline...[/bold green]")
     try:
-        result = pipeline.run(
-            contract_text, config, str(input_file), on_progress=_progress
-        )
+        result = pipeline.run(contract_text, config, str(input_file), on_progress=_progress)
     except Exception as e:
         _fatal(str(e))
 
@@ -91,9 +85,7 @@ def run(
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 
-    status = (
-        "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
-    )
+    status = "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
     console.print(f"\n[bold]Result:[/bold] {status}")
 
     table = Table(show_header=True, header_style="bold")
@@ -122,6 +114,7 @@ def run(
     if config.observability.langsmith.enabled:
         try:
             from langsmith import Client
+
             Client().flush()
         except Exception as e:
             console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
