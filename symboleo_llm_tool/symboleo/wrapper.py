@@ -19,7 +19,7 @@ class SymboleoWrapper:
         if not shutil.which(self._java):
             raise RuntimeError(
                 f"Java executable '{self._java}' not found on PATH. "
-                "Install Java 11+ from https://adoptium.net/ "
+                "Install Java 17+ from https://adoptium.net/ "
                 "and ensure it is on your PATH."
             )
         if not self._jar.exists():

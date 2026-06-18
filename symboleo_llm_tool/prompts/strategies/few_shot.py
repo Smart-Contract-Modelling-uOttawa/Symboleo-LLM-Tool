@@ -31,7 +31,7 @@ def _load_examples(example_files: list[str]) -> list[dict[str, str]]:
     for path_str in example_files:
         path = Path(path_str)
         if not path.exists():
-            raise ValueError(f"few_shot strategy: example file not found: {path}")
+            raise ValueError(f"Example not found: {path!r}")
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or "contract_text" not in data or "symboleo_code" not in data:
             raise ValueError(

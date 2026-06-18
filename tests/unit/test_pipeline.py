@@ -119,7 +119,7 @@ def test_on_progress_called_after_generation(mock_deps):
     progress = MagicMock()
     pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
 
-    progress.assert_called_once_with(0, 0, [])
+    progress.assert_called_once_with(0, 0, [], 1, 3)
 
 
 def test_on_progress_called_after_each_correction(mock_deps):
@@ -132,9 +132,9 @@ def test_on_progress_called_after_each_correction(mock_deps):
     pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
 
     assert progress.call_args_list == [
-        call(0, 0, [error]),
-        call(0, 1, [error]),
-        call(0, 2, []),
+        call(0, 0, [error], 1, 3),
+        call(0, 1, [error], 1, 3),
+        call(0, 2, [], 1, 3),
     ]
 
 

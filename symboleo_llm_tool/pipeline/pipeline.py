@@ -18,7 +18,7 @@ from symboleo_llm_tool.prompts.registry import get_strategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
-ProgressCallback = Callable[[int, int, list[SymboleoIssue]], None]
+ProgressCallback = Callable[[int, int, list[SymboleoIssue], int, int], None]
 
 
 @dataclass(frozen=True)
@@ -83,9 +83,11 @@ def _run_candidate(
     code = _clean_response(ctx.gen_llm.generate(gen_prompt))
 
     errors = ctx.wrapper.validate(code)
+    total_candidates = ctx.config.pipeline.num_candidates
+    total_iterations = ctx.config.pipeline.max_iterations
     error_history = [IterationRecord(iteration=0, code=code, errors=errors)]
     if ctx.on_progress:
-        ctx.on_progress(candidate_id, 0, errors)
+        ctx.on_progress(candidate_id, 0, errors, total_candidates, total_iterations)
 
     for iteration in range(1, ctx.config.pipeline.max_iterations + 1):
         if not errors:
@@ -103,7 +105,7 @@ def _run_candidate(
         errors = ctx.wrapper.validate(code)
         error_history.append(IterationRecord(iteration=iteration, code=code, errors=errors))
         if ctx.on_progress:
-            ctx.on_progress(candidate_id, iteration, errors)
+            ctx.on_progress(candidate_id, iteration, errors, total_candidates, total_iterations)
 
     return CandidateResult(
         candidate_id=candidate_id,

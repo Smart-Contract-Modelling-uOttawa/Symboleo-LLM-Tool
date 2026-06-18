@@ -62,10 +62,13 @@ def run(
     except Exception as e:
         _fatal(f"Could not read input file: {e}")
 
-    num_candidates = config.pipeline.num_candidates
-    max_iterations = config.pipeline.max_iterations
-
-    def _progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
+    def _progress(
+        candidate_id: int,
+        iteration: int,
+        errors: list[SymboleoIssue],
+        num_candidates: int,
+        max_iterations: int,
+    ) -> None:
         console.print(
             "  " + _format_progress(candidate_id, iteration, errors, num_candidates, max_iterations)
         )
@@ -102,6 +105,7 @@ def run(
 
     console.print(table)
 
+    num_candidates = config.pipeline.num_candidates
     if config.pipeline.stop_on_first_convergence and len(result.candidates) < num_candidates:
         skipped = num_candidates - len(result.candidates)
         console.print(
