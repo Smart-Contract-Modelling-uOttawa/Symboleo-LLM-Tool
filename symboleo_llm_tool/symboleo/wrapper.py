@@ -4,9 +4,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 _SUBPROCESS_TIMEOUT_SECONDS = 60
+_EXIT_CODE_VALIDATION_ERRORS = 1
+_EXIT_CODE_USAGE_ERROR = 2
 
 
 class SymboleoWrapper:
@@ -49,11 +53,11 @@ class SymboleoWrapper:
         finally:
             tmp_path.unlink(missing_ok=True)
 
-        if result.returncode == 2:
+        if result.returncode == _EXIT_CODE_USAGE_ERROR:
             raise RuntimeError(f"SymboleoAC CLI error: {result.stderr.strip()}")
 
         stdout = result.stdout.strip()
-        if result.returncode == 1 and not stdout:
+        if result.returncode == _EXIT_CODE_VALIDATION_ERRORS and not stdout:
             raise RuntimeError(
                 f"SymboleoAC CLI exited with errors but produced no output. "
                 f"stderr: {result.stderr.strip()}"
@@ -65,4 +69,7 @@ class SymboleoWrapper:
             data = json.loads(stdout)
         except json.JSONDecodeError as e:
             raise RuntimeError(f"SymboleoAC CLI returned non-JSON output: {stdout!r}") from e
-        return [SymboleoIssue(**issue) for issue in data.get("issues", [])]
+        try:
+            return [SymboleoIssue(**issue) for issue in data.get("issues", [])]
+        except (ValidationError, TypeError) as e:
+            raise RuntimeError(f"SymboleoAC CLI returned unexpected issue format: {e}") from e
