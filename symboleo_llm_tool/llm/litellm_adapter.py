@@ -11,9 +11,8 @@ class LiteLLMAdapter(LLMAdapter):
         self._config = config
         if tracing_enabled:
             from langsmith import traceable
-            self._invoke: Callable[[str], str] = traceable(run_type="llm")(
-                self._litellm_call
-            )
+
+            self._invoke: Callable[[str], str] = traceable(run_type="llm")(self._litellm_call)
         else:
             self._invoke = self._litellm_call
 

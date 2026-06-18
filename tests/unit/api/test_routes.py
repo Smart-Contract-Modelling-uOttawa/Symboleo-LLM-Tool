@@ -49,15 +49,13 @@ def _make_pipeline_result(*, success: bool = True) -> PipelineResult:
 def _parse_sse(text: str) -> dict[str, Any]:
     for line in text.splitlines():
         if line.startswith("data: "):
-            return json.loads(line[len("data: "):])  # type: ignore[no-any-return]
+            return json.loads(line[len("data: ") :])  # type: ignore[no-any-return]
     raise AssertionError(f"No SSE data frame found in: {text!r}")
 
 
 def _parse_all_sse(text: str) -> list[dict[str, Any]]:
     return [
-        json.loads(line[len("data: "):])
-        for line in text.splitlines()
-        if line.startswith("data: ")
+        json.loads(line[len("data: ") :]) for line in text.splitlines() if line.startswith("data: ")
     ]
 
 
@@ -204,7 +202,9 @@ def test_generate_with_unknown_correction_strategy_returns_422(client: TestClien
     assert "Unknown strategy" in response.json()["detail"]
 
 
-def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClient, patch_run_pipeline: None) -> None:
+def test_generate_with_explicit_correction_stage_returns_run_id(
+    client: TestClient, patch_run_pipeline: None
+) -> None:
     body = {**_VALID_BODY, "correction": _VALID_STAGE}
     response = client.post("/api/generate", json=body)
     assert response.status_code == 200
@@ -216,7 +216,9 @@ def test_generate_with_explicit_correction_stage_returns_run_id(client: TestClie
 # ---------------------------------------------------------------------------
 
 
-def test_generate_with_temperature_and_include_grammar(client: TestClient, patch_run_pipeline: None) -> None:
+def test_generate_with_temperature_and_include_grammar(
+    client: TestClient, patch_run_pipeline: None
+) -> None:
     body = {
         **_VALID_BODY,
         "generation": {**_VALID_STAGE, "temperature": 0.5, "include_grammar": False},
@@ -225,7 +227,9 @@ def test_generate_with_temperature_and_include_grammar(client: TestClient, patch
     assert response.status_code == 200
 
 
-def test_generate_with_optional_pipeline_kwargs(client: TestClient, patch_run_pipeline: None) -> None:
+def test_generate_with_optional_pipeline_kwargs(
+    client: TestClient, patch_run_pipeline: None
+) -> None:
     body = {
         **_VALID_BODY,
         "num_candidates": 2,

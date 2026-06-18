@@ -9,12 +9,8 @@ def write_results(result: PipelineResult, config: PipelineConfig, config_path: P
     run_dir = config.output.directory / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    (run_dir / "report.json").write_text(
-        result.model_dump_json(indent=2), encoding="utf-8"
-    )
-    (run_dir / "config.yaml").write_text(
-        config_path.read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    (run_dir / "report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    (run_dir / "config.yaml").write_text(config_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     multi = len(result.candidates) > 1
     for candidate in result.candidates:

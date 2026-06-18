@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+frontend/coverage/
 dist/
 *.egg-info/
 /output/

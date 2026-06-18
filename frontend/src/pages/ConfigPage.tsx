@@ -139,6 +139,7 @@ export default function ConfigPage() {
   useEffect(() => {
     if (options && !generation) {
       const defaults = makeDefaultStage(options)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGeneration(defaults)
       setCorrection(defaults)
       setAdvanced(makeDefaultAdvanced(options))

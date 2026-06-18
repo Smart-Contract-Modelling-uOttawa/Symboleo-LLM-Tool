@@ -64,7 +64,5 @@ class SymboleoWrapper:
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"SymboleoAC CLI returned non-JSON output: {stdout!r}"
-            ) from e
+            raise RuntimeError(f"SymboleoAC CLI returned non-JSON output: {stdout!r}") from e
         return [SymboleoIssue(**issue) for issue in data.get("issues", [])]

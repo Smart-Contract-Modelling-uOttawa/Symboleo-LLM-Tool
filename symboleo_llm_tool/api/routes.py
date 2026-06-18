@@ -93,8 +93,7 @@ def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
         return strategy_params
     resolved = dict(strategy_params)
     resolved["example_files"] = [
-        str(Path("examples") / f"{name}.yaml")
-        for name in strategy_params["example_files"]
+        str(Path("examples") / f"{name}.yaml") for name in strategy_params["example_files"]
     ]
     return resolved
 
@@ -163,9 +162,7 @@ async def _run_pipeline(
     config: PipelineConfig,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
-    def on_progress(
-        candidate_id: int, iteration: int, errors: list[SymboleoIssue]
-    ) -> None:
+    def on_progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
         event = ProgressEvent(
             candidate_id=candidate_id,
             iteration=iteration,
@@ -192,12 +189,12 @@ async def _run_pipeline(
 
 
 @router.get("/runs/{run_id}/stream", response_model=ProgressEvent | CompleteEvent | ErrorEvent)
-async def stream_run(run_id: str, request: Request):  # return annotation omitted so response_model reaches the schema
+async def stream_run(  # type: ignore[no-untyped-def]
+    run_id: str, request: Request
+):  # return annotation omitted intentionally — see CLAUDE.md "SSE Schema via response_model"
     job = get_job(run_id)
     if job is None:
-        raise HTTPException(
-            status_code=404, detail=f"Run {run_id!r} not found or expired"
-        )
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found or expired")
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if job.is_complete:
@@ -254,11 +251,7 @@ async def get_options() -> OptionsResponse:
         parameters[param_name] = entry
 
     examples_dir = Path("examples")
-    examples = (
-        sorted(p.stem for p in examples_dir.glob("*.yaml"))
-        if examples_dir.exists()
-        else []
-    )
+    examples = sorted(p.stem for p in examples_dir.glob("*.yaml")) if examples_dir.exists() else []
 
     return OptionsResponse(
         strategies=list_strategies(),
