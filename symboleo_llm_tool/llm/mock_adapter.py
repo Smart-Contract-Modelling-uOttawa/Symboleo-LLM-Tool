@@ -10,12 +10,12 @@ _FIXTURES = Path("tests/fixtures")
 
 
 class MockLLMAdapter(LLMAdapter):
-    """Returns invalid.sl on the first call, valid.sl on all subsequent calls."""
+    """Returns invalid.symboleo on the first call, valid.symboleo on all subsequent calls."""
 
     def __init__(self, config: LLMConfig) -> None:
         self._call_count = 0
 
     def generate(self, prompt: str) -> str:
         self._call_count += 1
-        fixture = "invalid.sl" if self._call_count == 1 else "valid.sl"
+        fixture = "invalid.symboleo" if self._call_count == 1 else "valid.symboleo"
         return (_FIXTURES / fixture).read_text(encoding="utf-8")

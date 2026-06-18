@@ -83,7 +83,7 @@ function CandidateItem({ candidate }: { candidate: CandidateResult }) {
   function downloadSl() {
     triggerDownload(
       candidate.final_code,
-      `candidate_${candidate.candidate_id}.sl`,
+      `candidate_${candidate.candidate_id}.symboleo`,
       'text/plain',
     )
   }
@@ -121,7 +121,7 @@ function CandidateItem({ candidate }: { candidate: CandidateResult }) {
         </pre>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={downloadSl}>
-            Download .sl
+            Download .symboleo
           </Button>
           <Button size="sm" variant="outline" onClick={downloadReport}>
             Download report.json

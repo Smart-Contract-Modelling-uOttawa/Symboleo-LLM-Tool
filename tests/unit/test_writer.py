@@ -63,16 +63,16 @@ def test_write_results_writes_report_and_config(tmp_path: Path, config_path: Pat
 def test_write_results_single_candidate_no_suffix(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(num_candidates=1), _config(tmp_path), config_path)
 
-    assert (run_dir / "contract_final.sl").exists()
-    assert not (run_dir / "contract_candidate_0_final.sl").exists()
+    assert (run_dir / "contract_final.symboleo").exists()
+    assert not (run_dir / "contract_candidate_0_final.symboleo").exists()
 
 
 def test_write_results_multi_candidate_uses_suffix(tmp_path: Path, config_path: Path) -> None:
     run_dir = write_results(_result(num_candidates=2), _config(tmp_path), config_path)
 
-    assert (run_dir / "contract_candidate_0_final.sl").exists()
-    assert (run_dir / "contract_candidate_1_final.sl").exists()
-    assert not (run_dir / "contract_final.sl").exists()
+    assert (run_dir / "contract_candidate_0_final.symboleo").exists()
+    assert (run_dir / "contract_candidate_1_final.symboleo").exists()
+    assert not (run_dir / "contract_final.symboleo").exists()
 
 
 def test_write_results_saves_intermediates_when_enabled(tmp_path: Path, config_path: Path) -> None:
@@ -98,5 +98,5 @@ def test_write_results_saves_intermediates_when_enabled(tmp_path: Path, config_p
     run_dir = write_results(result, _config(tmp_path, save_intermediates=True), config_path)
 
     inter_dir = run_dir / "intermediates"
-    assert (inter_dir / "iteration_0.sl").read_text(encoding="utf-8") == "bad code"
-    assert (inter_dir / "iteration_1.sl").read_text(encoding="utf-8") == "Contract Fixed() {}"
+    assert (inter_dir / "iteration_0.symboleo").read_text(encoding="utf-8") == "bad code"
+    assert (inter_dir / "iteration_1.symboleo").read_text(encoding="utf-8") == "Contract Fixed() {}"

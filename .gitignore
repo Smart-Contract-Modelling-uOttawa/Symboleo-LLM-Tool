@@ -10,7 +10,7 @@ __pycache__/
 htmlcov/
 dist/
 *.egg-info/
-output/
+/output/
 contracts/
 examples/
 .claude/

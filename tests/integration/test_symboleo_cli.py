@@ -15,12 +15,12 @@ def wrapper() -> SymboleoWrapper:
 
 @pytest.fixture(scope="module")
 def invalid_issues(wrapper: SymboleoWrapper) -> list:
-    code = (FIXTURES / "invalid.sl").read_text(encoding="utf-8")
+    code = (FIXTURES / "invalid.symboleo").read_text(encoding="utf-8")
     return wrapper.validate(code)
 
 
 def test_valid_contract_returns_no_errors(wrapper: SymboleoWrapper) -> None:
-    code = (FIXTURES / "valid.sl").read_text(encoding="utf-8")
+    code = (FIXTURES / "valid.symboleo").read_text(encoding="utf-8")
     issues = wrapper.validate(code)
     assert issues == []
 
