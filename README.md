@@ -86,7 +86,7 @@ generation:
   include_grammar: true   # inject SymboleoAC grammar into the prompt
 
 output:
-  save_intermediates: true  # save each iteration's .sl file
+  save_intermediates: true  # save each iteration's .symboleo file
 ```
 
 API keys are read from `.env` — never put them in config files.
@@ -132,10 +132,10 @@ Each run produces a timestamped directory under `output/`:
 
 ```
 output/run_20260601_143022/
-├── contract_final.sl     # final generated contract
-├── report.json           # full run details: iterations, errors, convergence
-├── config.yaml           # copy of the config used (for reproducibility)
-└── intermediates/        # per-iteration .sl files (if save_intermediates: true)
+├── contract_final.symboleo  # final generated contract
+├── report.json              # full run details: iterations, errors, convergence
+├── config.yaml              # copy of the config used (for reproducibility)
+└── intermediates/           # per-iteration .symboleo files (if save_intermediates: true)
 ```
 
 ## API (Web Service)

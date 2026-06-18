@@ -62,7 +62,7 @@ Input .txt
     if no errors or max_iterations reached → done
     else → LLM + PromptStrategy → corrected code → repeat
     ↓
-[Output] timestamped directory: report.json, config.yaml, final .sl, optional intermediates
+[Output] timestamped directory: report.json, config.yaml, final .symboleo, optional intermediates
 ```
 
 ---
@@ -95,7 +95,7 @@ Input .txt
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)
 - `strategy_params: {}` dict on each stage — strategies validate their own params internally
 - `include_grammar` is a per-stage research flag (not a strategy characteristic)
-- `output.save_intermediates` saves each iteration's `.sl` output — off by default
+- `output.save_intermediates` saves each iteration's `.symboleo` output — off by default
 - `stop_on_first_convergence` flag — default `false` (full research data), flip to `true` to save tokens
 - Input file is a CLI argument, not a config concern
 - CLI override support (`--set key=value`) for quick experiments — **deferred; low priority given the API provides a more ergonomic interface for per-run config**
@@ -107,8 +107,8 @@ Input .txt
 
 ### Output Format
 - Timestamped run directories (e.g., `output/run_20260526_143022/`) — prevents experiment overwrites
-- Each run directory contains: `report.json`, `config.yaml` (copy), `contract_final.sl`, optionally `intermediates/`
-- Multi-candidate runs use a `_candidate_N` suffix consistently: `contract_candidate_0_final.sl`, `intermediates_candidate_0/`
+- Each run directory contains: `report.json`, `config.yaml` (copy), `contract_final.symboleo`, optionally `intermediates/`
+- Multi-candidate runs use a `_candidate_N` suffix consistently: `contract_candidate_0_final.symboleo`, `intermediates_candidate_0/`
 - `report.json` captures: success, iterations per candidate, full error history per iteration
 - Console prints a human-readable summary; full detail is in `report.json`
 
@@ -141,9 +141,9 @@ Input .txt
 
 ### Testing Strategy
 - **Unit tests:** Mock both LLM adapter and CLI subprocess wrapper. Focus on pipeline loop logic (iteration bounds, early stopping, error passing).
-- **Integration tests:** Run the real JAR against known fixture files (valid `.sl`, invalid `.sl` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
+- **Integration tests:** Run the real JAR against known fixture files (valid `.symboleo`, invalid `.symboleo` with known errors). Live LLM adapter tests optional/skippable in CI (`pytest -m "not live"`).
 - **No full e2e in CI** — manual smoke test before releases.
-- `tests/fixtures/` contains: sample `.txt` contract, known-valid `.sl`, known-invalid `.sl`
+- `tests/fixtures/` contains: sample `.txt` contract, known-valid `.symboleo`, known-invalid `.symboleo`
 - **`tests/helpers.py`** — shared `make_issue()` factory returning a `SymboleoIssue` with keyword-only defaults. All unit test files import from here; no per-file `_make_error()` helpers.
 - **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (20 tests), and `test_jobs.py` (3 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution. `test_jobs.py` covers `cleanup_expired()` with expired, recent, and in-progress job cases.
 - **`tests/unit/test_writer.py`** — 5 tests covering `write_results()`: timestamped directory naming, `report.json`/`config.yaml` content, single vs. multi-candidate filename suffixes, and `save_intermediates` directory layout.
@@ -261,7 +261,7 @@ Two-page SPA with React Router:
 
 **Page 2 — Results (`/runs/:id`):**
 - While running: single spinner + "Candidate X — Iteration Y" counter updated from `ProgressEvent` stream; candidate accordion not rendered until `CompleteEvent` arrives
-- On complete: accordion of candidates, each with: convergence badge (Converged / Failed to converge), plain-text Symboleo code block, Download `.sl` button, Download `report.json` button (contains full error history per iteration)
+- On complete: accordion of candidates, each with: convergence badge (Converged / Failed to converge), plain-text Symboleo code block, Download `.symboleo` button, Download `report.json` button (contains full error history per iteration)
 - On fatal error: red error card displaying `ErrorEvent.message`
 - "New Run" button → `/` with form reset to defaults
 
