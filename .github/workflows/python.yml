@@ -1,13 +1,6 @@
 name: Python CI
 
 on:
-  push:
-    paths:
-      - 'symboleo_llm_tool/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/python.yml'
   pull_request:
     paths:
       - 'symboleo_llm_tool/**'
