@@ -15,7 +15,7 @@ A Python CLI and FastAPI web service that converts plain-English legal contracts
 
 **CLI usage:**
 - Python 3.11+
-- Java 11+ ([Adoptium](https://adoptium.net/))
+- Java 17+ ([Adoptium](https://adoptium.net/))
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 **Frontend dev server:**

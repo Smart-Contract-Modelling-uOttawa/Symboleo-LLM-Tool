@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
 from symboleo_llm_tool import pipeline
+from symboleo_llm_tool.api.config_builder import build_stage_config, resolve_provider
 from symboleo_llm_tool.api.jobs import Job, create_job, get_job
 from symboleo_llm_tool.api.models import (
     CompleteEvent,
@@ -20,7 +21,6 @@ from symboleo_llm_tool.api.models import (
     OptionsResponse,
     ProgressEvent,
     RunCreatedResponse,
-    StageRequest,
 )
 from symboleo_llm_tool.config.models import (
     LLMConfig,
@@ -29,7 +29,7 @@ from symboleo_llm_tool.config.models import (
     RunConfig,
     StageConfig,
 )
-from symboleo_llm_tool.prompts.registry import list_strategies
+from symboleo_llm_tool.prompts.registry import get_strategy, list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 router = APIRouter()
@@ -55,79 +55,25 @@ def reset_router() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _validate_strategy(strategy: str, available: list[str]) -> None:
-    if strategy not in available:
-        raise HTTPException(422, detail=f"Unknown strategy: {strategy!r}")
-
-
-def _validate_stages(req: GenerateRequest) -> None:
-    available = list_strategies()
-    _validate_strategy(req.generation.strategy, available)
-    _validate_examples(req.generation.strategy_params)
-    if req.correction is not None:
-        _validate_strategy(req.correction.strategy, available)
-        _validate_examples(req.correction.strategy_params)
-
-
-def _resolve_provider(model: str) -> str:
-    if model not in _model_to_provider:
-        raise HTTPException(status_code=422, detail=f"Unknown model: {model!r}")
-    return _model_to_provider[model]
-
-
-def _validate_examples(strategy_params: dict[str, Any]) -> None:
-    for name in strategy_params.get("example_files", []):
-        if not (Path("examples") / f"{name}.yaml").exists():
-            raise HTTPException(
-                status_code=422,
-                detail=f"Example not found: {name!r}. Expected at examples/{name}.yaml",
-            )
-
-
-def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
-    if "example_files" not in strategy_params:
-        return strategy_params
-    resolved = dict(strategy_params)
-    resolved["example_files"] = [
-        str(Path("examples") / f"{name}.yaml") for name in strategy_params["example_files"]
-    ]
-    return resolved
-
-
-def _build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:
-    llm_kwargs: dict[str, Any] = {"provider": provider, "model": stage_req.model}
-    if stage_req.temperature is not None:
-        llm_kwargs["temperature"] = stage_req.temperature
-
-    stage_kwargs: dict[str, Any] = {
-        "llm": LLMConfig(**llm_kwargs),
-        "strategy": stage_req.strategy,
-        "strategy_params": _resolve_example_paths(stage_req.strategy_params),
-    }
-    if stage_req.include_grammar is not None:
-        stage_kwargs["include_grammar"] = stage_req.include_grammar
-
-    return StageConfig(**stage_kwargs)
-
-
-# ---------------------------------------------------------------------------
 # POST /generate
 # ---------------------------------------------------------------------------
 
 
 @router.post("/generate", response_model=RunCreatedResponse)
 async def generate(req: GenerateRequest) -> RunCreatedResponse:
-    _validate_stages(req)
+    try:
+        gen_provider = resolve_provider(req.generation.model, _model_to_provider)
+        corr_provider = resolve_provider(req.effective_correction.model, _model_to_provider)
 
-    gen_provider = _resolve_provider(req.generation.model)
-    corr_provider = _resolve_provider(req.effective_correction.model)
+        gen_stage = build_stage_config(req.generation, gen_provider)
+        corr_stage = build_stage_config(req.effective_correction, corr_provider)
 
-    gen_stage = _build_stage_config(req.generation, gen_provider)
-    corr_stage = _build_stage_config(req.effective_correction, corr_provider)
+        # Early validation: instantiate both strategies synchronously so invalid strategy names
+        # or missing example files surface as a 422 rather than an ErrorEvent on the SSE stream.
+        get_strategy(gen_stage.strategy, gen_stage.strategy_params)
+        get_strategy(corr_stage.strategy, corr_stage.strategy_params)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     run_kwargs: dict[str, Any] = {}
     if req.num_candidates is not None:
@@ -162,7 +108,13 @@ async def _run_pipeline(
     config: PipelineConfig,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
-    def on_progress(candidate_id: int, iteration: int, errors: list[SymboleoIssue]) -> None:
+    def on_progress(
+        candidate_id: int,
+        iteration: int,
+        errors: list[SymboleoIssue],
+        total_candidates: int,
+        total_iterations: int,
+    ) -> None:
         event = ProgressEvent(
             candidate_id=candidate_id,
             iteration=iteration,
