@@ -125,7 +125,7 @@ Input .txt
 - Config as Pydantic models means the same object can be populated from YAML or a JSON request body
 
 ### Java Dependency (Packaging)
-- **Tier 1 (dev):** Bundle JAR inside the package, require Java 11+ as a system prerequisite. Check for Java at startup and fail with a clear, actionable error message.
+- **Tier 1 (dev):** Bundle JAR inside the package, require Java 17+ as a system prerequisite (JAR compiled with class file version 61.0). Check for Java at startup and fail with a clear, actionable error message.
 - **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates Java prerequisite for end users. `Dockerfile` and `docker-compose.yml` are in the project root.
 - **Running the API from Docker:** Preferred: `docker compose up symboleo-api` (handles build, volumes, and env automatically). Standalone: `docker build -t symboleo-llm-tool .` then `docker run -p 8000:8000 --env-file .env -v ./configs:/app/configs:ro --entrypoint uvicorn symboleo-llm-tool symboleo_llm_tool.api.app:app --host 0.0.0.0 --port 8000`. API keys must be passed via `--env-file .env` or `-e ANTHROPIC_API_KEY=...`. `configs/` is intentionally not baked into the image — `ui_config.yaml` must be mountable at runtime so model lists can be updated without a rebuild.
 - **JAR naming convention:** The JAR is stored as `lib/symboleo-cli.jar` (no version in the filename). When updating the JAR, replace the file in place — the version lives in the file content and git history, not the filename. This keeps the default `jar_path` in `SymboleoConfig` stable across releases.
