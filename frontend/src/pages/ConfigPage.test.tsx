@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { vi } from 'vitest'
 import { server } from '@/test/server'
+import { TEST_RUN_ID } from '@/test/handlers'
 import ConfigPage from './ConfigPage'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
@@ -85,7 +86,7 @@ describe('ConfigPage', () => {
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith('/runs/test-run-id')
+      expect(mockNavigate).toHaveBeenCalledWith(`/runs/${TEST_RUN_ID}`)
     )
   })
 

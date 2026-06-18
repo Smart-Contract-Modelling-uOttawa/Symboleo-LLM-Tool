@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
+import { TEST_RUN_ID } from '@/test/handlers'
 import { useStream } from '@/hooks/useStream'
 import ResultsPage from './ResultsPage'
 import type { PipelineResult } from '@/api/types'
@@ -40,7 +41,7 @@ const MOCK_RESULT: PipelineResult = {
 
 function renderResultsPage() {
   return render(
-    <MemoryRouter initialEntries={['/runs/test-run-id']}>
+    <MemoryRouter initialEntries={[`/runs/${TEST_RUN_ID}`]}>
       <Routes>
         <Route path="/runs/:runId" element={<ResultsPage />} />
       </Routes>
