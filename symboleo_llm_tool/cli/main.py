@@ -84,7 +84,7 @@ def run(
         _fatal(str(e))
 
     try:
-        run_dir = write_results(result, config, config_file)
+        run_dir = write_results(result, config)
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 
