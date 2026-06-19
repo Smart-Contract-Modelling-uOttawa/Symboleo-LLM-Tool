@@ -216,7 +216,7 @@ The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and r
 - `CompleteEvent` — final event; embeds the full `PipelineResult`
 - `ErrorEvent` — fatal pipeline error; contains `message`
 - Reconnect behavior: if job complete → send `CompleteEvent` immediately; if still running → resume live stream; if TTL expired → 404
-- Event type discrimination uses `EventType(str, Enum)` — serializes to lowercase string values (`"progress"`, `"complete"`, `"error"`) without `Literal["x"] = "x"` repetition.
+- Event type discrimination uses `EventType(str, Enum)` — serializes to lowercase string values (`"progress"`, `"complete"`, `"error"`) without `Literal["x"] = "x"` repetition. Note: this generates the enum as a shared type across all three event schemas, which prevents TypeScript discriminated-union narrowing. The frontend adapts via `WithLiteralType<T, V>` in `api/types.ts` — do not change the backend to fix a frontend type concern.
 
 **Async bridge (sync pipeline → async SSE):**
 - `asyncio.Queue` + `loop.call_soon_threadsafe(queue.put_nowait, event)` — the `on_progress` callback, created in async context before thread launch, posts events thread-safely onto the queue

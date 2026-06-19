@@ -13,4 +13,11 @@ export type ProgressEvent = components['schemas']['ProgressEvent']
 export type CompleteEvent = components['schemas']['CompleteEvent']
 export type ErrorEvent = components['schemas']['ErrorEvent']
 
-export type SSEEvent = ProgressEvent | CompleteEvent | ErrorEvent
+// The schema generates `type` as a shared EventType enum on all three variants,
+// which prevents TypeScript narrowing. These wrapper types replace the field
+// with a per-variant literal so `data.type === 'progress'` narrows correctly.
+type WithLiteralType<T, V extends string> = Omit<T, 'type'> & { type: V }
+export type SSEEvent =
+  | WithLiteralType<ProgressEvent, 'progress'>
+  | WithLiteralType<CompleteEvent, 'complete'>
+  | WithLiteralType<ErrorEvent, 'error'>
