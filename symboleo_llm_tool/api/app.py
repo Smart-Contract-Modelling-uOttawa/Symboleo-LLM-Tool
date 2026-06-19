@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import AsyncGenerator
 
 import yaml
@@ -11,10 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from symboleo_llm_tool.api import routes
-from symboleo_llm_tool.api._paths import UI_CONFIG_PATH
+from symboleo_llm_tool.api._paths import FRONTEND_DIST, UI_CONFIG_PATH
 from symboleo_llm_tool.api.jobs import cleanup_expired
 from symboleo_llm_tool.config.models import SymboleoConfig
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
+
+_API_PORT = 8000  # must match --port in Dockerfile ENTRYPOINT
 
 
 @asynccontextmanager
@@ -31,7 +32,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     cleanup_task = asyncio.create_task(_ttl_cleanup_loop())
 
-    _base = "http://localhost:8000"
+    _base = f"http://localhost:{_API_PORT}"
     logging.getLogger("uvicorn").info(f"API available at {_base} — docs at {_base}/docs")
 
     yield
@@ -64,6 +65,5 @@ app.add_middleware(
 
 app.include_router(routes.router, prefix="/api")
 
-_frontend_dist = Path("frontend/dist")
-if _frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

@@ -79,6 +79,8 @@ def run(
         )
 
     if config.observability.langsmith.enabled:
+        if _LangSmithClient is None:
+            _fatal("langsmith is not installed but observability.langsmith.enabled is true")
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGSMITH_PROJECT"] = config.observability.langsmith.project
 
@@ -121,8 +123,6 @@ def run(
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
     if config.observability.langsmith.enabled:
-        if _LangSmithClient is None:
-            _fatal("langsmith is not installed but observability.langsmith.enabled is true")
         try:
             _LangSmithClient().flush()
         except Exception as e:
