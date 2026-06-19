@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from symboleo_llm_tool.api import routes
+from symboleo_llm_tool.api._paths import UI_CONFIG_PATH
 from symboleo_llm_tool.api.jobs import cleanup_expired
 from symboleo_llm_tool.config.models import SymboleoConfig
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
@@ -17,7 +18,7 @@ from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    config_path = Path("configs/ui_config.yaml")
+    config_path = UI_CONFIG_PATH
     if not config_path.exists():
         raise RuntimeError(f"UI config not found: {config_path.resolve()}")
     ui_config = yaml.safe_load(config_path.read_text(encoding="utf-8"))

@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
-from pathlib import Path
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from symboleo_llm_tool import pipeline
+from symboleo_llm_tool.api._paths import EXAMPLES_DIR
 from symboleo_llm_tool.api.config_builder import build_stage_config, resolve_provider
 from symboleo_llm_tool.api.jobs import Job, create_job, get_job
 from symboleo_llm_tool.api.models import (
@@ -201,8 +202,7 @@ async def get_options() -> OptionsResponse:
             entry["default"] = model_cls.model_fields[field_name].default
         parameters[param_name] = entry
 
-    examples_dir = Path("examples")
-    examples = sorted(p.stem for p in examples_dir.glob("*.yaml")) if examples_dir.exists() else []
+    examples = sorted(p.stem for p in EXAMPLES_DIR.glob("*.yaml")) if EXAMPLES_DIR.exists() else []
 
     return OptionsResponse(
         strategies=list_strategies(),

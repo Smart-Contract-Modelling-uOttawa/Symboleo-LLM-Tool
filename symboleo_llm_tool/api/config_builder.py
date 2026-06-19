@@ -1,6 +1,6 @@
-from pathlib import Path
 from typing import Any
 
+from symboleo_llm_tool.api._paths import EXAMPLES_DIR
 from symboleo_llm_tool.api.models import StageRequest
 from symboleo_llm_tool.config.models import LLMConfig, StageConfig
 
@@ -32,6 +32,6 @@ def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
         return strategy_params
     resolved = dict(strategy_params)
     resolved["example_files"] = [
-        str(Path("examples") / f"{name}.yaml") for name in strategy_params["example_files"]
+        str(EXAMPLES_DIR / f"{name}.yaml") for name in strategy_params["example_files"]
     ]
     return resolved
