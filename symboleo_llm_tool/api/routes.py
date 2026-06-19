@@ -182,6 +182,7 @@ def _sse(event: ProgressEvent | CompleteEvent | ErrorEvent) -> str:
 # GET /options
 # ---------------------------------------------------------------------------
 
+
 @router.get("/options", response_model=OptionsResponse)
 async def get_options() -> OptionsResponse:
     parameters = get_parameter_defaults(_ui_config.get("parameters", {}))
