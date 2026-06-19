@@ -148,7 +148,7 @@ uv run uvicorn symboleo_llm_tool.api.app:app --reload
 docker compose up symboleo-api
 ```
 
-Interactive API docs are available at `http://localhost:8000/docs` once the server is running.
+The server logs the API URL on startup. Interactive docs are at `http://localhost:8000/docs`.
 
 ### Frontend
 
