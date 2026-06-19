@@ -24,7 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useOptions } from '@/hooks/useOptions'
 import { generate } from '@/api/client'
-import type { OptionsResponse } from '@/api/types'
+import type { OptionsResponse, StageRequest } from '@/api/types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,7 +104,7 @@ function makeNullableUpdater<T>(setter: (fn: (prev: T | null) => T | null) => vo
     setter(prev => (prev ? updater(prev) : prev))
 }
 
-function buildStageRequest(state: StageState) {
+function buildStageRequest(state: StageState): StageRequest {
   const temp = parseFloat(state.temperature)
   return {
     model: state.model,
