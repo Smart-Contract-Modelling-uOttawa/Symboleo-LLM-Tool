@@ -4,7 +4,7 @@ import type { OptionsResponse } from '@/api/types'
 
 // Options are static for the server's lifetime — cache them so remounts
 // (e.g. navigating back via "New Run") skip the fetch and loading screen.
-let _cached: OptionsResponse | null = null
+let optionsCache: OptionsResponse | null = null
 
 interface UseOptionsResult {
   options: OptionsResponse | null
@@ -13,15 +13,15 @@ interface UseOptionsResult {
 }
 
 export function useOptions(): UseOptionsResult {
-  const [options, setOptions] = useState<OptionsResponse | null>(_cached)
-  const [loading, setLoading] = useState(_cached === null)
+  const [options, setOptions] = useState<OptionsResponse | null>(optionsCache)
+  const [loading, setLoading] = useState(optionsCache === null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (_cached !== null) return
+    if (optionsCache !== null) return
     fetchOptions()
       .then(data => {
-        _cached = data
+        optionsCache = data
         setOptions(data)
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load options'))
