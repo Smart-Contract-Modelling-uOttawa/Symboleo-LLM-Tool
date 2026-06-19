@@ -15,7 +15,7 @@ from symboleo_llm_tool.symboleo.models import SymboleoIssue
 try:
     from langsmith import Client as _LangSmithClient
 except ImportError:
-    _LangSmithClient = None  # type: ignore[assignment]
+    _LangSmithClient = None  # type: ignore[misc, assignment]
 
 load_dotenv()
 

@@ -40,7 +40,7 @@ A Python CLI and FastAPI web service that:
 ```
 symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
-├── api/            # FastAPI adapter layer: routes, config_builder, job store, SSE events, request/response models
+├── api/            # FastAPI adapter layer: routes, config_builder, job store, SSE events, request/response models, _paths.py (deployment path constants)
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
@@ -80,7 +80,7 @@ Input .txt
 - Strategy-specific data comes from `strategy_params` in config, passed to the strategy constructor
 - Prompt text lives in Jinja2 `.j2` templates, separate from Python logic
 - Grammar is baseline for all strategies — `include_grammar` is a per-stage flag, not a strategy characteristic
-- Adding a new strategy: add templates to `prompts/templates/`, add a strategy class decorated with `@registry.register("name")` in `prompts/strategies/`, import it in `prompts/strategies/__init__.py`
+- Adding a new strategy: add templates to `prompts/templates/`, add a strategy class in `prompts/strategies/`, then import it and add it to the `_STRATEGIES` dict in `prompts/strategies/__init__.py`
 
 **Available strategies:**
 | Strategy | Key `strategy_params` | Notes |
@@ -125,6 +125,7 @@ Input .txt
 - Config as Pydantic models means the same object can be populated from YAML or a JSON request body
 - **`ProgressCallback` type:** `Callable[[int, int, list[SymboleoIssue], int, int], None]` — args are `(candidate_id, iteration, errors, total_candidates, total_iterations)`. The pipeline passes `total_candidates` and `total_iterations` so callers (CLI, API) do not need to reach into config themselves.
 - **`api/config_builder.py`** separates config construction (provider resolution, `StageConfig` assembly, example path resolution) from routing logic. Functions raise `ValueError`; `routes.py` converts these to `HTTPException(422)` in a single `try/except` block alongside strategy validation.
+- **`api/_paths.py`** holds deployment path constants (`UI_CONFIG_PATH`, `EXAMPLES_DIR`). All modules in `api/` that reference filesystem paths import from here — never inline `Path("configs/ui_config.yaml")` elsewhere.
 
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 17+ as a system prerequisite (JAR compiled with class file version 61.0). Check for Java at startup and fail with a clear, actionable error message.
@@ -159,7 +160,8 @@ Input .txt
 - LangSmith is opt-in via `observability.langsmith.enabled: false` default
 - Tracing applied conditionally at adapter construction time — `tracing_enabled` flows from `pipeline.run()` → `create_adapter()` → `LiteLLMAdapter.__init__()`. Only `LiteLLMAdapter` is traced; mock adapter is not.
 - `observability.langsmith.project` controls the LangSmith project — the CLI sets `LANGSMITH_PROJECT` and `LANGCHAIN_TRACING_V2` env vars from config at runtime. `.env` only needs `LANGSMITH_API_KEY`.
-- **Data model consistency rule:** data passed between layers uses Pydantic `BaseModel`; internal service-object bundles (e.g., `_RunContext` in `pipeline.py`) use `@dataclass(frozen=True)`.
+- **Optional dependency pattern in CLI:** `langsmith` is guarded by a module-level `try/except ImportError`. A missing package causes a fatal error only if `observability.langsmith.enabled: true` is set — separating "package not installed" (config error) from runtime flush failures (warn and continue). Do not use deferred imports inside `except Exception` — that conflates both failure modes.
+- **Data model consistency rule:** data passed between layers uses Pydantic `BaseModel`; internal service-object bundles (e.g., `_RunContext` in `pipeline.py`) use `@dataclass(frozen=True)`. `_RunContext` is intentionally flat (individual scalar fields, not a nested `PipelineConfig`) — `run()` is the translation site from nested config to flat execution bundle, eliminating LoD chain access through the context in downstream functions.
 
 ---
 
@@ -213,6 +215,7 @@ The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and r
 - `CompleteEvent` — final event; embeds the full `PipelineResult`
 - `ErrorEvent` — fatal pipeline error; contains `message`
 - Reconnect behavior: if job complete → send `CompleteEvent` immediately; if still running → resume live stream; if TTL expired → 404
+- Event type discrimination uses `EventType(str, Enum)` — serializes to lowercase string values (`"progress"`, `"complete"`, `"error"`) without `Literal["x"] = "x"` repetition.
 
 **Async bridge (sync pipeline → async SSE):**
 - `asyncio.Queue` + `loop.call_soon_threadsafe(queue.put_nowait, event)` — the `on_progress` callback, created in async context before thread launch, posts events thread-safely onto the queue

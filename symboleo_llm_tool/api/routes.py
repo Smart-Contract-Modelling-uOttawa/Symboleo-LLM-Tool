@@ -2,17 +2,19 @@ import asyncio
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
-
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from symboleo_llm_tool import pipeline
 from symboleo_llm_tool.api._paths import EXAMPLES_DIR
-from symboleo_llm_tool.api.config_builder import build_stage_config, resolve_provider
+from symboleo_llm_tool.api.config_builder import (
+    build_stage_config,
+    get_parameter_defaults,
+    resolve_provider,
+)
 from symboleo_llm_tool.api.jobs import Job, create_job, get_job
 from symboleo_llm_tool.api.models import (
     CompleteEvent,
@@ -23,11 +25,9 @@ from symboleo_llm_tool.api.models import (
     RunCreatedResponse,
 )
 from symboleo_llm_tool.config.models import (
-    LLMConfig,
     OutputConfig,
     PipelineConfig,
     RunConfig,
-    StageConfig,
 )
 from symboleo_llm_tool.prompts.strategies import get_strategy, list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
@@ -112,8 +112,8 @@ async def _run_pipeline(
         candidate_id: int,
         iteration: int,
         errors: list[SymboleoIssue],
-        total_candidates: int,
-        total_iterations: int,
+        _total_candidates: int,
+        _total_iterations: int,
     ) -> None:
         event = ProgressEvent(
             candidate_id=candidate_id,
@@ -182,28 +182,10 @@ def _sse(event: ProgressEvent | CompleteEvent | ErrorEvent) -> str:
 # GET /options
 # ---------------------------------------------------------------------------
 
-_PARAM_SOURCES: dict[str, tuple[type[BaseModel], str]] = {
-    "num_candidates": (RunConfig, "num_candidates"),
-    "max_iterations": (RunConfig, "max_iterations"),
-    "stop_on_first_convergence": (RunConfig, "stop_on_first_convergence"),
-    "temperature": (LLMConfig, "temperature"),
-    "include_grammar": (StageConfig, "include_grammar"),
-    "save_intermediates": (OutputConfig, "save_intermediates"),
-}
-
-
 @router.get("/options", response_model=OptionsResponse)
 async def get_options() -> OptionsResponse:
-    parameters: dict[str, Any] = {}
-    for param_name, constraints in _ui_config.get("parameters", {}).items():
-        entry = dict(constraints)
-        if param_name in _PARAM_SOURCES:
-            model_cls, field_name = _PARAM_SOURCES[param_name]
-            entry["default"] = model_cls.model_fields[field_name].default
-        parameters[param_name] = entry
-
+    parameters = get_parameter_defaults(_ui_config.get("parameters", {}))
     examples = sorted(p.stem for p in EXAMPLES_DIR.glob("*.yaml")) if EXAMPLES_DIR.exists() else []
-
     return OptionsResponse(
         strategies=list_strategies(),
         models=_ui_config.get("models", {}),

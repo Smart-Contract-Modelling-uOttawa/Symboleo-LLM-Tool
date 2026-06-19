@@ -12,7 +12,9 @@ def write_results(result: PipelineResult, config: PipelineConfig) -> Path:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     (run_dir / "report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
-    config_yaml = yaml.dump(config.model_dump(mode="json"), default_flow_style=False, sort_keys=False)
+    config_yaml = yaml.dump(
+        config.model_dump(mode="json"), default_flow_style=False, sort_keys=False
+    )
     (run_dir / "config.yaml").write_text(config_yaml, encoding="utf-8")
 
     multi = len(result.candidates) > 1
