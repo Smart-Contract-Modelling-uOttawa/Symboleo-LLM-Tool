@@ -3,7 +3,6 @@ from typing import Any
 
 import yaml
 
-from symboleo_llm_tool.prompts import registry
 from symboleo_llm_tool.prompts.base import PromptStrategy, build_jinja_env
 from symboleo_llm_tool.prompts.context import PromptContext
 
@@ -32,7 +31,6 @@ def _load_examples(example_files: list[str]) -> list[dict[str, str]]:
     return examples
 
 
-@registry.register("few_shot")
 class FewShotStrategy(PromptStrategy):
     def __init__(self, params: dict[str, Any]) -> None:
         super().__init__(params)

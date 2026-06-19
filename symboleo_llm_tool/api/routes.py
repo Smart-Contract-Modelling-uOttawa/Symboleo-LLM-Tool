@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
 from symboleo_llm_tool import pipeline
 from symboleo_llm_tool.api.config_builder import build_stage_config, resolve_provider
 from symboleo_llm_tool.api.jobs import Job, create_job, get_job
@@ -29,7 +28,7 @@ from symboleo_llm_tool.config.models import (
     RunConfig,
     StageConfig,
 )
-from symboleo_llm_tool.prompts.registry import get_strategy, list_strategies
+from symboleo_llm_tool.prompts.strategies import get_strategy, list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 router = APIRouter()

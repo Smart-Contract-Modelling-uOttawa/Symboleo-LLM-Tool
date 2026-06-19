@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import resources
 
-import symboleo_llm_tool.prompts.strategies  # noqa: F401 — triggers strategy registration
 from symboleo_llm_tool.config.models import PipelineConfig
 from symboleo_llm_tool.llm.base import LLMAdapter
 from symboleo_llm_tool.llm.factory import create_adapter
@@ -14,7 +13,7 @@ from symboleo_llm_tool.output.models import (
 )
 from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
-from symboleo_llm_tool.prompts.registry import get_strategy
+from symboleo_llm_tool.prompts.strategies import get_strategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 

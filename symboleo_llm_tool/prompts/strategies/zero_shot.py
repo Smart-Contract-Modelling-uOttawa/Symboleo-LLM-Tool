@@ -1,6 +1,5 @@
 from typing import Any
 
-from symboleo_llm_tool.prompts import registry
 from symboleo_llm_tool.prompts.base import PromptStrategy, build_jinja_env
 from symboleo_llm_tool.prompts.context import PromptContext
 
@@ -12,7 +11,6 @@ _env = build_jinja_env([
 ])
 
 
-@registry.register("zero_shot")
 class ZeroShotStrategy(PromptStrategy):
     def __init__(self, params: dict[str, Any]) -> None:
         super().__init__(params)
