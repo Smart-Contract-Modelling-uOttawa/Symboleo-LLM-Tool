@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -29,6 +30,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     SymboleoWrapper(symboleo_cfg.jar_path, symboleo_cfg.java_executable)
 
     cleanup_task = asyncio.create_task(_ttl_cleanup_loop())
+
+    _base = "http://localhost:8000"
+    logging.getLogger("uvicorn").info(f"API available at {_base} — docs at {_base}/docs")
 
     yield
 
