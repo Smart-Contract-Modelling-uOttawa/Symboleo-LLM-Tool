@@ -74,25 +74,22 @@ export interface components {
         };
         /** CompleteEvent */
         CompleteEvent: {
-            /**
-             * Type
-             * @default complete
-             * @constant
-             */
-            type: "complete";
+            /** @default complete */
+            type: components["schemas"]["EventType"];
             result: components["schemas"]["PipelineResult"];
         };
         /** ErrorEvent */
         ErrorEvent: {
-            /**
-             * Type
-             * @default error
-             * @constant
-             */
-            type: "error";
+            /** @default error */
+            type: components["schemas"]["EventType"];
             /** Message */
             message: string;
         };
+        /**
+         * EventType
+         * @enum {string}
+         */
+        EventType: "progress" | "complete" | "error";
         /** GenerateRequest */
         GenerateRequest: {
             /** Contract Text */
@@ -153,12 +150,8 @@ export interface components {
         };
         /** ProgressEvent */
         ProgressEvent: {
-            /**
-             * Type
-             * @default progress
-             * @constant
-             */
-            type: "progress";
+            /** @default progress */
+            type: components["schemas"]["EventType"];
             /** Candidate Id */
             candidate_id: number;
             /** Iteration */
