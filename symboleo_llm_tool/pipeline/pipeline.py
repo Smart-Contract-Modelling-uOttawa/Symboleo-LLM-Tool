@@ -19,16 +19,23 @@ from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
 ProgressCallback = Callable[[int, int, list[SymboleoIssue], int, int], None]
 
+_GRAMMAR_PACKAGE = "symboleo_llm_tool.resources"
+_GRAMMAR_FILE = "Symboleo.xtext"
+
 
 @dataclass(frozen=True)
 class _RunContext:
-    config: PipelineConfig
     wrapper: SymboleoWrapper
     gen_llm: LLMAdapter
     corr_llm: LLMAdapter
     gen_strategy: PromptStrategy
     corr_strategy: PromptStrategy
     grammar_context: str | None
+    gen_include_grammar: bool
+    corr_include_grammar: bool
+    num_candidates: int
+    max_iterations: int
+    stop_on_first_convergence: bool
     on_progress: ProgressCallback | None
 
 
@@ -40,7 +47,6 @@ def run(
 ) -> PipelineResult:
     tracing = config.observability.langsmith.enabled
     ctx = _RunContext(
-        config=config,
         wrapper=SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable),
         gen_llm=create_adapter(config.generation.llm, tracing_enabled=tracing),
         corr_llm=create_adapter(config.correction.llm, tracing_enabled=tracing),
@@ -51,14 +57,19 @@ def run(
             if (config.generation.include_grammar or config.correction.include_grammar)
             else None
         ),
+        gen_include_grammar=config.generation.include_grammar,
+        corr_include_grammar=config.correction.include_grammar,
+        num_candidates=config.pipeline.num_candidates,
+        max_iterations=config.pipeline.max_iterations,
+        stop_on_first_convergence=config.pipeline.stop_on_first_convergence,
         on_progress=on_progress,
     )
 
     candidates: list[CandidateResult] = []
-    for i in range(config.pipeline.num_candidates):
+    for i in range(ctx.num_candidates):
         candidate = _run_candidate(candidate_id=i, contract_text=contract_text, ctx=ctx)
         candidates.append(candidate)
-        if config.pipeline.stop_on_first_convergence and candidate.converged:
+        if ctx.stop_on_first_convergence and candidate.converged:
             break
 
     return PipelineResult(
@@ -76,27 +87,23 @@ def _run_candidate(
 ) -> CandidateResult:
     gen_context = PromptContext(
         contract_text=contract_text,
-        grammar_context=ctx.grammar_context if ctx.config.generation.include_grammar else None,
+        grammar_context=ctx.grammar_context if ctx.gen_include_grammar else None,
     )
     gen_prompt = ctx.gen_strategy.build_generation_prompt(gen_context)
     code = _clean_response(ctx.gen_llm.generate(gen_prompt))
 
     errors = ctx.wrapper.validate(code)
-    total_candidates = ctx.config.pipeline.num_candidates
-    total_iterations = ctx.config.pipeline.max_iterations
     error_history = [IterationRecord(iteration=0, code=code, errors=errors)]
     if ctx.on_progress:
-        ctx.on_progress(candidate_id, 0, errors, total_candidates, total_iterations)
+        ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
 
-    for iteration in range(1, ctx.config.pipeline.max_iterations + 1):
+    for iteration in range(1, ctx.max_iterations + 1):
         if not errors:
             break
         corr_context = PromptContext(
             current_code=code,
             errors=errors,
-            grammar_context=(
-                ctx.grammar_context if ctx.config.correction.include_grammar else None
-            ),
+            grammar_context=ctx.grammar_context if ctx.corr_include_grammar else None,
             history=error_history,
         )
         corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
@@ -104,7 +111,7 @@ def _run_candidate(
         errors = ctx.wrapper.validate(code)
         error_history.append(IterationRecord(iteration=iteration, code=code, errors=errors))
         if ctx.on_progress:
-            ctx.on_progress(candidate_id, iteration, errors, total_candidates, total_iterations)
+            ctx.on_progress(candidate_id, iteration, errors, ctx.num_candidates, ctx.max_iterations)
 
     return CandidateResult(
         candidate_id=candidate_id,
@@ -129,10 +136,10 @@ def _clean_response(response: str) -> str:
 
 def _load_grammar() -> str:
     try:
-        grammar_file = resources.files("symboleo_llm_tool.resources").joinpath("Symboleo.xtext")
+        grammar_file = resources.files(_GRAMMAR_PACKAGE).joinpath(_GRAMMAR_FILE)
         return grammar_file.read_text(encoding="utf-8")
     except Exception as e:
         raise RuntimeError(
             f"Failed to load Symboleo grammar resource: {e}. "
-            "Ensure Symboleo.xtext is present in symboleo_llm_tool/resources/."
+            f"Ensure {_GRAMMAR_FILE} is present in symboleo_llm_tool/resources/."
         ) from e
