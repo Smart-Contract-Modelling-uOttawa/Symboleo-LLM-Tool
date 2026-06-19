@@ -30,7 +30,7 @@ import type { OptionsResponse, StageRequest } from '@/api/types'
 // Types
 // ---------------------------------------------------------------------------
 
-interface StageState {
+interface StageFormValues {
   model: string
   strategy: string
   temperature: string
@@ -38,7 +38,7 @@ interface StageState {
   example_files: string[]
 }
 
-interface AdvancedState {
+interface AdvancedFormValues {
   num_candidates: string
   max_iterations: string
   stop_on_first_convergence: boolean
@@ -77,7 +77,7 @@ function getParamDefault<T>(
   return fallback
 }
 
-function makeDefaultStage(options: OptionsResponse): StageState {
+function makeDefaultStage(options: OptionsResponse): StageFormValues {
   const firstProvider = Object.keys(options.models)[0]
   const firstModel = (firstProvider && options.models[firstProvider]?.[0]) ?? ''
   const firstStrategy = options.strategies[0] ?? ''
@@ -90,7 +90,7 @@ function makeDefaultStage(options: OptionsResponse): StageState {
   }
 }
 
-function makeDefaultAdvanced(options: OptionsResponse): AdvancedState {
+function makeDefaultAdvanced(options: OptionsResponse): AdvancedFormValues {
   return {
     num_candidates: String(getParamDefault(options.parameters, 'num_candidates', DEFAULTS.num_candidates)),
     max_iterations: String(getParamDefault(options.parameters, 'max_iterations', DEFAULTS.max_iterations)),
@@ -104,7 +104,7 @@ function makeNullableUpdater<T>(setter: (fn: (prev: T | null) => T | null) => vo
     setter(prev => (prev ? updater(prev) : prev))
 }
 
-function buildStageRequest(state: StageState): StageRequest {
+function buildStageRequest(state: StageFormValues): StageRequest {
   const temp = parseFloat(state.temperature)
   return {
     model: state.model,
@@ -127,9 +127,9 @@ export default function ConfigPage() {
 
   const [contractText, setContractText] = useState('')
   const [fileName, setFileName] = useState('')
-  const [generation, setGeneration] = useState<StageState | null>(null)
-  const [correction, setCorrection] = useState<StageState | null>(null)
-  const [advanced, setAdvanced] = useState<AdvancedState | null>(null)
+  const [generation, setGeneration] = useState<StageFormValues | null>(null)
+  const [correction, setCorrection] = useState<StageFormValues | null>(null)
+  const [advanced, setAdvanced] = useState<AdvancedFormValues | null>(null)
   const [generationOpen, setGenerationOpen] = useState(true)
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -161,9 +161,9 @@ export default function ConfigPage() {
     multiple: false,
   })
 
-  const updateGeneration = makeNullableUpdater<StageState>(setGeneration)
-  const updateCorrection = makeNullableUpdater<StageState>(setCorrection)
-  const updateAdvanced = makeNullableUpdater<AdvancedState>(setAdvanced)
+  const updateGeneration = makeNullableUpdater<StageFormValues>(setGeneration)
+  const updateCorrection = makeNullableUpdater<StageFormValues>(setCorrection)
+  const updateAdvanced = makeNullableUpdater<AdvancedFormValues>(setAdvanced)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -366,9 +366,9 @@ interface StageSectionProps {
   id: string
   open: boolean
   onOpenChange: (open: boolean) => void
-  state: StageState
+  state: StageFormValues
   options: OptionsResponse
-  onChange: (updater: (prev: StageState) => StageState) => void
+  onChange: (updater: (prev: StageFormValues) => StageFormValues) => void
 }
 
 function StageSection({
