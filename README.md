@@ -21,7 +21,7 @@ A Python CLI and FastAPI web service that converts plain-English legal contracts
 **Frontend dev server:**
 - Node.js 18+
 
-**Docker usage:**
+**API (Docker):**
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
 ## Setup
@@ -43,23 +43,11 @@ cp .env.example .env
 
 ## Usage
 
-### CLI (Native)
+### CLI
 
 ```bash
 uv run symboleo-tool <contract.txt> --config configs/openai.yaml
 ```
-
-### CLI (Docker)
-
-```bash
-# Build the image (once, or after code changes)
-docker compose build
-
-# Run
-docker compose run --rm symboleo-tool /app/contracts/<contract.txt> --config /app/configs/openai.yaml
-```
-
-Place your contract files in the `contracts/` folder at the project root. Output is written to `output/` on your local machine.
 
 ## Configuration
 
@@ -124,7 +112,7 @@ generation:
       - ./examples/your_example.yaml
 ```
 
-The `examples/` directory is gitignored and mounted as a read-only volume in Docker — same pattern as `contracts/` and `configs/`.
+The `examples/` directory is gitignored and mounted as a read-only volume when running the API via Docker.
 
 ## Output
 
@@ -160,7 +148,7 @@ uv run uvicorn symboleo_llm_tool.api.app:app --reload
 docker compose up symboleo-api
 ```
 
-Interactive API docs are available at `http://localhost:8000/docs` once the server is running.
+The server logs the API URL on startup. Interactive docs are at `http://localhost:8000/docs`.
 
 ### Frontend
 

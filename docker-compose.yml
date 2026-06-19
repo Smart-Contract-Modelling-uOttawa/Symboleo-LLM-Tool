@@ -1,13 +1,4 @@
 services:
-  symboleo-tool:
-    build: .
-    env_file: .env
-    volumes:
-      - ./contracts:/app/contracts:ro
-      - ./configs:/app/configs:ro
-      - ./examples:/app/examples:ro
-      - ./output:/app/output
-
   symboleo-api:
     build: .
     env_file: .env
@@ -17,4 +8,3 @@ services:
       - ./configs:/app/configs:ro
       - ./examples:/app/examples:ro
       - ./frontend/dist:/app/frontend/dist:ro
-    entrypoint: ["uvicorn", "symboleo_llm_tool.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
