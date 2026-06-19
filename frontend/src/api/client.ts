@@ -22,7 +22,7 @@ export function fetchOptions(): Promise<OptionsResponse> {
   return apiFetch<OptionsResponse>('/api/options')
 }
 
-export function submitGenerate(request: GenerateRequest): Promise<RunCreatedResponse> {
+export function generate(request: GenerateRequest): Promise<RunCreatedResponse> {
   return apiFetch<RunCreatedResponse>('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -23,7 +23,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useOptions } from '@/hooks/useOptions'
-import { submitGenerate } from '@/api/client'
+import { generate } from '@/api/client'
 import type { OptionsResponse } from '@/api/types'
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ export default function ConfigPage() {
     try {
       const numCandidates = parseInt(advanced.num_candidates, 10)
       const maxIterations = parseInt(advanced.max_iterations, 10)
-      const { run_id } = await submitGenerate({
+      const { run_id } = await generate({
         contract_text: contractText,
         generation: buildStageRequest(generation),
         correction: buildStageRequest(correction),
