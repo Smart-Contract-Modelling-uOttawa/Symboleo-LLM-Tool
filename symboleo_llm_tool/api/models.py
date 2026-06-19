@@ -1,8 +1,15 @@
-from typing import Any, Literal
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from symboleo_llm_tool.output.models import PipelineResult
+
+
+class EventType(str, Enum):
+    PROGRESS = "progress"
+    COMPLETE = "complete"
+    ERROR = "error"
 
 
 class StageRequest(BaseModel):
@@ -35,19 +42,19 @@ class GenerateRequest(BaseModel):
 
 
 class ProgressEvent(BaseModel):
-    type: Literal["progress"] = "progress"
+    type: EventType = EventType.PROGRESS
     candidate_id: int
     iteration: int
     error_count: int
 
 
 class CompleteEvent(BaseModel):
-    type: Literal["complete"] = "complete"
+    type: EventType = EventType.COMPLETE
     result: PipelineResult
 
 
 class ErrorEvent(BaseModel):
-    type: Literal["error"] = "error"
+    type: EventType = EventType.ERROR
     message: str
 
 

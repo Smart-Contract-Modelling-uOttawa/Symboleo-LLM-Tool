@@ -9,8 +9,13 @@ from rich.table import Table
 
 from symboleo_llm_tool.config.loader import load_config
 from symboleo_llm_tool.output.writer import write_results
-from symboleo_llm_tool.pipeline import pipeline
+from symboleo_llm_tool.pipeline import run as run_pipeline
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
+
+try:
+    from langsmith import Client as _LangSmithClient
+except ImportError:
+    _LangSmithClient = None  # type: ignore[misc, assignment]
 
 load_dotenv()
 
@@ -79,12 +84,12 @@ def run(
 
     console.print("[bold green]Running pipeline...[/bold green]")
     try:
-        result = pipeline.run(contract_text, config, str(input_file), on_progress=_progress)
+        result = run_pipeline(contract_text, config, str(input_file), on_progress=_progress)
     except Exception as e:
         _fatal(str(e))
 
     try:
-        run_dir = write_results(result, config, config_file)
+        run_dir = write_results(result, config)
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 
@@ -116,10 +121,10 @@ def run(
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
     if config.observability.langsmith.enabled:
+        if _LangSmithClient is None:
+            _fatal("langsmith is not installed but observability.langsmith.enabled is true")
         try:
-            from langsmith import Client
-
-            Client().flush()
+            _LangSmithClient().flush()
         except Exception as e:
             console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
 
