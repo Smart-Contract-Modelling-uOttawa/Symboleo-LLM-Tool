@@ -20,4 +20,4 @@ COPY lib/ ./lib/
 
 EXPOSE 8000
 
-ENTRYPOINT ["symboleo-tool"]
+ENTRYPOINT ["uvicorn", "symboleo_llm_tool.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
