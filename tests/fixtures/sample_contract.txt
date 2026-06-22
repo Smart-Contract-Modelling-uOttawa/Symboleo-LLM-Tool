@@ -1,13 +1,12 @@
-This is a meat sale contract between Alice (Seller) and Bob (Buyer).
+This agreement is entered into effect as of <effDate>, between <party1> as Seller and <party2> as Buyer.
 
-Alice agrees to deliver 100 kg of prime quality meat to Bob's warehouse within 30 days of the contract effective date.
+1. Payment and Delivery
+1.1 The Seller shall sell <qnt> of <qlt> quality meat ("Goods") to the Buyer.
+1.2 Title in the Goods shall not pass to the Buyer until payment in full has been made.
+1.3 The Seller shall deliver the Goods to the Buyer at its warehouse within <delDueDateDays> days of the effective date.
+1.4 The Buyer shall pay <amt> in <curr> to the Seller within <payDueDateDays> days of delivery.
+1.5 In the event of late payment, the Buyer shall pay a late fee of <interestRate> of the amount owed. The Seller may suspend performance of all of its delivery obligations until payment of all amounts owed has been received in full.
+1.6 Should the Buyer pay all outstanding amounts while the Seller's obligations are suspended, the Buyer shall be entitled to request resumption of delivery.
 
-Bob agrees to pay $500 USD within 15 days of delivery.
-
-If Bob fails to pay on time, Bob must additionally pay a late fee of $550 USD (reflecting 10% interest on the original amount).
-
-If Bob fails to pay, Alice may suspend the delivery obligation.
-
-If Bob pays the late fee while delivery is suspended, Bob may request resumption of delivery.
-
-If Alice fails to deliver, Bob may terminate the contract.
+2. Termination
+2.1 The Buyer may terminate this agreement in the event that the Seller fails to deliver the Goods.
