@@ -3,15 +3,7 @@ from typing import Any
 from symboleo_llm_tool.prompts.base import PromptStrategy, build_jinja_env
 from symboleo_llm_tool.prompts.context import PromptContext
 
-_env = build_jinja_env(
-    [
-        "_system_header.j2",
-        "_grammar_section.j2",
-        "_placeholder_guidance.j2",
-        "cot_generation.j2",
-        "cot_correction.j2",
-    ]
-)
+_env = build_jinja_env("cot_generation.j2", "cot_correction.j2")
 
 
 class CoTStrategy(PromptStrategy):
