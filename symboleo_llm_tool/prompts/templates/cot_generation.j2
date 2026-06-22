@@ -1,17 +1,19 @@
 {% include '_system_header.j2' %}
-Your task is to convert the following legal contract (written in plain English) into a valid SymboleoAC contract.
-{% include '_grammar_section.j2' %}
-## Legal Contract
+## Goals
+- Convert the following legal contract into a complete, valid SymboleoAC contract.
 
-{{ contract_text }}
+## Constraints
+- Follow the grammar precisely. Every keyword, bracket, and semicolon matters.
+{% include '_placeholder_guidance.j2' %}
+- Return ONLY the SymboleoAC code. Do not include your reasoning, explanations, or markdown code fences.
 
-## Instructions
-
-Before generating, reason through these steps:
+## Workflow
 1. Identify all parties and their roles.
 2. Identify all `<varName>` template placeholders — these represent parameterizable values (quantities, dates, amounts, addresses, etc.) and should become typed parameters in the `Contract(...)` declaration.
 3. Identify all assets, events, and domain types required.
 4. Identify each obligation, permission, and prohibition along with its antecedent conditions and trigger events.
 5. Map every element to the correct SymboleoAC construct.
+{% include '_grammar_section.j2' %}
+## Input
 
-Then output ONLY the complete SymboleoAC contract. Do not include your reasoning, explanations, or markdown code fences.
+{{ contract_text }}

@@ -1,29 +1,10 @@
 {% include '_system_header.j2' %}
-Your task is to convert the following legal contract (written in plain English) into a valid SymboleoAC contract.
-{% include '_grammar_section.j2' %}
-{% if examples %}
-## Examples
+## Goals
+- Convert the following legal contract into a complete, valid SymboleoAC contract.
 
-{% for example in examples %}
-### Example {{ loop.index }}
-
-**Contract:**
-{{ example.contract_text }}
-
-**SymboleoAC:**
-{{ example.symboleo_code }}
-
-{% endfor %}
-{% endif %}
-## Legal Contract
-
-{{ contract_text }}
-
-## Instructions
-
-- Generate a complete, valid SymboleoAC contract that faithfully captures all obligations, powers, roles, assets, events, and constraints described in the legal text.
-{% include '_placeholder_guidance.j2' %}
+## Constraints
 - Follow the grammar precisely. Every keyword, bracket, and semicolon matters.
+{% include '_placeholder_guidance.j2' %}
 - A SymboleoAC contract must follow this top-level structure:
 
   Domain <domainName>
@@ -40,3 +21,21 @@ Your task is to convert the following legal contract (written in plain English) 
   endContract
 
 - Return ONLY the SymboleoAC code. Do not include explanations or markdown code fences.
+{% include '_grammar_section.j2' %}
+{% if examples %}
+## Examples
+
+{% for example in examples %}
+### Example {{ loop.index }}
+
+**Contract:**
+{{ example.contract_text }}
+
+**SymboleoAC:**
+{{ example.symboleo_code }}
+
+{% endfor %}
+{% endif %}
+## Input
+
+{{ contract_text }}

@@ -118,7 +118,7 @@ Standard module order for **correction** templates:
 {{ errors }}
 ```
 
-Shared partials (`_grammar_section.j2`, `_placeholder_guidance.j2`) are `{% include %}`d at the appropriate position within this structure. `_system_header.j2` is absorbed into the `# Role` section of each template — do not use `{% include '_system_header.j2' %}` in LangGPT-structured templates. The `## Workflow` section is intentionally placed before `## Grammar` — this is the natural LangGPT ordering even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
+Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — this is the natural LangGPT ordering even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
 
 **Why LangGPT over DSPy now:** DSPy automatically optimizes prompt text but requires labeled (contract_text → correct Symboleo) training data. LangGPT provides a principled hand-crafted baseline while that dataset accumulates from successful runs. See Future Directions — DSPy.
 
