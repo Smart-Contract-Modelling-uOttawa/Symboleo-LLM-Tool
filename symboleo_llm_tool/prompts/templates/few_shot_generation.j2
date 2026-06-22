@@ -5,22 +5,8 @@
 ## Constraints
 - Follow the grammar precisely. Every keyword, bracket, and semicolon matters.
 {% include '_placeholder_guidance.j2' %}
-- A SymboleoAC contract must follow this top-level structure:
-
-  Domain <domainName>
-    <type definitions>
-  endDomain
-
-  Contract <ContractName> (<parameters>)
-  Declarations
-    <variable declarations>
-  Obligations
-    <obligation definitions>
-  Powers
-    <power definitions>
-  endContract
-
 - Return ONLY the SymboleoAC code. Do not include explanations or markdown code fences.
+{% include '_output_format.j2' %}
 {% include '_grammar_section.j2' %}
 {% if examples %}
 ## Examples
