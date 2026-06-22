@@ -105,7 +105,9 @@ Standard module order for **generation** templates:
 ## Input
 {{ contract_text }}
 ```
-`## Output Format` is the canonical LangGPT module for the shape of the produced artifact. It comes after `## Workflow` per LangGPT's conventional order (Workflow → OutputFormat) and carries the contract skeleton plus the structural rules (domain types defined before use, `O`-vs-`Obligation`, the reversed creditor/debtor order in `Power`, inline propositions). It is **generation-only** — the correction templates do not include it, since correction edits existing structure rather than producing it from scratch. Behavioral rules ("follow the grammar," "code only, no fences") stay in `## Constraints`; the structural shape lives in `## Output Format`.
+`## Output Format` is the canonical LangGPT module for the shape of the produced artifact. It comes after `## Workflow` per LangGPT's conventional order (Workflow → OutputFormat) and carries the contract skeleton plus the structural rules (domain types defined before use, `O`-vs-`Obligation`, the reversed creditor/debtor order in `Power`, inline propositions). It is included in **both generation and correction** templates. Behavioral rules ("follow the grammar," "code only, no fences") stay in `## Constraints`; the structural shape lives in `## Output Format`.
+
+**Why correction also carries `## Output Format` (it was generation-only at first):** a live run (`run_20260622_122824`) showed correction regressing structurally — it rewrote a valid declaration `deliveryEvent: DeliveryEvent;` into the malformed `deliveryEvent: DeliveryEvent with;`, an unforced edit to a line that had no listed error. Root cause: the correction prompt gave the model the raw grammar and an error list but dropped the structural task specification that generation had, the "feedback-only" anti-pattern the code-repair literature warns against (effective repair prompts carry task spec *and* feedback). Two coordinated fixes: (1) include `## Output Format` in correction so the model has the same structural grounding, and (2) harden the first `## Constraints` bullet to forbid editing any line without a listed error (targets the over-edit/scope-creep that intrinsic self-correction is prone to in weaker models). Reusing generation's context *without* re-sending it would require conversational threading (a stateful multi-turn `messages` array); the API and our `LLMAdapter.generate(prompt: str)` are stateless single-shot, so the grounding must be re-included rather than "remembered." Prompt caching makes the re-included prefix cheap but does not provide statefulness.
 
 Standard module order for **correction** templates:
 ```
@@ -113,6 +115,7 @@ Standard module order for **correction** templates:
 ## Goals
 ## Constraints
 ## Workflow        ← CoT only; omitted in zero_shot and few_shot
+## Output Format   ← {% include '_output_format.j2' %}; same structural grounding as generation
 ## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
 ## Current Contract
 {{ current_code }}
@@ -120,7 +123,7 @@ Standard module order for **correction** templates:
 {{ errors }}
 ```
 
-Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), `_output_format.j2` provides the `## Output Format` section (with its own heading) in generation templates only, and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — this is the natural LangGPT ordering even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
+Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), `_output_format.j2` provides the `## Output Format` section (with its own heading) in both generation and correction templates, and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — this is the natural LangGPT ordering even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
 
 **Partial loading — the `_`-prefix is load-bearing:** `build_jinja_env(*template_names)` in `prompts/base.py` automatically loads *every* `_`-prefixed `.j2` file in `templates/` into the env, then adds the strategy-specific templates named in the call. A strategy file therefore lists only its own templates (e.g. `build_jinja_env("zero_shot_generation.j2", "zero_shot_correction.j2")`) and never re-lists partials. Adding a new shared partial is a single file drop in `templates/` — no strategy file changes. Which partials a strategy *uses* is controlled solely by the `{% include %}` directives in its own templates; a partial that is loaded but not included renders nothing, so per-strategy partial selection lives in the templates, not in the env. Partials are shared, strategy-invariant content by design — anything that varies by strategy (CoT's `## Workflow`, few_shot's `## Examples`) belongs in the strategy template, not a partial.
 
