@@ -6,15 +6,7 @@ import yaml
 from symboleo_llm_tool.prompts.base import PromptStrategy, build_jinja_env
 from symboleo_llm_tool.prompts.context import PromptContext
 
-_env = build_jinja_env(
-    [
-        "_system_header.j2",
-        "_grammar_section.j2",
-        "_placeholder_guidance.j2",
-        "few_shot_generation.j2",
-        "few_shot_correction.j2",
-    ]
-)
+_env = build_jinja_env("few_shot_generation.j2", "few_shot_correction.j2")
 
 
 def _load_examples(example_files: list[str]) -> list[dict[str, str]]:
