@@ -22,7 +22,7 @@ Your task is to convert the following legal contract (written in plain English) 
 ## Instructions
 
 - Generate a complete, valid SymboleoAC contract that faithfully captures all obligations, powers, roles, assets, events, and constraints described in the legal text.
-- The contract text may contain `<varName>` template placeholders representing parameterizable values (quantities, dates, amounts, addresses, etc.). Map each placeholder to a typed parameter in the `Contract(...)` declaration.
+{% include '_placeholder_guidance.j2' %}
 - Follow the grammar precisely. Every keyword, bracket, and semicolon matters.
 - A SymboleoAC contract must follow this top-level structure:
 
