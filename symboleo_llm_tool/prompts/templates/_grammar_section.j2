@@ -2,5 +2,13 @@
 
 ## SymboleoAC Grammar Reference
 
+The grammar below is written in Xtext grammar-definition notation — it *describes* SymboleoAC's syntax and is not itself example code. Read its notation as follows, and never copy the notation into your output:
+
+- A **single-quoted token** (`'days'`, `'Obligation'`, `'->'`, `'('`) is a literal: write its contents **without** the surrounding quotes — so `'days'` becomes `days` and `'('` becomes `(`. This is the most common mistake — time units, keywords, and operators are bare, never quoted.
+- **`STRING`** is the one place a real quoted string belongs: an actual text value you supply, e.g. `"value > 2"`. Do not confuse it with the single-quoted keyword literals above.
+- **`ID`** is a bare identifier (a name) you supply; **`INT`** / **`Number`** is a number.
+- A **CapitalizedName** to the left of `:` (e.g. `Obligation`, `VariableDotExpression`) is a *rule name*, not surface syntax — it refers to another rule and must never be emitted literally.
+- `|` is a choice (pick one), `?` is optional, `*` / `+` is repetition, and `[RuleName]` is a reference to a declared element. These are notation, not characters to write.
+
 {{ grammar_context }}
 {% endif %}
