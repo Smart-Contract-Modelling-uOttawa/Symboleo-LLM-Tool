@@ -91,6 +91,37 @@ Input .txt
 
 **CoT Option B (future flag):** Currently CoT uses Option A — the model reasons internally but outputs only code. Option B would add a `post_process_response()` hook to `PromptStrategy` so strategies can extract code from a mixed reasoning+code response, preserving reasoning in `report.json`. Deferred until research value is confirmed.
 
+**Prompt template structure — LangGPT conventions:** All `.j2` generation and correction templates follow [LangGPT](https://arxiv.org/abs/2402.16929) module conventions. LangGPT structures prompts as labeled semantic sections analogous to OOP class definitions; empirical research shows this reduces model ambiguity about what each part of the prompt is asking and measurably improves accuracy on downstream tasks compared to unstructured prose.
+
+Standard module order for **generation** templates:
+```
+# Role
+## Goals
+## Constraints
+## Workflow        ← CoT only; omitted in zero_shot and few_shot
+## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
+## Examples        ← few_shot only
+## Input
+{{ contract_text }}
+```
+
+Standard module order for **correction** templates:
+```
+# Role
+## Goals
+## Constraints
+## Workflow        ← CoT only; omitted in zero_shot and few_shot
+## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
+## Current Contract
+{{ current_code }}
+## Errors to Fix
+{{ errors }}
+```
+
+Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — this is the natural LangGPT ordering even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
+
+**Why LangGPT over DSPy now:** DSPy automatically optimizes prompt text but requires labeled (contract_text → correct Symboleo) training data. LangGPT provides a principled hand-crafted baseline while that dataset accumulates from successful runs. See Future Directions — DSPy.
+
 ### Config Schema
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)
 - `strategy_params: {}` dict on each stage — strategies validate their own params internally
@@ -194,6 +225,18 @@ The frontend has no persistent run history. Once a job's 5-minute TTL expires, i
 ---
 
 ## Future Directions
+
+### DSPy — Prompt Optimization
+
+[DSPy](https://dspy.ai/) ([paper](https://arxiv.org/pdf/2310.03714)) is the planned long-term replacement for hand-authored prompt templates. Instead of writing prompt text, you declare a `Signature` (typed input/output fields) and a `Module` (prompting strategy: `dspy.Predict`, `dspy.ChainOfThought`, etc.); DSPy's optimizer automatically searches for the best prompt by evaluating candidates against a labeled dataset. Demonstrated gains of 33% → 82% accuracy on GPT-3.5 in the original paper without any hand-crafted prompts.
+
+**What it replaces:** The `prompts/` layer only — `.j2` templates and `PromptStrategy` subclasses become DSPy `Module` classes; `PromptContext` fields become `Signature` input fields. The pipeline, correction loop, JAR validator, LLM adapter, config system, API, CLI, and frontend are all untouched.
+
+**The `PromptStrategy` ABC is the natural migration seam:** `pipeline.run()` calls `strategy.build_generation_prompt(context)` without knowing what's behind it. A DSPy-backed strategy implements the same interface — internally calling a DSPy module prediction instead of rendering a Jinja2 template. LangGPT and DSPy strategies can coexist as implementations of the same ABC and be compared directly in the same experiment.
+
+**Prerequisite — labeled training data:** Every run that converges to a valid `.symboleo` file is a training example. DSPy is viable once enough (contract_text → correct Symboleo) pairs have accumulated from LangGPT-baseline experiments to train and evaluate an optimizer. LangGPT experiments are building this dataset.
+
+**Do not adopt DSPy prematurely:** DSPy optimization runs consume significant API tokens and require a stable evaluation metric. Both require a meaningful dataset first.
 
 ### FastAPI Web Service — Implementation Notes
 

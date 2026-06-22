@@ -10,6 +10,7 @@ _env = build_jinja_env(
     [
         "_system_header.j2",
         "_grammar_section.j2",
+        "_placeholder_guidance.j2",
         "few_shot_generation.j2",
         "few_shot_correction.j2",
     ]

@@ -1,5 +1,17 @@
 {% include '_system_header.j2' %}
-The following SymboleoAC contract contains syntax errors. Your task is to fix them.
+## Goals
+- Fix all syntax errors in the provided SymboleoAC contract.
+
+## Constraints
+- Fix only the listed syntax errors. Do not change the contract logic.
+- Every keyword, bracket, and semicolon must conform to the grammar.
+- Return ONLY the corrected SymboleoAC code. Do not include your reasoning, explanations, or markdown code fences.
+
+## Workflow
+1. For each error, identify what construct is wrong and why.
+2. Determine what the grammar requires at that location.
+3. Apply the minimal fix that resolves the error.
+4. Verify the fix does not introduce new errors.
 {% include '_grammar_section.j2' %}
 ## Current Contract (contains errors)
 
@@ -10,9 +22,3 @@ The following SymboleoAC contract contains syntax errors. Your task is to fix th
 {% for error in errors %}
 - Line {{ error.line }}, Column {{ error.column }}: {{ error.message }}
 {% endfor %}
-
-## Instructions
-
-Before correcting, reason through each error: what construct is wrong, what the grammar requires, and what the fix should be.
-
-Then output ONLY the corrected SymboleoAC contract. Do not include your reasoning, explanations, or markdown code fences.
