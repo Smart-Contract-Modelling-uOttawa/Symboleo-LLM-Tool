@@ -72,7 +72,8 @@ function getParamDefault<T>(
   const entry = parameters[key]
   if (entry !== null && typeof entry === 'object' && 'default' in entry) {
     const val = (entry as Record<string, unknown>)['default']
-    return val !== undefined ? (val as T) : fallback
+    // Fall back when default is absent OR null (temperature has no forced default).
+    return val !== undefined && val !== null ? (val as T) : fallback
   }
   return fallback
 }
@@ -173,7 +174,7 @@ export default function ConfigPage() {
     try {
       const numCandidates = parseInt(advanced.num_candidates, 10)
       const maxIterations = parseInt(advanced.max_iterations, 10)
-      const { run_id } = await generate({
+      const { run_id, warnings } = await generate({
         contract_text: contractText,
         generation: buildStageRequest(generation),
         correction: buildStageRequest(correction),
@@ -182,7 +183,7 @@ export default function ConfigPage() {
         stop_on_first_convergence: advanced.stop_on_first_convergence,
         save_intermediates: advanced.save_intermediates,
       })
-      navigate(`/runs/${run_id}`)
+      navigate(`/runs/${run_id}`, { state: { warnings: warnings ?? [] } })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Submission failed')
     } finally {

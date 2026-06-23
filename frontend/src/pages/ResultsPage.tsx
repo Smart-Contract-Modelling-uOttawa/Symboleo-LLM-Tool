@@ -1,8 +1,8 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import {
   Accordion,
   AccordionContent,
@@ -16,10 +16,18 @@ import type { CandidateResult, PipelineResult } from '@/api/types'
 // ResultsPage
 // ---------------------------------------------------------------------------
 
+// Advisory warnings forwarded by the config form via navigation state (see
+// ConfigPage handleSubmit). Lost on a hard refresh by design — they are a
+// transient, submit-time notice, not run state.
+type ResultsNavState = { warnings?: string[] } | null
+
 export default function ResultsPage() {
   const { runId } = useParams<{ runId: string }>()
   const navigate = useNavigate()
+  const { state } = useLocation()
   const { status, progress, result, errorMessage } = useStream(runId!)
+
+  const warnings = (state as ResultsNavState)?.warnings ?? []
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
@@ -29,6 +37,19 @@ export default function ResultsPage() {
           New Run
         </Button>
       </div>
+
+      {warnings.length > 0 && (
+        <Alert variant="warning" className="mb-6">
+          <AlertTitle>Configuration warnings</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4 space-y-1">
+              {warnings.map(warning => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {(status === 'connecting' || status === 'running' || status === 'reconnecting') && (
         <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">

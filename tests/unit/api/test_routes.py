@@ -187,7 +187,8 @@ def test_options_returns_parameter_defaults(client: TestClient, parameters_confi
     response = client.get("/api/options")
     params = response.json()["parameters"]
     assert params["num_candidates"]["default"] == 1
-    assert params["temperature"]["default"] == pytest.approx(0.7)
+    # temperature is now optional (no forced default) so it is only sent when set.
+    assert params["temperature"]["default"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +210,28 @@ def test_generate_with_explicit_correction_stage_returns_run_id(
     response = client.post("/api/generate", json=body)
     assert response.status_code == 200
     assert "run_id" in response.json()
+
+
+def test_generate_returns_no_warnings_for_non_reasoning_model(
+    client: TestClient, patch_run_pipeline: None
+) -> None:
+    response = client.post("/api/generate", json=_VALID_BODY)
+    assert response.status_code == 200
+    assert response.json()["warnings"] == []
+
+
+def test_generate_surfaces_param_warnings_in_response(
+    client: TestClient, patch_run_pipeline: None
+) -> None:
+    # Wiring only: whatever pipeline_param_warnings returns reaches the response.
+    # Stage labeling itself is covered in test_compatibility.py.
+    with patch(
+        "symboleo_llm_tool.api.routes.pipeline_param_warnings",
+        return_value=["generation: temperature will be ignored"],
+    ):
+        response = client.post("/api/generate", json=_VALID_BODY)
+    assert response.status_code == 200
+    assert response.json()["warnings"] == ["generation: temperature will be ignored"]
 
 
 # ---------------------------------------------------------------------------

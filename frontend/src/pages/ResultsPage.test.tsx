@@ -39,9 +39,12 @@ const MOCK_RESULT: PipelineResult = {
   ],
 }
 
-function renderResultsPage() {
+function renderResultsPage(warnings?: string[]) {
+  const entry = warnings
+    ? { pathname: `/runs/${TEST_RUN_ID}`, state: { warnings } }
+    : `/runs/${TEST_RUN_ID}`
   return render(
-    <MemoryRouter initialEntries={[`/runs/${TEST_RUN_ID}`]}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/runs/:runId" element={<ResultsPage />} />
       </Routes>
@@ -145,6 +148,29 @@ describe('ResultsPage', () => {
     renderResultsPage()
     expect(screen.getByText('2 iterations')).toBeInTheDocument()
     expect(screen.getByText('3 iterations')).toBeInTheDocument()
+  })
+
+  it('renders configuration warnings forwarded via navigation state', () => {
+    mockUseStream.mockReturnValue({
+      status: 'connecting',
+      progress: null,
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage(["generation: temperature=0.2 is set, but 'gpt-5' is a reasoning model"])
+    expect(screen.getByText('Configuration warnings')).toBeInTheDocument()
+    expect(screen.getByText(/temperature=0.2 is set/)).toBeInTheDocument()
+  })
+
+  it('renders no warnings section when none are forwarded', () => {
+    mockUseStream.mockReturnValue({
+      status: 'connecting',
+      progress: null,
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(screen.queryByText('Configuration warnings')).not.toBeInTheDocument()
   })
 
   it('navigates to / when New Run is clicked', async () => {

@@ -13,6 +13,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Pin LiteLLM's model-compatibility data to the package-bundled copy for
+# deterministic, offline-safe behavior (no GitHub fetch at startup). Refresh by
+# bumping the litellm version. Set to False to opt into the live remote fetch.
+ENV LITELLM_LOCAL_MODEL_COST_MAP=True
+
 COPY symboleo_llm_tool/ ./symboleo_llm_tool/
 RUN uv sync --frozen --no-dev
 
