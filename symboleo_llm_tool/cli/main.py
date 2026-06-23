@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from symboleo_llm_tool.config.loader import load_config
+from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings
 from symboleo_llm_tool.output.writer import write_results
 from symboleo_llm_tool.pipeline import run as run_pipeline
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
@@ -61,6 +62,9 @@ def run(
         config = load_config(config_file)
     except Exception as e:
         _fatal(f"Config error: {e}")
+
+    for warning in pipeline_param_warnings(config):
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
 
     try:
         contract_text = input_file.read_text(encoding="utf-8")

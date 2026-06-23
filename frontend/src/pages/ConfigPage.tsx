@@ -72,7 +72,8 @@ function getParamDefault<T>(
   const entry = parameters[key]
   if (entry !== null && typeof entry === 'object' && 'default' in entry) {
     const val = (entry as Record<string, unknown>)['default']
-    return val !== undefined ? (val as T) : fallback
+    // Fall back when default is absent OR null (temperature has no forced default).
+    return val !== undefined && val !== null ? (val as T) : fallback
   }
   return fallback
 }

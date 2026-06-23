@@ -29,6 +29,7 @@ from symboleo_llm_tool.config.models import (
     PipelineConfig,
     RunConfig,
 )
+from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings
 from symboleo_llm_tool.prompts.strategies import get_strategy, list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
@@ -94,12 +95,14 @@ async def generate(req: GenerateRequest) -> RunCreatedResponse:
         output=OutputConfig(**output_kwargs),
     )
 
+    warnings = pipeline_param_warnings(config)
+
     run_id = str(uuid.uuid4())
     job = create_job(run_id)
     loop = asyncio.get_running_loop()
     job.task = asyncio.create_task(_run_pipeline(job, req.contract_text, config, loop))
 
-    return RunCreatedResponse(run_id=run_id)
+    return RunCreatedResponse(run_id=run_id, warnings=warnings)
 
 
 async def _run_pipeline(

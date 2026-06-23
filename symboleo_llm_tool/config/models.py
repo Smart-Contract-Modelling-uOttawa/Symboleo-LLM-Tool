@@ -7,13 +7,17 @@ from pydantic import BaseModel, Field, field_validator
 class LLMConfig(BaseModel):
     provider: str
     model: str
-    temperature: float = 0.7
+    # Optional so it is only sent when explicitly set. Reasoning models (OpenAI
+    # o-series/GPT-5, Anthropic Opus 4.x/Fable 5) reject sampling params; omitting
+    # temperature for those models avoids a 400 without relying on LiteLLM's
+    # (imperfect) param-support table to drop it. See CLAUDE.md Known Issues.
+    temperature: float | None = None
     max_tokens: int = 4096
 
     @field_validator("temperature")
     @classmethod
-    def _validate_temperature(cls, v: float) -> float:
-        if not 0.0 <= v <= 2.0:
+    def _validate_temperature(cls, v: float | None) -> float | None:
+        if v is not None and not 0.0 <= v <= 2.0:
             raise ValueError(f"temperature must be between 0.0 and 2.0, got {v}")
         return v
 
@@ -23,6 +27,15 @@ class LLMConfig(BaseModel):
         if v < 1:
             raise ValueError(f"max_tokens must be at least 1, got {v}")
         return v
+
+    @property
+    def litellm_model(self) -> str:
+        """Provider-qualified id LiteLLM expects (e.g. ``openai/gpt-4o-mini``).
+
+        Single source of truth so the call and any capability lookup reference
+        the same model.
+        """
+        return f"{self.provider}/{self.model}"
 
 
 class StageConfig(BaseModel):

@@ -60,6 +60,7 @@ class ErrorEvent(BaseModel):
 
 class RunCreatedResponse(BaseModel):
     run_id: str
+    warnings: list[str] = Field(default_factory=list)
 
 
 class OptionsResponse(BaseModel):
