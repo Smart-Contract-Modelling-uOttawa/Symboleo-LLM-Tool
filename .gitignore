@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 frontend/coverage/
+frontend/src/api/schema.d.ts
 dist/
 *.egg-info/
 /output/
