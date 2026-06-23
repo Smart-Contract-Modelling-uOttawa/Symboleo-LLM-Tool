@@ -25,6 +25,11 @@ class LiteLLMAdapter(LLMAdapter):
             messages=[{"role": "user", "content": prompt}],
             temperature=self._config.temperature,
             max_tokens=self._config.max_tokens,
+            # Drop provider-unsupported sampling params (e.g. temperature on OpenAI
+            # reasoning models) instead of erroring. Note: currently a no-op for
+            # Anthropic reasoning models (BerriAI/litellm#26444) — that path still
+            # needs model-conditional handling. See CLAUDE.md Known Issues.
+            drop_params=True,
         )
         content: str | None = response.choices[0].message.content
         if content is None:
