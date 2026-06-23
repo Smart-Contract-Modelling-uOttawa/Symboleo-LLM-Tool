@@ -86,7 +86,34 @@ describe('ConfigPage', () => {
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith(`/runs/${TEST_RUN_ID}`)
+      expect(mockNavigate).toHaveBeenCalledWith(`/runs/${TEST_RUN_ID}`, {
+        state: { warnings: [] },
+      })
+    )
+  })
+
+  it('forwards API warnings to the results page via navigation state', async () => {
+    server.use(
+      http.post('/api/generate', () =>
+        HttpResponse.json({ run_id: TEST_RUN_ID, warnings: ['generation: temperature ignored'] })
+      )
+    )
+    const user = userEvent.setup()
+    const { container } = renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, makeFile())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
+    )
+
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement)
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(`/runs/${TEST_RUN_ID}`, {
+        state: { warnings: ['generation: temperature ignored'] },
+      })
     )
   })
 
