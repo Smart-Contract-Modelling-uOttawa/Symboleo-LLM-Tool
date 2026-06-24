@@ -42,11 +42,12 @@ symboleo_llm_tool/
 ├── cli/            # Typer entry point — thin layer only, no business logic
 ├── api/            # FastAPI adapter layer: routes, config_builder, job store, SSE events, request/response models, _paths.py (deployment path constants)
 ├── pipeline/       # Orchestration: generation stage + correction loop
+├── experiments/    # Suite orchestration: run_suite() composes pipeline.run() over N configs
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
 ├── symboleo/       # Subprocess wrapper around the SymboleoAC headless CLI JAR
-├── config/         # Pydantic config models + YAML loader
-├── output/         # PipelineResult, CandidateResult, IterationRecord models
+├── config/         # Pydantic config models + YAML loader (incl. SuiteConfig/Experiment)
+├── output/         # PipelineResult, CandidateResult, IterationRecord (+ SuiteResult/ExperimentResult)
 └── resources/      # Bundled assets: Symboleo.xtext grammar file
 ```
 
@@ -167,6 +168,14 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - **`api/config_builder.py`** separates config construction (provider resolution, `StageConfig` assembly, example path resolution) from routing logic. Functions raise `ValueError`; `routes.py` converts these to `HTTPException(422)` in a single `try/except` block alongside strategy validation.
 - **`api/_paths.py`** holds deployment path constants (`UI_CONFIG_PATH`, `EXAMPLES_DIR`). All modules in `api/` that reference filesystem paths import from here — never inline `Path("configs/ui_config.yaml")` elsewhere.
 
+### Experiment Suites (Multi-Config Comparison)
+- A **suite** runs one contract against N named configurations (`Experiment` = name + full `PipelineConfig`) and compares them; convergence/metrics are per-experiment.
+- **`experiments/runner.py` composes `pipeline.run()` — it does not modify it.** `run_suite(SuiteConfig, on_progress) → SuiteResult` loops over experiments **sequentially**, calling the single-run pipeline unchanged; a per-cell callback adapter prepends `experiment_index` so the pipeline's `ProgressCallback` signature stays untouched. Same altitude discipline as the CLI/API → `pipeline.run` relationship — if you find yourself editing `pipeline.py` for suite logic, it's at the wrong altitude.
+- **Sequential and single-contract by design (v1).** Sequential matches the candidate-sequential precedent and avoids cancellation complexity. One contract because config comparison is only apples-to-apples with the contract held as the control variable.
+- **Comparison metrics are derived, not stored.** `SuiteResult`/`ExperimentResult` hold each per-run `PipelineResult` unchanged; metrics (converged, iterations-to-convergence) are computed at display/write time, so adding a metric never requires re-running a suite. Config/result models live in their concern packages (`config/models.py`, `output/models.py`), not a feature package — only the orchestrator gets the new `experiments/` package.
+- **API & shared machinery:** `POST /suites` + `GET /suites/{id}/stream` (one **multiplexed** SSE stream — `ProgressEvent` carries `experiment_index`, new `SuiteCompleteEvent` embeds `SuiteResult`). The multiplexing (N→1) is server-side; the client demultiplexes by the tag. The single-run and suite endpoints share `build_pipeline_config` and `_stream_job`; `Job` is generic over its result type; `RunSettings` is the shared base of `GenerateRequest`/`ExperimentRequest`; `ContractText` is a reusable validated type.
+- **Deferred (future stages):** concurrency (semaphores + cancellation; the multiplexed-queue transport is already concurrency-ready), multiple contracts, token/cost comparison axes + server-side suite archive, sweep-axis config expansion. Per-experiment and summary-CSV downloads are built client-side, matching the single-run page — the API is a live view, not an archive.
+
 ### Java Dependency (Packaging)
 - **Tier 1 (dev):** Bundle JAR inside the package, require Java 17+ as a system prerequisite (JAR compiled with class file version 61.0). Check for Java at startup and fail with a clear, actionable error message.
 - **Tier 2 (release):** Docker image bundling JRE + JAR + Python tool — eliminates the Java prerequisite **for the API only**. `Dockerfile` and `docker-compose.yml` are in the project root. The CLI is intentionally not containerized: mounting a contract file, config, and output directory as volumes for a one-shot command is more friction than simply requiring Java 17 of a technical user. CLI users run `uv run symboleo-tool` directly with Java 17 on their PATH.
@@ -175,8 +184,9 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - **JAR/grammar coupling:** `lib/symboleo-cli.jar` and `symboleo_llm_tool/resources/Symboleo.xtext` must always be updated together in the same commit. If the SymboleoAC language evolves and only the JAR is replaced, the LLM generates code against the old grammar while the validator enforces new rules — the correction loop will spin through all iterations without converging. Treat them as a single atomic change.
 
 ### Frontend Architecture
-- Two-page SPA with React Router: `/` (config form) and `/runs/:id` (results page).
-- **Generated types:** `openapi-typescript` generates `frontend/src/api/schema.d.ts` from the live OpenAPI schema. `frontend/src/api/types.ts` re-exports all frontend-relevant types from this generated file — never hand-write interfaces that mirror backend Pydantic models. Run `npm run generate-types` from `frontend/` whenever backend Pydantic models change; requires the API server running at `localhost:8000`. The SSE endpoint's `response_model` hack (see Known Issues) is what makes the SSE event types appear in the schema.
+- Four-route SPA with React Router: `/` (single-run config) + `/runs/:id` (single-run results), and `/experiments` (suite config — one contract + N experiment cards) + `/suites/:id` (suite comparison results).
+- **Shared config/results/stream modules:** `components/config/` (`ContractUpload`, `StageSection`, `AdvancedSection`, `stageForm.ts`) is the one pipeline-config form, used by both `ConfigPage` and each experiment card. `hooks/useEventStream.ts` is the shared SSE lifecycle; `useStream` and `useSuiteStream` are thin wrappers differing only in URL + result type. `components/results/` (`CandidateItem` + `download.ts`) renders per-candidate detail on both results pages. `lib/progress.ts` (`formatProgressLabel`) is the single place interpreting the pipeline's `iteration` field for the live counter — iteration 0 is the generation pass, 1..max are corrections (no `+1`, which previously overshot `max_iterations`).
+- **Generated types:** `openapi-typescript` generates `frontend/src/api/schema.d.ts` from the live OpenAPI schema. `frontend/src/api/types.ts` re-exports all frontend-relevant types from this generated file — never hand-write interfaces that mirror backend Pydantic models. Run `npm run generate-types` from `frontend/` whenever backend Pydantic models change; requires the API server running at `localhost:8000`. **`schema.d.ts` is committed (tracked), not gitignored** — the frontend CI typecheck job runs `tsc` in a Node-only checkout and can't regenerate it from the backend, so a missing file fails with `TS2307`; after changing backend models, regenerate **and commit** it in the same change (a stale schema fails `tsc` as soon as the frontend uses a new field). The SSE endpoint's `response_model` hack (see Known Issues) is what makes the SSE event types appear in the schema.
 - **`StreamStatus` type union:** `'connecting' | 'running' | 'reconnecting' | 'complete' | 'error'` is defined as a TypeScript string union in `useStream.ts`. Do not extract these values into a constants object — the union type itself provides compile-time exhaustiveness checking, making a separate constants file a second source of truth with no safety benefit.
 - **`makeNullableUpdater<T>` factory:** module-level generic in `ConfigPage.tsx` that captures the `prev => prev ? updater(prev) : prev` null-guard pattern. Use it whenever a top-level state type is `T | null` and child handlers only need to update non-null state.
 - **Naming convention — UI vs API layer:** API-layer functions in `api/client.ts` use domain vocabulary (`generate`, not `submitGenerate`). Page-level types that hold raw form input values use a `*FormValues` suffix (`StageFormValues`, `AdvancedFormValues`) to distinguish them from API contract types (`StageRequest`). `buildStageRequest(StageFormValues): StageRequest` is the explicit translation point between the two layers — it parses strings to typed values and handles conditional fields.
@@ -189,10 +199,10 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - **No full e2e in CI** — manual smoke test before releases.
 - `tests/fixtures/` contains: sample `.txt` contract, known-valid `.symboleo`, known-invalid `.symboleo`
 - **`tests/helpers.py`** — shared `make_issue()` factory returning a `SymboleoIssue` with keyword-only defaults. All unit test files import from here; no per-file `_make_error()` helpers.
-- **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (20 tests), and `test_jobs.py` (3 tests). Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution. `test_jobs.py` covers `cleanup_expired()` with expired, recent, and in-progress job cases.
+- **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (single-run endpoints), `test_suites.py` (suite endpoints + the `_run_suite` async bridge), and `test_jobs.py`. Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution. `test_jobs.py` covers `cleanup_expired()` with expired, recent, and in-progress job cases.
 - **`tests/unit/test_writer.py`** — 5 tests covering `write_results()`: timestamped directory naming, `report.json`/`config.yaml` content, single vs. multi-candidate filename suffixes, and `save_intermediates` directory layout.
-- **Coverage:** 75 tests, ~80% line coverage. Run with `uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing`. Intentionally untested: `app.py` lifespan (integration-level) and `litellm_adapter.py` (live LLM calls).
-- **Frontend tests (Vitest + RTL + MSW):** Vitest is configured in `frontend/vite.config.ts` (`test` block with `environment: happy-dom`) — shares the Vite config and alias resolution. React Testing Library for component rendering/interaction. MSW v2 (`msw/node`) stubs all three API endpoints at the network level; default handlers in `frontend/src/test/handlers.ts`, server instance in `frontend/src/test/server.ts`, global setup (jest-dom matchers + MSW lifecycle) in `frontend/src/test/setup.ts`. Test files are co-located with source files (`*.test.tsx` / `*.test.ts`). Run with `npm run test` or `npm run test:coverage` from `frontend/`. 20 tests across 4 files: `App.test.tsx` (1), `ConfigPage.test.tsx` (8), `ResultsPage.test.tsx` (9), `useOptions.test.ts` (2).
+- **Coverage:** 102 tests, ~80% line coverage. Run with `uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing`. Suite layer: `tests/unit/test_suite_runner.py` covers `run_suite()` against a mocked `pipeline.run`. Intentionally untested: `app.py` lifespan (integration-level) and `litellm_adapter.py` (live LLM calls).
+- **Frontend tests (Vitest + RTL + MSW):** Vitest is configured in `frontend/vite.config.ts` (`test` block with `environment: happy-dom`) — shares the Vite config and alias resolution. React Testing Library for component rendering/interaction. MSW v2 (`msw/node`) stubs all three API endpoints at the network level; default handlers in `frontend/src/test/handlers.ts`, server instance in `frontend/src/test/server.ts`, global setup (jest-dom matchers + MSW lifecycle) in `frontend/src/test/setup.ts`. Test files are co-located with source files (`*.test.tsx` / `*.test.ts`). Run with `npm run test` or `npm run test:coverage` from `frontend/`. 43 tests across 7 files: `App.test.tsx` (1), `ConfigPage.test.tsx` (9), `ResultsPage.test.tsx` (12), `ExperimentsPage.test.tsx` (8), `SuiteResultsPage.test.tsx` (7), `useOptions.test.ts` (2), `lib/progress.test.ts` (4). `SuiteResultsPage` mocks `useSuiteStream` the same way `ResultsPage` mocks `useStream`.
 - **Frontend test fixtures:** `frontend/src/test/handlers.ts` exports `TEST_RUN_ID` and `MOCK_OPTIONS` as named constants — shared test plumbing values used across multiple test files. Concrete assertion values (UI strings, strategy names) are intentionally repeated as literals in each test file, not imported from shared constants, so that a typo or rename in production code causes a test failure rather than silently passing.
 - **Frontend test gotchas:** RTL does not auto-cleanup in Vitest (unlike Jest) — `cleanup()` must be called explicitly in `afterEach` (done in `setup.ts`). `userEvent.click()` on `type="submit"` buttons does not trigger form submission in happy-dom — use `fireEvent.submit(form)` instead. `useStream` uses `EventSource` which is not available in happy-dom — mock the hook entirely with `vi.mock('@/hooks/useStream')` in `ResultsPage.test.tsx`. `vi.hoisted()` is required to declare mock functions (e.g. `mockNavigate`) before the hoisted `vi.mock()` factory runs. MSW `server.use()` handler overrides work reliably in `render`-based component tests but not in `renderHook` tests — error paths for hooks are covered via component-level tests instead.
 - **Frontend E2E (future):** If a regression suite for the full generate→stream→display flow becomes valuable, add **Playwright** — native SSE support via `page.route()` and first-class Vite integration. Not in CI for now; manual smoke test before releases. No LLM API costs required — Playwright can mock the backend entirely.
@@ -283,19 +293,22 @@ The web service is fully implemented. All four original milestones are complete:
 
 1. ~~**Add `api/` directory**~~ — done. FastAPI routes call the same `pipeline.run()` the CLI calls.
 2. ~~**Wrap the sync pipeline for async**~~ — done. `run_in_threadpool` + `asyncio.Queue` bridge in `api/routes.py`.
-3. ~~**Add a frontend**~~ — done. React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Two-page SPA: `/` (config form) and `/runs/:id` (results page with SSE progress stream).
+3. ~~**Add a frontend**~~ — done. React/Vite + shadcn/ui + Tailwind CSS, served from FastAPI as static files. Four-route SPA: `/` + `/runs/:id` (single run) and `/experiments` + `/suites/:id` (experiment suite — one contract across N configs with a comparison view).
 4. ~~**Wire up Docker for API**~~ — done. `Dockerfile` has `EXPOSE 8000`; `docker-compose.yml` has a `symboleo-api` service with uvicorn entrypoint. `configs/` is intentionally not baked in — mounted as a volume at runtime.
 
 The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and returns a `PipelineResult` — no file I/O, no CLI concerns, no stdout. Any entry point (CLI, API, test) can call it the same way.
 
 **Endpoint design (decided):**
-- `POST /generate` — body: `GenerateRequest` (see below) → returns `{ run_id }`
+- `POST /generate` — body: `GenerateRequest` (see below) → returns `{ run_id, warnings }`
 - `GET /runs/{run_id}/stream` — SSE stream of typed events (see below)
+- `POST /suites` — body: `SuiteRequest` (one contract + N `ExperimentRequest`) → returns `{ run_id, warnings }` (warnings labeled per experiment name)
+- `GET /suites/{run_id}/stream` — multiplexed SSE stream of the same event types; `ProgressEvent` tagged with `experiment_index`, terminal `SuiteCompleteEvent`
 - `GET /options` — returns everything the frontend needs at page load (see below)
 
 **SSE event schema:**
-- `ProgressEvent` — fired after each generation/correction iteration; contains `candidate_id`, `iteration`, `error_count`
-- `CompleteEvent` — final event; embeds the full `PipelineResult`
+- `ProgressEvent` — fired after each generation/correction iteration; contains `candidate_id`, `iteration`, `error_count`, and `experiment_index` (null for a single run; set within a suite so the client demultiplexes one stream into per-experiment state)
+- `CompleteEvent` — final event for a single run; embeds the full `PipelineResult`
+- `SuiteCompleteEvent` — final event for a suite; embeds the full `SuiteResult`
 - `ErrorEvent` — fatal pipeline error; contains `message`
 - Reconnect behavior: if job complete → send `CompleteEvent` immediately; if still running → resume live stream; if TTL expired → 404
 - Event type discrimination uses `EventType(str, Enum)` — serializes to lowercase string values (`"progress"`, `"complete"`, `"error"`) without `Literal["x"] = "x"` repetition. Note: this generates the enum as a shared type across all three event schemas, which prevents TypeScript discriminated-union narrowing. The frontend adapts via `WithLiteralType<T, V>` in `api/types.ts` — do not change the backend to fix a frontend type concern.
@@ -338,9 +351,11 @@ examples: list[str]            # names of .yaml files in examples/ (without exte
 
 **Frontend UI — Page Design (decided):**
 
-Two-page SPA with React Router:
+SPA with React Router:
 - `/` — config form
 - `/runs/:id` — results page; survives a browser refresh within the 5-minute TTL via SSE reconnect behavior
+- `/experiments` — suite config: one contract + N experiment cards (Add/Duplicate/Remove); each card is the same generation/correction/advanced form
+- `/suites/:id` — suite results: comparison rows (name · converged · iterations), each expandable into per-candidate detail; client-side summary CSV download
 
 **Page 1 — Config (`/`):**
 - Contract upload: `.txt` only; file input tooling chosen for future format flexibility; contract text preview rendered after upload
