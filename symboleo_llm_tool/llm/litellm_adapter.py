@@ -4,7 +4,8 @@ from typing import Any
 import litellm
 
 from symboleo_llm_tool.config.models import LLMConfig
-from symboleo_llm_tool.llm.base import LLMAdapter
+from symboleo_llm_tool.llm.base import GenerationResult, LLMAdapter
+from symboleo_llm_tool.output.models import TokenUsage
 
 
 class LiteLLMAdapter(LLMAdapter):
@@ -13,14 +14,16 @@ class LiteLLMAdapter(LLMAdapter):
         if tracing_enabled:
             from langsmith import traceable
 
-            self._invoke: Callable[[str], str] = traceable(run_type="llm")(self._litellm_call)
+            self._invoke: Callable[[str], GenerationResult] = traceable(run_type="llm")(
+                self._litellm_call
+            )
         else:
             self._invoke = self._litellm_call
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str) -> GenerationResult:
         return self._invoke(prompt)
 
-    def _litellm_call(self, prompt: str) -> str:
+    def _litellm_call(self, prompt: str) -> GenerationResult:
         kwargs: dict[str, Any] = {
             "model": self._config.litellm_model,
             "messages": [{"role": "user", "content": prompt}],
@@ -39,4 +42,23 @@ class LiteLLMAdapter(LLMAdapter):
         content: str | None = response.choices[0].message.content
         if content is None:
             raise RuntimeError("LLM returned an empty response.")
-        return content
+        return GenerationResult(generated_text=content, usage=_extract_usage(response))
+
+
+def _extract_usage(response: Any) -> TokenUsage:
+    """Pull token counts and dollar cost out of a LiteLLM completion response.
+
+    Cost is best-effort: ``litellm.completion_cost`` raises for models missing
+    from the pricing map, in which case ``cost_usd`` is ``None``.
+    """
+    usage = getattr(response, "usage", None)
+    try:
+        cost: float | None = litellm.completion_cost(completion_response=response)
+    except Exception:
+        cost = None
+    # total_tokens is a computed field on TokenUsage, so it is not passed here.
+    return TokenUsage(
+        prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        cost_usd=cost,
+    )

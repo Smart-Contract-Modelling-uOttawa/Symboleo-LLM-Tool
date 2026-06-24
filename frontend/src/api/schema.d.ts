@@ -105,6 +105,10 @@ export interface components {
             iterations_used: number;
             /** Error History */
             error_history: components["schemas"]["IterationRecord"][];
+            /** Total Tokens */
+            readonly total_tokens: number;
+            /** Total Cost Usd */
+            readonly total_cost_usd: number | null;
         };
         /** CompleteEvent */
         CompleteEvent: {
@@ -143,9 +147,10 @@ export interface components {
          * ExperimentResult
          * @description The outcome of one named experiment in a suite.
          *
-         *     Holds the full per-run ``PipelineResult`` unchanged; comparison metrics are
-         *     derived from it at write/display time rather than baked into the model, so
-         *     adding a metric never requires re-running a suite.
+         *     Holds the full per-run ``PipelineResult`` unchanged; comparison rollups are
+         *     ``@computed_field``s on the result models that delegate to ``output/metrics.py``,
+         *     derived from the stored atomic facts rather than baked in, so adding a metric
+         *     never requires re-running a suite.
          */
         ExperimentResult: {
             /** Name */
@@ -180,6 +185,7 @@ export interface components {
             code: string;
             /** Errors */
             errors: components["schemas"]["SymboleoIssue"][];
+            usage?: components["schemas"]["TokenUsage"] | null;
         };
         /** OptionsResponse */
         OptionsResponse: {
@@ -209,6 +215,12 @@ export interface components {
             input_file: string;
             /** Candidates */
             candidates: components["schemas"]["CandidateResult"][];
+            /** Total Tokens */
+            readonly total_tokens: number;
+            /** Total Cost Usd */
+            readonly total_cost_usd: number | null;
+            /** Iterations To Convergence */
+            readonly iterations_to_convergence: number | null;
         };
         /** ProgressEvent */
         ProgressEvent: {
@@ -269,6 +281,10 @@ export interface components {
             input_file: string;
             /** Experiments */
             experiments: components["schemas"]["ExperimentResult"][];
+            /** Total Tokens */
+            readonly total_tokens: number;
+            /** Total Cost Usd */
+            readonly total_cost_usd: number | null;
         };
         /** SymboleoIssue */
         SymboleoIssue: {
@@ -286,6 +302,26 @@ export interface components {
             length: number;
             /** Message */
             message: string;
+        };
+        /**
+         * TokenUsage
+         * @description Token counts and cost for a single LLM call.
+         *
+         *     Attached to each ``IterationRecord`` (one call per iteration). ``cost_usd`` is
+         *     best-effort: ``None`` when LiteLLM has no pricing for the model.
+         */
+        TokenUsage: {
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd?: number | null;
+            /**
+             * Total Tokens
+             * @description Always prompt + completion — derived rather than trusting the reported total.
+             */
+            readonly total_tokens: number;
         };
         /** ValidationError */
         ValidationError: {

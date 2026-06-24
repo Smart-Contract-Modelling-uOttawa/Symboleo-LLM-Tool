@@ -6,6 +6,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { triggerDownload } from '@/components/results/download'
+import { formatCost, formatTokens } from '@/lib/tokens'
 import type { CandidateResult } from '@/api/types'
 
 // One candidate's result, rendered as an accordion item. Shared by the
@@ -43,6 +44,10 @@ export function CandidateItem({ candidate }: { candidate: CandidateResult }) {
           <span className="text-xs text-muted-foreground">
             {candidate.iterations_used} iteration
             {candidate.iterations_used !== 1 ? 's' : ''}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {formatTokens(candidate.total_tokens)} tokens ·{' '}
+            {formatCost(candidate.total_cost_usd)}
           </span>
         </div>
       </AccordionTrigger>

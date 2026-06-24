@@ -21,6 +21,9 @@ const MOCK_RESULT: PipelineResult = {
   success: true,
   timestamp: '2026-01-01T00:00:00',
   input_file: 'contract.txt',
+  total_tokens: 2300,
+  total_cost_usd: 0.003,
+  iterations_to_convergence: 2,
   candidates: [
     {
       candidate_id: 0,
@@ -28,6 +31,8 @@ const MOCK_RESULT: PipelineResult = {
       converged: true,
       iterations_used: 2,
       error_history: [],
+      total_tokens: 1500,
+      total_cost_usd: 0.003,
     },
     {
       candidate_id: 1,
@@ -35,6 +40,8 @@ const MOCK_RESULT: PipelineResult = {
       converged: false,
       iterations_used: 3,
       error_history: [],
+      total_tokens: 800,
+      total_cost_usd: null,
     },
   ],
 }
@@ -161,6 +168,18 @@ describe('ResultsPage', () => {
     renderResultsPage()
     expect(screen.getByText('2 iterations')).toBeInTheDocument()
     expect(screen.getByText('3 iterations')).toBeInTheDocument()
+  })
+
+  it('displays per-candidate token and cost totals (unknown cost as a dash)', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(screen.getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
+    expect(screen.getByText('800 tokens · —')).toBeInTheDocument()
   })
 
   it('renders configuration warnings forwarded via navigation state', () => {
