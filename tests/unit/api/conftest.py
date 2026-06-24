@@ -47,6 +47,12 @@ def patch_run_pipeline() -> Generator[None, None, None]:
 
 
 @pytest.fixture
+def patch_run_suite() -> Generator[None, None, None]:
+    with patch("symboleo_llm_tool.api.routes._run_suite", new_callable=AsyncMock):
+        yield
+
+
+@pytest.fixture
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api")
