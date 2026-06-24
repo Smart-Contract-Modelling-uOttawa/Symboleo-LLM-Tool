@@ -5,6 +5,11 @@ export type StageRequest = components['schemas']['StageRequest']
 export type RunCreatedResponse = components['schemas']['RunCreatedResponse']
 export type OptionsResponse = components['schemas']['OptionsResponse']
 
+export type SuiteRequest = components['schemas']['SuiteRequest']
+export type ExperimentRequest = components['schemas']['ExperimentRequest']
+export type SuiteResult = components['schemas']['SuiteResult']
+export type ExperimentResult = components['schemas']['ExperimentResult']
+
 export type SymboleoIssue = components['schemas']['SymboleoIssue']
 export type IterationRecord = components['schemas']['IterationRecord']
 export type CandidateResult = components['schemas']['CandidateResult']

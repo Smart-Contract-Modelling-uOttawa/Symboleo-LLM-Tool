@@ -128,10 +128,12 @@ output/run_20260601_143022/
 
 ## API (Web Service)
 
-The FastAPI server exposes three endpoints:
+The FastAPI server exposes these endpoints:
 
 - `POST /api/generate` — submit a contract and config, returns a `run_id`
 - `GET /api/runs/{run_id}/stream` — SSE stream of progress and final result
+- `POST /api/suites` — submit one contract and multiple named configs (an experiment suite), returns a `run_id`
+- `GET /api/suites/{run_id}/stream` — multiplexed SSE stream of progress and the final comparison
 - `GET /api/options` — available models, strategies, and parameter constraints
 
 ### Running the API
@@ -172,6 +174,10 @@ For production, build the frontend first, then start the API — `frontend/dist/
 cd frontend && npm run build && cd ..
 docker compose up symboleo-api
 ```
+
+### Experiment Suites
+
+The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence and iterations-to-convergence per experiment — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. It maps to `POST /api/suites`; experiments run sequentially and stream progress over a single multiplexed SSE connection.
 
 ## Development
 
@@ -215,6 +221,7 @@ npm run test:coverage
 # Lint
 npm run lint
 
-# Generate TypeScript types from the live API schema (requires API running)
+# Regenerate TypeScript types from the live API schema (requires API running).
+# schema.d.ts is committed — regenerate AND commit it whenever backend models change.
 npm run generate-types
 ```

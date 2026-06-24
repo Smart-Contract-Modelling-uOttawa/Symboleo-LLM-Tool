@@ -1,5 +1,5 @@
 import type { components } from './schema'
-import type { GenerateRequest, RunCreatedResponse, OptionsResponse } from './types'
+import type { GenerateRequest, RunCreatedResponse, OptionsResponse, SuiteRequest } from './types'
 
 type ErrorBody = components['schemas']['HTTPValidationError'] | { detail?: string }
 
@@ -24,6 +24,14 @@ export function fetchOptions(): Promise<OptionsResponse> {
 
 export function generate(request: GenerateRequest): Promise<RunCreatedResponse> {
   return apiFetch<RunCreatedResponse>('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+}
+
+export function createSuite(request: SuiteRequest): Promise<RunCreatedResponse> {
+  return apiFetch<RunCreatedResponse>('/api/suites', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),

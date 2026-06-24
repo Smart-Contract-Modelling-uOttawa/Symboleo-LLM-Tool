@@ -3,8 +3,15 @@ from typing import Any
 from pydantic import BaseModel
 
 from symboleo_llm_tool.api._paths import EXAMPLES_DIR
-from symboleo_llm_tool.api.models import StageRequest
-from symboleo_llm_tool.config.models import LLMConfig, OutputConfig, RunConfig, StageConfig
+from symboleo_llm_tool.api.models import RunSettings, StageRequest
+from symboleo_llm_tool.config.models import (
+    LLMConfig,
+    OutputConfig,
+    PipelineConfig,
+    RunConfig,
+    StageConfig,
+)
+from symboleo_llm_tool.prompts.strategies import get_strategy
 
 _PARAM_SOURCES: dict[str, tuple[type[BaseModel], str]] = {
     "num_candidates": (RunConfig, "num_candidates"),
@@ -20,6 +27,47 @@ def resolve_provider(model: str, model_to_provider: dict[str, str]) -> str:
     if model not in model_to_provider:
         raise ValueError(f"Unknown model: {model!r}")
     return model_to_provider[model]
+
+
+def build_pipeline_config(
+    settings: RunSettings, model_to_provider: dict[str, str]
+) -> PipelineConfig:
+    """Assemble a ``PipelineConfig`` from request-layer settings.
+
+    Shared by the single-run and suite endpoints — the only difference between
+    them is what wraps these settings (a contract, or a named experiment).
+    Raises ``ValueError`` on an unknown model or invalid strategy so the route
+    can convert it to a 422 before any job starts.
+    """
+    gen_provider = resolve_provider(settings.generation.model, model_to_provider)
+    corr_provider = resolve_provider(settings.effective_correction.model, model_to_provider)
+
+    gen_stage = build_stage_config(settings.generation, gen_provider)
+    corr_stage = build_stage_config(settings.effective_correction, corr_provider)
+
+    # Early validation: instantiate both strategies so invalid strategy names or
+    # missing example files surface here (→ 422) rather than as an SSE ErrorEvent.
+    get_strategy(gen_stage.strategy, gen_stage.strategy_params)
+    get_strategy(corr_stage.strategy, corr_stage.strategy_params)
+
+    run_kwargs: dict[str, Any] = {}
+    if settings.num_candidates is not None:
+        run_kwargs["num_candidates"] = settings.num_candidates
+    if settings.max_iterations is not None:
+        run_kwargs["max_iterations"] = settings.max_iterations
+    if settings.stop_on_first_convergence is not None:
+        run_kwargs["stop_on_first_convergence"] = settings.stop_on_first_convergence
+
+    output_kwargs: dict[str, Any] = {}
+    if settings.save_intermediates is not None:
+        output_kwargs["save_intermediates"] = settings.save_intermediates
+
+    return PipelineConfig(
+        generation=gen_stage,
+        correction=corr_stage,
+        pipeline=RunConfig(**run_kwargs),
+        output=OutputConfig(**output_kwargs),
+    )
 
 
 def build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:

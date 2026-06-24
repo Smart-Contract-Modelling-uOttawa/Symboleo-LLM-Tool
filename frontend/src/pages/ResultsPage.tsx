@@ -1,16 +1,12 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+import { Accordion } from '@/components/ui/accordion'
+import { CandidateItem } from '@/components/results/CandidateItem'
 import { useStream } from '@/hooks/useStream'
-import type { CandidateResult, PipelineResult } from '@/api/types'
+import { formatProgressLabel } from '@/lib/progress'
+import type { PipelineResult } from '@/api/types'
 
 // ---------------------------------------------------------------------------
 // ResultsPage
@@ -58,7 +54,7 @@ export default function ResultsPage() {
             {status === 'reconnecting'
               ? 'Connection dropped — retrying...'
               : progress
-              ? `Candidate ${progress.candidateId + 1} — Iteration ${progress.iteration + 1}`
+              ? formatProgressLabel(progress)
               : 'Connecting...'}
           </span>
         </div>
@@ -96,77 +92,4 @@ function ResultsView({ result }: { result: PipelineResult }) {
       </Accordion>
     </div>
   )
-}
-
-// ---------------------------------------------------------------------------
-// CandidateItem
-// ---------------------------------------------------------------------------
-
-function CandidateItem({ candidate }: { candidate: CandidateResult }) {
-  function downloadSl() {
-    triggerDownload(
-      candidate.final_code,
-      `candidate_${candidate.candidate_id}.symboleo`,
-      'text/plain',
-    )
-  }
-
-  function downloadReport() {
-    triggerDownload(
-      JSON.stringify(candidate, null, 2),
-      `candidate_${candidate.candidate_id}_report.json`,
-      'application/json',
-    )
-  }
-
-  return (
-    <AccordionItem
-      value={`candidate-${candidate.candidate_id}`}
-      className="border rounded-lg px-4"
-    >
-      <AccordionTrigger className="hover:no-underline">
-        <div className="flex items-center gap-3">
-          <span className="font-medium">
-            Candidate {candidate.candidate_id + 1}
-          </span>
-          <Badge variant={candidate.converged ? 'default' : 'destructive'}>
-            {candidate.converged ? 'Converged' : 'Failed to converge'}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {candidate.iterations_used} iteration
-            {candidate.iterations_used !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </AccordionTrigger>
-      <AccordionContent className="space-y-4 pb-4">
-        <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-auto max-h-96 whitespace-pre-wrap break-words">
-          {candidate.final_code}
-        </pre>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={downloadSl}>
-            Download .symboleo
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadReport}>
-            Download report.json
-          </Button>
-        </div>
-      </AccordionContent>
-    </AccordionItem>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
-
-function triggerDownload(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  setTimeout(() => URL.revokeObjectURL(url), 100)
 }

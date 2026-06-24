@@ -91,3 +91,36 @@ class PipelineConfig(BaseModel):
     symboleo: SymboleoConfig = Field(default_factory=SymboleoConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+
+
+class Experiment(BaseModel):
+    """One named configuration in an experiment suite.
+
+    The name labels the experiment in the comparison view; the config is a
+    complete, independent ``PipelineConfig`` (reused wholesale — a suite does
+    not constrain what a single run can express).
+    """
+
+    name: str
+    config: PipelineConfig
+
+
+class SuiteConfig(BaseModel):
+    """A set of experiments run against one contract for comparison.
+
+    One contract is the deliberate v1 default: comparison is only
+    apples-to-apples with the contract held fixed as the control variable.
+    """
+
+    contract_text: str
+    experiments: list[Experiment]
+
+    @field_validator("experiments")
+    @classmethod
+    def _validate_experiments(cls, v: list[Experiment]) -> list[Experiment]:
+        if not v:
+            raise ValueError("a suite must contain at least one experiment")
+        names = [e.name for e in v]
+        if len(names) != len(set(names)):
+            raise ValueError("experiment names must be unique within a suite")
+        return v

@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
-from symboleo_llm_tool.output.models import PipelineResult
+from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
 
 
 class EventType(str, Enum):
@@ -20,8 +20,24 @@ class StageRequest(BaseModel):
     strategy_params: dict[str, Any] = Field(default_factory=dict)
 
 
-class GenerateRequest(BaseModel):
-    contract_text: str
+def _require_nonempty_contract(v: str) -> str:
+    if not v.strip():
+        raise ValueError("contract_text must not be empty or whitespace-only")
+    return v
+
+
+# Reusable validated type: the non-empty rule travels with the field wherever a
+# contract appears — a single request now, or list[ContractText] per suite later.
+ContractText = Annotated[str, AfterValidator(_require_nonempty_contract)]
+
+
+class RunSettings(BaseModel):
+    """The per-run configuration shared by a single generation request and one
+    experiment in a suite. Subclasses add the input that distinguishes them — a
+    contract to generate from, or a name within a suite. Keeping these fields in
+    one place lets ``build_pipeline_config`` accept either kind of request.
+    """
+
     generation: StageRequest
     correction: StageRequest | None = None
     num_candidates: int | None = None
@@ -33,16 +49,35 @@ class GenerateRequest(BaseModel):
     def effective_correction(self) -> StageRequest:
         return self.correction if self.correction is not None else self.generation
 
-    @field_validator("contract_text")
+
+class GenerateRequest(RunSettings):
+    contract_text: ContractText
+
+
+class ExperimentRequest(RunSettings):
+    name: str
+
+
+class SuiteRequest(BaseModel):
+    contract_text: ContractText
+    experiments: list[ExperimentRequest]
+
+    @field_validator("experiments")
     @classmethod
-    def _validate_contract_text(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("contract_text must not be empty or whitespace-only")
+    def _validate_experiments(cls, v: list[ExperimentRequest]) -> list[ExperimentRequest]:
+        if not v:
+            raise ValueError("a suite must contain at least one experiment")
+        names = [e.name for e in v]
+        if len(names) != len(set(names)):
+            raise ValueError("experiment names must be unique within a suite")
         return v
 
 
 class ProgressEvent(BaseModel):
     type: EventType = EventType.PROGRESS
+    # None for single runs; set to the experiment index within a suite so the
+    # client can route the update to the right experiment (demultiplexing).
+    experiment_index: int | None = None
     candidate_id: int
     iteration: int
     error_count: int
@@ -51,6 +86,11 @@ class ProgressEvent(BaseModel):
 class CompleteEvent(BaseModel):
     type: EventType = EventType.COMPLETE
     result: PipelineResult
+
+
+class SuiteCompleteEvent(BaseModel):
+    type: EventType = EventType.COMPLETE
+    result: SuiteResult
 
 
 class ErrorEvent(BaseModel):
