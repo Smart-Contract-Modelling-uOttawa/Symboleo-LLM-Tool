@@ -17,9 +17,7 @@ from tests.helpers import make_issue
 
 
 def _stage(strategy: str = "zero_shot") -> StageConfig:
-    return StageConfig(
-        llm=LLMConfig(provider="openai", model="gpt-4o-mini"), strategy=strategy
-    )
+    return StageConfig(llm=LLMConfig(provider="openai", model="gpt-4o-mini"), strategy=strategy)
 
 
 def _config(strategy: str = "zero_shot") -> PipelineConfig:
@@ -30,8 +28,7 @@ def _suite(*strategies: str) -> SuiteConfig:
     return SuiteConfig(
         contract_text="contract text",
         experiments=[
-            Experiment(name=f"exp_{i}", config=_config(s))
-            for i, s in enumerate(strategies)
+            Experiment(name=f"exp_{i}", config=_config(s)) for i, s in enumerate(strategies)
         ],
     )
 

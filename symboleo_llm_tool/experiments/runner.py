@@ -37,9 +37,7 @@ def run_suite(
     """
     experiments: list[ExperimentResult] = []
     for index, experiment in enumerate(suite.experiments):
-        cell_progress = (
-            _make_cell_callback(on_progress, index) if on_progress is not None else None
-        )
+        cell_progress = _make_cell_callback(on_progress, index) if on_progress is not None else None
         result = pipeline.run(
             suite.contract_text,
             experiment.config,
@@ -48,9 +46,7 @@ def run_suite(
         )
         experiments.append(ExperimentResult(name=experiment.name, result=result))
 
-    return SuiteResult(
-        timestamp=datetime.now(), input_file=input_file, experiments=experiments
-    )
+    return SuiteResult(timestamp=datetime.now(), input_file=input_file, experiments=experiments)
 
 
 def _make_cell_callback(
