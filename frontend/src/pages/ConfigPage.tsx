@@ -1,126 +1,21 @@
-import { useState, useCallback, useEffect, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useDropzone } from 'react-dropzone'
-import { ChevronDown, Upload, FileText } from 'lucide-react'
+import { useState, useEffect, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
+import { ContractUpload } from '@/components/config/ContractUpload'
+import { StageSection } from '@/components/config/StageSection'
+import { AdvancedSection } from '@/components/config/AdvancedSection'
+import {
+  type StageFormValues,
+  type AdvancedFormValues,
+  makeDefaultStage,
+  makeDefaultAdvanced,
+  makeNullableUpdater,
+  buildStageRequest,
+  buildAdvancedFields,
+} from '@/components/config/stageForm'
 import { useOptions } from '@/hooks/useOptions'
 import { generate } from '@/api/client'
-import type { OptionsResponse, StageRequest } from '@/api/types'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface StageFormValues {
-  model: string
-  strategy: string
-  temperature: string
-  include_grammar: boolean
-  example_files: string[]
-}
-
-interface AdvancedFormValues {
-  num_candidates: string
-  max_iterations: string
-  stop_on_first_convergence: boolean
-  save_intermediates: boolean
-}
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const FEW_SHOT = 'few_shot'
-
-const DEFAULTS = {
-  temperature: 0.7,
-  include_grammar: true,
-  num_candidates: 1,
-  max_iterations: 3,
-  stop_on_first_convergence: false,
-  save_intermediates: false,
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getParamDefault<T>(
-  parameters: Record<string, unknown>,
-  key: string,
-  fallback: T,
-): T {
-  const entry = parameters[key]
-  if (entry !== null && typeof entry === 'object' && 'default' in entry) {
-    const val = (entry as Record<string, unknown>)['default']
-    // Fall back when default is absent OR null (temperature has no forced default).
-    return val !== undefined && val !== null ? (val as T) : fallback
-  }
-  return fallback
-}
-
-function makeDefaultStage(options: OptionsResponse): StageFormValues {
-  const firstProvider = Object.keys(options.models)[0]
-  const firstModel = (firstProvider && options.models[firstProvider]?.[0]) ?? ''
-  const firstStrategy = options.strategies[0] ?? ''
-  return {
-    model: firstModel,
-    strategy: firstStrategy,
-    temperature: String(getParamDefault(options.parameters, 'temperature', DEFAULTS.temperature)),
-    include_grammar: getParamDefault(options.parameters, 'include_grammar', DEFAULTS.include_grammar),
-    example_files: [],
-  }
-}
-
-function makeDefaultAdvanced(options: OptionsResponse): AdvancedFormValues {
-  return {
-    num_candidates: String(getParamDefault(options.parameters, 'num_candidates', DEFAULTS.num_candidates)),
-    max_iterations: String(getParamDefault(options.parameters, 'max_iterations', DEFAULTS.max_iterations)),
-    stop_on_first_convergence: getParamDefault(options.parameters, 'stop_on_first_convergence', DEFAULTS.stop_on_first_convergence),
-    save_intermediates: getParamDefault(options.parameters, 'save_intermediates', DEFAULTS.save_intermediates),
-  }
-}
-
-function makeNullableUpdater<T>(setter: (fn: (prev: T | null) => T | null) => void) {
-  return (updater: (prev: T) => T) =>
-    setter(prev => (prev ? updater(prev) : prev))
-}
-
-function buildStageRequest(state: StageFormValues): StageRequest {
-  const temp = parseFloat(state.temperature)
-  return {
-    model: state.model,
-    strategy: state.strategy,
-    temperature: isNaN(temp) ? DEFAULTS.temperature : temp,
-    include_grammar: state.include_grammar,
-    ...(state.strategy === FEW_SHOT && {
-      strategy_params: { example_files: state.example_files },
-    }),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// ConfigPage
-// ---------------------------------------------------------------------------
 
 export default function ConfigPage() {
   const navigate = useNavigate()
@@ -147,21 +42,6 @@ export default function ConfigPage() {
     }
   }, [options, generation])
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0]
-    if (!file) return
-    setFileName(file.name)
-    const reader = new FileReader()
-    reader.onload = (e) => setContractText((e.target?.result as string) ?? '')
-    reader.readAsText(file)
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'text/plain': ['.txt'] },
-    multiple: false,
-  })
-
   const updateGeneration = makeNullableUpdater<StageFormValues>(setGeneration)
   const updateCorrection = makeNullableUpdater<StageFormValues>(setCorrection)
   const updateAdvanced = makeNullableUpdater<AdvancedFormValues>(setAdvanced)
@@ -172,16 +52,11 @@ export default function ConfigPage() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const numCandidates = parseInt(advanced.num_candidates, 10)
-      const maxIterations = parseInt(advanced.max_iterations, 10)
       const { run_id, warnings } = await generate({
         contract_text: contractText,
         generation: buildStageRequest(generation),
         correction: buildStageRequest(correction),
-        num_candidates: isNaN(numCandidates) ? DEFAULTS.num_candidates : numCandidates,
-        max_iterations: isNaN(maxIterations) ? DEFAULTS.max_iterations : maxIterations,
-        stop_on_first_convergence: advanced.stop_on_first_convergence,
-        save_intermediates: advanced.save_intermediates,
+        ...buildAdvancedFields(advanced),
       })
       navigate(`/runs/${run_id}`, { state: { warnings: warnings ?? [] } })
     } catch (err) {
@@ -213,47 +88,23 @@ export default function ConfigPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-semibold mb-8">Symboleo LLM Tool</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-semibold">Symboleo LLM Tool</h1>
+        <Link to="/experiments" className="text-sm text-muted-foreground hover:text-foreground">
+          Run an experiment suite →
+        </Link>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <ContractUpload
+          contractText={contractText}
+          fileName={fileName}
+          onFile={(text, name) => {
+            setContractText(text)
+            setFileName(name)
+          }}
+        />
 
-        {/* Contract file upload */}
-        <div className="space-y-2">
-          <Label>Contract File</Label>
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-              isDragActive
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/50'
-            }`}
-          >
-            <input {...getInputProps()} />
-            <Upload className="mx-auto mb-2 text-muted-foreground" size={24} />
-            {fileName ? (
-              <p className="text-sm flex items-center justify-center gap-1.5">
-                <FileText size={14} />
-                {fileName}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isDragActive
-                  ? 'Drop the file here'
-                  : 'Drag and drop a .txt file, or click to browse'}
-              </p>
-            )}
-          </div>
-          {contractText && (
-            <textarea
-              readOnly
-              value={contractText}
-              rows={6}
-              className="w-full text-xs font-mono p-2 rounded-md border bg-muted resize-none"
-            />
-          )}
-        </div>
-
-        {/* Generation section */}
         <StageSection
           title="Generation"
           id="generation"
@@ -264,7 +115,6 @@ export default function ConfigPage() {
           onChange={updateGeneration}
         />
 
-        {/* Correction section */}
         <StageSection
           title="Correction"
           id="correction"
@@ -275,70 +125,13 @@ export default function ConfigPage() {
           onChange={updateCorrection}
         />
 
-        {/* Advanced options */}
-        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger className="flex items-center gap-2 w-full text-sm font-medium py-1">
-            <ChevronDown
-              size={16}
-              className={`transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-            />
-            Advanced Options
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="num_candidates">Candidates</Label>
-                <Input
-                  id="num_candidates"
-                  type="number"
-                  min={1}
-                  value={advanced.num_candidates}
-                  onChange={e =>
-                    updateAdvanced(prev => ({ ...prev, num_candidates: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="max_iterations">Max Iterations</Label>
-                <Input
-                  id="max_iterations"
-                  type="number"
-                  min={1}
-                  value={advanced.max_iterations}
-                  onChange={e =>
-                    updateAdvanced(prev => ({ ...prev, max_iterations: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="stop_on_first"
-                  checked={advanced.stop_on_first_convergence}
-                  onCheckedChange={v =>
-                    updateAdvanced(prev => ({ ...prev, stop_on_first_convergence: !!v }))
-                  }
-                />
-                <Label htmlFor="stop_on_first" className="font-normal cursor-pointer">
-                  Stop on first convergence
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="save_intermediates"
-                  checked={advanced.save_intermediates}
-                  onCheckedChange={v =>
-                    updateAdvanced(prev => ({ ...prev, save_intermediates: !!v }))
-                  }
-                />
-                <Label htmlFor="save_intermediates" className="font-normal cursor-pointer">
-                  Save intermediates
-                </Label>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        <AdvancedSection
+          idPrefix="advanced"
+          value={advanced}
+          onChange={updateAdvanced}
+          open={advancedOpen}
+          onOpenChange={setAdvancedOpen}
+        />
 
         {submitError && (
           <Alert variant="destructive">
@@ -346,169 +139,10 @@ export default function ConfigPage() {
           </Alert>
         )}
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!contractText || submitting}
-        >
+        <Button type="submit" className="w-full" disabled={!contractText || submitting}>
           {submitting ? 'Submitting...' : 'Generate'}
         </Button>
       </form>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// StageSection
-// ---------------------------------------------------------------------------
-
-interface StageSectionProps {
-  title: string
-  id: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  state: StageFormValues
-  options: OptionsResponse
-  onChange: (updater: (prev: StageFormValues) => StageFormValues) => void
-}
-
-function StageSection({
-  title,
-  id: titleId,
-  open,
-  onOpenChange,
-  state,
-  options,
-  onChange,
-}: StageSectionProps) {
-  const hasFewShotExamples = options.examples.length > 0
-
-  return (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
-      <div className="border rounded-lg">
-        <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium">
-          {title}
-          <ChevronDown
-            size={16}
-            className={`transition-transform ${open ? 'rotate-180' : ''}`}
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <Separator />
-          <div className="p-4 space-y-4">
-
-            {/* Model */}
-            <div className="space-y-1.5">
-              <Label>Model</Label>
-              <Select
-                value={state.model}
-                onValueChange={v => onChange(prev => ({ ...prev, model: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(options.models).map(([provider, models]) => (
-                    <SelectGroup key={provider}>
-                      <SelectLabel className="capitalize">{provider}</SelectLabel>
-                      {models.map(m => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Strategy */}
-            <div className="space-y-1.5">
-              <Label>Strategy</Label>
-              <Select
-                value={state.strategy}
-                onValueChange={v => onChange(prev => ({ ...prev, strategy: v, example_files: [] }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select strategy" />
-                </SelectTrigger>
-                <SelectContent>
-                  {options.strategies.map(s => (
-                    <SelectItem
-                      key={s}
-                      value={s}
-                      disabled={s === FEW_SHOT && !hasFewShotExamples}
-                    >
-                      {s}
-                      {s === FEW_SHOT && !hasFewShotExamples ? ' (no examples available)' : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Example files — shown only for few_shot */}
-            {state.strategy === FEW_SHOT && (
-              <div className="space-y-2">
-                <Label>Example Files</Label>
-                <div className="space-y-1.5 pl-1">
-                  {options.examples.map(ex => (
-                    <div key={ex} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`${titleId}-ex-${ex}`}
-                        checked={state.example_files.includes(ex)}
-                        onCheckedChange={checked => {
-                          onChange(prev => ({
-                            ...prev,
-                            example_files: checked
-                              ? [...prev.example_files, ex]
-                              : prev.example_files.filter(f => f !== ex),
-                          }))
-                        }}
-                      />
-                      <Label
-                        htmlFor={`${titleId}-ex-${ex}`}
-                        className="font-normal cursor-pointer"
-                      >
-                        {ex}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Temperature */}
-            <div className="space-y-1.5">
-              <Label htmlFor={`${titleId}-temp`}>Temperature</Label>
-              <Input
-                id={`${titleId}-temp`}
-                type="number"
-                min={0}
-                max={2}
-                step={0.1}
-                value={state.temperature}
-                onChange={e => onChange(prev => ({ ...prev, temperature: e.target.value }))}
-              />
-            </div>
-
-            {/* Include grammar */}
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id={`${titleId}-grammar`}
-                checked={state.include_grammar}
-                onCheckedChange={v =>
-                  onChange(prev => ({ ...prev, include_grammar: !!v }))
-                }
-              />
-              <Label
-                htmlFor={`${titleId}-grammar`}
-                className="font-normal cursor-pointer"
-              >
-                Include grammar
-              </Label>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
   )
 }

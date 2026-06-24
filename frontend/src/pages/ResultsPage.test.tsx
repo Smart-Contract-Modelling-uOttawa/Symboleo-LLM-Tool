@@ -77,7 +77,20 @@ describe('ResultsPage', () => {
       errorMessage: null,
     })
     renderResultsPage()
-    expect(screen.getByText('Candidate 1 — Iteration 3')).toBeInTheDocument()
+    // iteration 2 is the 2nd correction — not "Iteration 3" (no +1; that
+    // overshot max_iterations). See lib/progress.
+    expect(screen.getByText('Candidate 1 — Iteration 2')).toBeInTheDocument()
+  })
+
+  it('labels the generation pass (iteration 0) as generating, not Iteration 1', () => {
+    mockUseStream.mockReturnValue({
+      status: 'running',
+      progress: { candidateId: 0, iteration: 0 },
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(screen.getByText('Candidate 1 — Generating...')).toBeInTheDocument()
   })
 
   it('shows an error alert with the error message from the stream', () => {
