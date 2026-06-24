@@ -10,7 +10,7 @@ from symboleo_llm_tool.config.models import (
     StageConfig,
 )
 from symboleo_llm_tool.pipeline import pipeline
-from tests.helpers import make_issue
+from tests.helpers import make_generation, make_issue, make_usage
 
 
 def _make_config(**pipeline_kwargs: Any) -> PipelineConfig:
@@ -50,7 +50,7 @@ def mock_deps():
 
 def test_converges_immediately_when_no_errors(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "valid symboleo"
+    mock_llm.generate.return_value = make_generation("valid symboleo")
     mock_wrapper.validate.return_value = []
 
     result = pipeline.run("contract text", _make_config(max_iterations=3))
@@ -63,7 +63,7 @@ def test_converges_immediately_when_no_errors(mock_deps):
 
 def test_stops_at_max_iterations_when_always_errors(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "invalid"
+    mock_llm.generate.return_value = make_generation("invalid")
     mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=3))
@@ -75,7 +75,7 @@ def test_stops_at_max_iterations_when_always_errors(mock_deps):
 
 def test_error_history_length_matches_iterations(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "invalid"
+    mock_llm.generate.return_value = make_generation("invalid")
     mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=2))
@@ -86,7 +86,7 @@ def test_error_history_length_matches_iterations(mock_deps):
 
 def test_stop_on_first_convergence_halts_remaining_candidates(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "valid"
+    mock_llm.generate.return_value = make_generation("valid")
     mock_wrapper.validate.return_value = []
 
     result = pipeline.run(
@@ -100,7 +100,7 @@ def test_stop_on_first_convergence_halts_remaining_candidates(mock_deps):
 
 def test_all_candidates_run_when_stop_on_first_convergence_false(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "valid"
+    mock_llm.generate.return_value = make_generation("valid")
     mock_wrapper.validate.return_value = []
 
     result = pipeline.run(
@@ -113,7 +113,7 @@ def test_all_candidates_run_when_stop_on_first_convergence_false(mock_deps):
 
 def test_on_progress_called_after_generation(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "valid"
+    mock_llm.generate.return_value = make_generation("valid")
     mock_wrapper.validate.return_value = []
 
     progress = MagicMock()
@@ -124,7 +124,7 @@ def test_on_progress_called_after_generation(mock_deps):
 
 def test_on_progress_called_after_each_correction(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "invalid"
+    mock_llm.generate.return_value = make_generation("invalid")
     error = make_issue()
     mock_wrapper.validate.side_effect = [[error], [error], []]
 
@@ -138,6 +138,24 @@ def test_on_progress_called_after_each_correction(mock_deps):
     ]
 
 
+def test_usage_recorded_on_each_iteration(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation(
+        "invalid", usage=make_usage(prompt_tokens=30, completion_tokens=12, cost_usd=0.005)
+    )
+    mock_wrapper.validate.side_effect = [[make_issue()], []]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    history = result.candidates[0].error_history
+    # generation (iter 0) + one correction (iter 1), each carrying its call's usage
+    assert len(history) == 2
+    assert all(record.usage is not None for record in history)
+    # total_tokens is computed: 30 + 12
+    assert [record.usage.total_tokens for record in history] == [42, 42]
+    assert [record.usage.cost_usd for record in history] == [0.005, 0.005]
+
+
 def test_grammar_load_failure_propagates(mock_deps):
     with patch(
         "symboleo_llm_tool.pipeline.pipeline._load_grammar",
@@ -149,7 +167,7 @@ def test_grammar_load_failure_propagates(mock_deps):
 
 def test_clean_response_strips_markdown_fences(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "```symboleo\nContract Test() {}\n```"
+    mock_llm.generate.return_value = make_generation("```symboleo\nContract Test() {}\n```")
     mock_wrapper.validate.return_value = []
 
     result = pipeline.run("contract text", _make_config())
@@ -159,7 +177,7 @@ def test_clean_response_strips_markdown_fences(mock_deps):
 
 def test_clean_response_strips_plain_fences(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = "```\nContract Test() {}\n```"
+    mock_llm.generate.return_value = make_generation("```\nContract Test() {}\n```")
     mock_wrapper.validate.return_value = []
 
     result = pipeline.run("contract text", _make_config())

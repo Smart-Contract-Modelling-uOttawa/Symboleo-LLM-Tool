@@ -180,6 +180,7 @@ export interface components {
             code: string;
             /** Errors */
             errors: components["schemas"]["SymboleoIssue"][];
+            usage?: components["schemas"]["TokenUsage"] | null;
         };
         /** OptionsResponse */
         OptionsResponse: {
@@ -286,6 +287,28 @@ export interface components {
             length: number;
             /** Message */
             message: string;
+        };
+        /**
+         * TokenUsage
+         * @description Token counts and cost for a single LLM call.
+         *
+         *     Attached to each ``IterationRecord`` (one call per iteration). Per-candidate
+         *     and per-experiment totals are derived from these by summing, never stored —
+         *     consistent with the "metrics are derived, not stored" rule. ``cost_usd`` is
+         *     best-effort: ``None`` when LiteLLM has no pricing for the model.
+         */
+        TokenUsage: {
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd?: number | null;
+            /**
+             * Total Tokens
+             * @description Always prompt + completion — derived rather than trusting the reported total.
+             */
+            readonly total_tokens: number;
         };
         /** ValidationError */
         ValidationError: {

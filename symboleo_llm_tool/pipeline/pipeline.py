@@ -90,10 +90,11 @@ def _run_candidate(
         grammar_context=ctx.grammar_context if ctx.gen_include_grammar else None,
     )
     gen_prompt = ctx.gen_strategy.build_generation_prompt(gen_context)
-    code = _clean_response(ctx.gen_llm.generate(gen_prompt))
+    gen_result = ctx.gen_llm.generate(gen_prompt)
+    code = _clean_response(gen_result.generated_text)
 
     errors = ctx.wrapper.validate(code)
-    error_history = [IterationRecord(iteration=0, code=code, errors=errors)]
+    error_history = [IterationRecord(iteration=0, code=code, errors=errors, usage=gen_result.usage)]
     if ctx.on_progress:
         ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
 
@@ -107,9 +108,12 @@ def _run_candidate(
             history=error_history,
         )
         corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
-        code = _clean_response(ctx.corr_llm.generate(corr_prompt))
+        corr_result = ctx.corr_llm.generate(corr_prompt)
+        code = _clean_response(corr_result.generated_text)
         errors = ctx.wrapper.validate(code)
-        error_history.append(IterationRecord(iteration=iteration, code=code, errors=errors))
+        error_history.append(
+            IterationRecord(iteration=iteration, code=code, errors=errors, usage=corr_result.usage)
+        )
         if ctx.on_progress:
             ctx.on_progress(candidate_id, iteration, errors, ctx.num_candidates, ctx.max_iterations)
 
