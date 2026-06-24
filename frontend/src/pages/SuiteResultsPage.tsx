@@ -13,7 +13,8 @@ import { CandidateItem } from '@/components/results/CandidateItem'
 import { triggerDownload } from '@/components/results/download'
 import { useSuiteStream } from '@/hooks/useSuiteStream'
 import { formatProgressLabel } from '@/lib/progress'
-import type { ExperimentResult, PipelineResult, SuiteResult } from '@/api/types'
+import { formatCost, formatTokens } from '@/lib/tokens'
+import type { ExperimentResult, SuiteResult } from '@/api/types'
 
 // Warnings forwarded from the experiments form via navigation state (see
 // ExperimentsPage). Transient — lost on a hard refresh, by design.
@@ -83,9 +84,15 @@ function SuiteView({ result }: { result: SuiteResult }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {convergedCount} of {result.experiments.length} experiments converged.
-        </p>
+        <div>
+          <p className="text-sm text-muted-foreground">
+            {convergedCount} of {result.experiments.length} experiments converged.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Suite total: {formatTokens(result.total_tokens)} tokens ·{' '}
+            {formatCost(result.total_cost_usd)}
+          </p>
+        </div>
         <Button
           size="sm"
           variant="outline"
@@ -105,8 +112,7 @@ function SuiteView({ result }: { result: SuiteResult }) {
 }
 
 function ExperimentRow({ index, experiment }: { index: number; experiment: ExperimentResult }) {
-  const { success } = experiment.result
-  const iterations = iterationsToConvergence(experiment.result)
+  const { success, total_tokens, total_cost_usd, iterations_to_convergence } = experiment.result
   const candidates = experiment.result.candidates
 
   return (
@@ -118,7 +124,12 @@ function ExperimentRow({ index, experiment }: { index: number; experiment: Exper
             {success ? 'Converged' : 'Failed to converge'}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            {iterations !== null ? `${iterations} iteration${iterations !== 1 ? 's' : ''}` : '—'}
+            {iterations_to_convergence !== null
+              ? `${iterations_to_convergence} iteration${iterations_to_convergence !== 1 ? 's' : ''}`
+              : '—'}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {formatTokens(total_tokens)} tokens · {formatCost(total_cost_usd)}
           </span>
         </div>
       </AccordionTrigger>
@@ -134,20 +145,20 @@ function ExperimentRow({ index, experiment }: { index: number; experiment: Exper
 }
 
 // ---------------------------------------------------------------------------
-// Comparison metrics (derived from PipelineResult; nothing baked into the model)
+// Summary CSV — built from the result models' computed rollups
 // ---------------------------------------------------------------------------
 
-// Iterations of the first converged candidate, or null if none converged.
-function iterationsToConvergence(result: PipelineResult): number | null {
-  const converged = result.candidates.find(c => c.converged)
-  return converged ? converged.iterations_used : null
-}
-
 function buildSummaryCsv(result: SuiteResult): string {
-  const header = 'experiment,converged,iterations_to_convergence'
+  const header = 'experiment,converged,iterations_to_convergence,total_tokens,cost_usd'
   const rows = result.experiments.map(exp => {
-    const iterations = iterationsToConvergence(exp.result)
-    return [csvCell(exp.name), exp.result.success, iterations ?? ''].join(',')
+    const { success, iterations_to_convergence, total_tokens, total_cost_usd } = exp.result
+    return [
+      csvCell(exp.name),
+      success,
+      iterations_to_convergence ?? '',
+      total_tokens,
+      total_cost_usd ?? '',
+    ].join(',')
   })
   return [header, ...rows].join('\n')
 }

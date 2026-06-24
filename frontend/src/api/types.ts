@@ -11,6 +11,7 @@ export type SuiteResult = components['schemas']['SuiteResult']
 export type ExperimentResult = components['schemas']['ExperimentResult']
 
 export type SymboleoIssue = components['schemas']['SymboleoIssue']
+export type TokenUsage = components['schemas']['TokenUsage']
 export type IterationRecord = components['schemas']['IterationRecord']
 export type CandidateResult = components['schemas']['CandidateResult']
 export type PipelineResult = components['schemas']['PipelineResult']

@@ -3,11 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import { useSuiteStream } from '@/hooks/useSuiteStream'
+import { triggerDownload } from '@/components/results/download'
 import SuiteResultsPage from './SuiteResultsPage'
 import type { PipelineResult, SuiteResult } from '@/api/types'
 
 vi.mock('@/hooks/useSuiteStream')
 const mockUseSuiteStream = vi.mocked(useSuiteStream)
+
+vi.mock('@/components/results/download', () => ({ triggerDownload: vi.fn() }))
+const mockTriggerDownload = vi.mocked(triggerDownload)
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 
@@ -18,11 +22,23 @@ vi.mock('react-router-dom', async () => {
 
 const TEST_SUITE_ID = 'test-suite-id'
 
-function pipelineResult(converged: boolean, iterations: number): PipelineResult {
+type Totals = { tokens: number; cost: number | null }
+
+// Token/cost totals and iterations_to_convergence are computed_fields on the
+// backend models, so they arrive as authoritative values — the page reads them
+// directly rather than re-deriving from error_history.
+function pipelineResult(
+  converged: boolean,
+  iterations: number,
+  totals: Totals = { tokens: 0, cost: null },
+): PipelineResult {
   return {
     success: converged,
     timestamp: '2026-01-01T00:00:00',
     input_file: '',
+    total_tokens: totals.tokens,
+    total_cost_usd: totals.cost,
+    iterations_to_convergence: converged ? iterations : null,
     candidates: [
       {
         candidate_id: 0,
@@ -30,6 +46,8 @@ function pipelineResult(converged: boolean, iterations: number): PipelineResult 
         converged,
         iterations_used: iterations,
         error_history: [],
+        total_tokens: totals.tokens,
+        total_cost_usd: totals.cost,
       },
     ],
   }
@@ -38,9 +56,11 @@ function pipelineResult(converged: boolean, iterations: number): PipelineResult 
 const MOCK_SUITE_RESULT: SuiteResult = {
   timestamp: '2026-01-01T00:00:00',
   input_file: '',
+  total_tokens: 3500,
+  total_cost_usd: 0.007,
   experiments: [
-    { name: 'zero-shot', result: pipelineResult(true, 2) },
-    { name: 'cot', result: pipelineResult(false, 3) },
+    { name: 'zero-shot', result: pipelineResult(true, 2, { tokens: 1500, cost: 0.003 }) },
+    { name: 'cot', result: pipelineResult(false, 3, { tokens: 2000, cost: 0.004 }) },
   ],
 }
 
@@ -61,6 +81,7 @@ describe('SuiteResultsPage', () => {
   beforeEach(() => {
     mockNavigate.mockReset()
     mockUseSuiteStream.mockReset()
+    mockTriggerDownload.mockReset()
   })
 
   it('shows "Connecting..." on initial load', () => {
@@ -122,6 +143,46 @@ describe('SuiteResultsPage', () => {
     // converged experiment shows its iteration count; the failed one shows a dash
     expect(screen.getByText('2 iterations')).toBeInTheDocument()
     expect(screen.getByText('—')).toBeInTheDocument()
+  })
+
+  it('shows per-experiment token totals and cost', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
+    expect(screen.getByText('2,000 tokens · $0.0040')).toBeInTheDocument()
+  })
+
+  it('shows the suite-wide token and cost total', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('Suite total: 3,500 tokens · $0.0070')).toBeInTheDocument()
+  })
+
+  it('includes token and cost columns in the summary CSV', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    await user.click(screen.getByRole('button', { name: /Download CSV/ }))
+
+    const csv = mockTriggerDownload.mock.calls[0][0] as string
+    expect(csv).toContain('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
+    expect(csv).toContain('zero-shot,true,2,1500,')
+    expect(csv).toContain('cot,false,,2000,')
   })
 
   it('renders configuration warnings forwarded via navigation state', () => {

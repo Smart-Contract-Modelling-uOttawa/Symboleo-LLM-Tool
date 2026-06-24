@@ -2,15 +2,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, computed_field
 
+from symboleo_llm_tool.output import metrics
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
 
 class TokenUsage(BaseModel):
     """Token counts and cost for a single LLM call.
 
-    Attached to each ``IterationRecord`` (one call per iteration). Per-candidate
-    and per-experiment totals are derived from these by summing, never stored —
-    consistent with the "metrics are derived, not stored" rule. ``cost_usd`` is
+    Attached to each ``IterationRecord`` (one call per iteration). ``cost_usd`` is
     best-effort: ``None`` when LiteLLM has no pricing for the model.
     """
 
@@ -39,6 +38,16 @@ class CandidateResult(BaseModel):
     iterations_used: int
     error_history: list[IterationRecord]
 
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_tokens(self) -> int:
+        return metrics.candidate_total_tokens(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_cost_usd(self) -> float | None:
+        return metrics.candidate_total_cost_usd(self)
+
 
 class PipelineResult(BaseModel):
     success: bool
@@ -46,13 +55,29 @@ class PipelineResult(BaseModel):
     input_file: str
     candidates: list[CandidateResult]
 
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_tokens(self) -> int:
+        return metrics.pipeline_total_tokens(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_cost_usd(self) -> float | None:
+        return metrics.pipeline_total_cost_usd(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def iterations_to_convergence(self) -> int | None:
+        return metrics.iterations_to_convergence(self)
+
 
 class ExperimentResult(BaseModel):
     """The outcome of one named experiment in a suite.
 
-    Holds the full per-run ``PipelineResult`` unchanged; comparison metrics are
-    derived from it at write/display time rather than baked into the model, so
-    adding a metric never requires re-running a suite.
+    Holds the full per-run ``PipelineResult`` unchanged; comparison rollups are
+    ``@computed_field``s on the result models that delegate to ``output/metrics.py``,
+    derived from the stored atomic facts rather than baked in, so adding a metric
+    never requires re-running a suite.
     """
 
     name: str
@@ -63,3 +88,13 @@ class SuiteResult(BaseModel):
     timestamp: datetime
     input_file: str
     experiments: list[ExperimentResult]
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_tokens(self) -> int:
+        return metrics.suite_total_tokens(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def total_cost_usd(self) -> float | None:
+        return metrics.suite_total_cost_usd(self)
