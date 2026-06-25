@@ -21,4 +21,6 @@ export const handlers = [
   http.post('/api/suites', () => {
     return HttpResponse.json({ run_id: TEST_RUN_ID })
   }),
+
+  http.post('/api/runs/:id/cancel', () => new HttpResponse(null, { status: 204 })),
 ]

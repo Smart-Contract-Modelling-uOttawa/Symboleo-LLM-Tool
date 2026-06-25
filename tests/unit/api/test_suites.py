@@ -137,6 +137,32 @@ def test_create_suite_empty_contract_returns_422(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_cancel_suite_trips_the_token(client: TestClient) -> None:
+    # The shared cancel endpoint works for suite jobs too (one store, unique ids).
+    job = create_suite_job("cancel-suite")
+    response = client.post("/api/runs/cancel-suite/cancel")
+    assert response.status_code == 204
+    assert job.cancel.cancelled is True
+
+
+def test_create_suite_forwards_max_concurrency_to_config(client: TestClient) -> None:
+    body = {**_VALID_SUITE_BODY, "max_concurrency": 4}
+    with patch("symboleo_llm_tool.api.routes._run_suite", new_callable=AsyncMock) as mock_run:
+        response = client.post("/api/suites", json=body)
+    assert response.status_code == 200
+    # _run_suite(job, suite_config, loop) — inspect the config it was handed.
+    suite_config = mock_run.call_args.args[1]
+    assert suite_config.max_concurrency == 4
+
+
+def test_create_suite_uses_default_max_concurrency_when_omitted(client: TestClient) -> None:
+    with patch("symboleo_llm_tool.api.routes._run_suite", new_callable=AsyncMock) as mock_run:
+        response = client.post("/api/suites", json=_VALID_SUITE_BODY)
+    assert response.status_code == 200
+    suite_config = mock_run.call_args.args[1]
+    assert suite_config.max_concurrency == 2
+
+
 def test_create_suite_labels_warnings_by_experiment_name(
     client: TestClient, patch_run_suite: None
 ) -> None:
@@ -232,6 +258,21 @@ def test_run_suite_puts_suite_complete_event_on_queue() -> None:
     event = job.queue.get_nowait()
     assert isinstance(event, SuiteCompleteEvent)
     assert event.result is result
+
+
+def test_run_suite_forwards_job_cancel_token() -> None:
+    job = create_suite_job("suite-cancel")
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with patch(
+            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
+        ) as mock_tp:
+            mock_tp.return_value = _suite_result()
+            await _run_suite(job, _suite_config(), loop)
+            assert mock_tp.call_args.kwargs["cancel"] is job.cancel
+
+    asyncio.run(run())
 
 
 def test_run_suite_puts_error_event_on_exception() -> None:

@@ -1,8 +1,10 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+from symboleo_llm_tool.concurrency import CancellationToken, RunCoordinator
 from symboleo_llm_tool.config.models import (
     LLMConfig,
     PipelineConfig,
@@ -183,3 +185,75 @@ def test_clean_response_strips_plain_fences(mock_deps):
     result = pipeline.run("contract text", _make_config())
 
     assert result.candidates[0].final_code == "Contract Test() {}"
+
+
+# --- Concurrent candidate execution (coordinator supplied) ---------------------
+
+
+def test_coordinator_runs_all_candidates_and_reorders_them(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=3, stop_on_first_convergence=False),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=CancellationToken()),
+        )
+
+    assert result.success is True
+    # futures finish out of order; candidates come back sorted by id
+    assert [c.candidate_id for c in result.candidates] == [0, 1, 2]
+
+
+def test_coordinator_skips_all_candidates_when_pre_cancelled(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    cancel = CancellationToken()
+    cancel.cancel()  # cancelled before any candidate starts
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=3),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=cancel),
+        )
+
+    assert result.candidates == []
+    assert result.success is False
+
+
+def test_coordinator_stop_on_first_convergence_keeps_at_least_one(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=3, stop_on_first_convergence=True),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=CancellationToken()),
+        )
+
+    # In-flight candidates may finish before the cancel lands, so >1 can converge,
+    # but never zero and never more than requested.
+    assert result.success is True
+    assert 1 <= len(result.candidates) <= 3
+    assert all(c.converged for c in result.candidates)
+
+
+def test_cancel_token_skips_sequential_candidates(mock_deps):
+    # The single-run cancel path (no coordinator): a tripped token aborts the
+    # sequential run cooperatively — used by the API on client disconnect.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    cancel = CancellationToken()
+    cancel.cancel()
+    result = pipeline.run("contract text", _make_config(num_candidates=2), cancel=cancel)
+
+    assert result.candidates == []
+    assert result.success is False

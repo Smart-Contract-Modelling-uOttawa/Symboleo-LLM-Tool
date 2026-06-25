@@ -191,6 +191,32 @@ def test_options_returns_parameter_defaults(client: TestClient, parameters_confi
     assert params["temperature"]["default"] is None
 
 
+def test_options_returns_max_concurrency_default(
+    client: TestClient, parameters_config: None
+) -> None:
+    response = client.get("/api/options")
+    param = response.json()["parameters"]["max_concurrency"]
+    assert param["default"] == 2  # SuiteConfig default
+    assert (param["min"], param["max"]) == (1, 8)
+
+
+# ---------------------------------------------------------------------------
+# POST /runs/{run_id}/cancel
+# ---------------------------------------------------------------------------
+
+
+def test_cancel_run_trips_the_token(client: TestClient) -> None:
+    job = create_job("cancel-me")
+    response = client.post("/api/runs/cancel-me/cancel")
+    assert response.status_code == 204
+    assert job.cancel.cancelled is True
+
+
+def test_cancel_unknown_run_returns_404(client: TestClient) -> None:
+    response = client.post("/api/runs/does-not-exist/cancel")
+    assert response.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # POST /generate: correction stage
 # ---------------------------------------------------------------------------

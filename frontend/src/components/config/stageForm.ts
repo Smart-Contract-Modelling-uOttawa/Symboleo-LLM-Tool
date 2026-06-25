@@ -44,6 +44,7 @@ export const DEFAULTS = {
   max_iterations: 3,
   stop_on_first_convergence: false,
   save_intermediates: false,
+  max_concurrency: 2,
 }
 
 export function getParamDefault<T>(

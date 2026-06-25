@@ -61,6 +61,9 @@ class ExperimentRequest(RunSettings):
 class SuiteRequest(BaseModel):
     contract_text: ContractText
     experiments: list[ExperimentRequest]
+    # Suite-wide concurrency cap; None → the SuiteConfig default. Bounds are
+    # enforced by SuiteConfig (clamped to [1, 8]).
+    max_concurrency: int | None = None
 
     @field_validator("experiments")
     @classmethod

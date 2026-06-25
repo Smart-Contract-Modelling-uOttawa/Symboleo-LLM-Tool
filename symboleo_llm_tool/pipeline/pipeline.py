@@ -1,8 +1,10 @@
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import resources
 
+from symboleo_llm_tool.concurrency import CancellationToken, RunCoordinator
 from symboleo_llm_tool.config.models import PipelineConfig
 from symboleo_llm_tool.llm.base import LLMAdapter
 from symboleo_llm_tool.llm.factory import create_adapter
@@ -37,6 +39,9 @@ class _RunContext:
     max_iterations: int
     stop_on_first_convergence: bool
     on_progress: ProgressCallback | None
+    # Never cancelled on the sequential path; on the concurrent path it is this
+    # run's per-experiment token (a child of the suite's request-scoped token).
+    cancel: CancellationToken
 
 
 def run(
@@ -44,8 +49,23 @@ def run(
     config: PipelineConfig,
     input_file: str = "",
     on_progress: ProgressCallback | None = None,
+    coordinator: RunCoordinator | None = None,
+    cancel: CancellationToken | None = None,
 ) -> PipelineResult:
+    """Generate and correction-loop candidates for one contract.
+
+    ``coordinator`` is supplied only by the suite runner for concurrent execution;
+    its absence selects the unchanged sequential path (CLI, single-run API).
+    ``cancel`` lets a caller abort that sequential path cooperatively (e.g. the
+    API on client disconnect); a ``coordinator``'s own token takes precedence.
+    """
     tracing = config.observability.langsmith.enabled
+    if coordinator is not None:
+        cancel_token = coordinator.cancel
+    elif cancel is not None:
+        cancel_token = cancel
+    else:
+        cancel_token = CancellationToken()
     ctx = _RunContext(
         wrapper=SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable),
         gen_llm=create_adapter(config.generation.llm, tracing_enabled=tracing),
@@ -63,14 +83,13 @@ def run(
         max_iterations=config.pipeline.max_iterations,
         stop_on_first_convergence=config.pipeline.stop_on_first_convergence,
         on_progress=on_progress,
+        cancel=cancel_token,
     )
 
-    candidates: list[CandidateResult] = []
-    for i in range(ctx.num_candidates):
-        candidate = _run_candidate(candidate_id=i, contract_text=contract_text, ctx=ctx)
-        candidates.append(candidate)
-        if ctx.stop_on_first_convergence and candidate.converged:
-            break
+    if coordinator is None:
+        candidates = _run_candidates_sequential(contract_text, ctx)
+    else:
+        candidates = _run_candidates_concurrent(contract_text, ctx, coordinator.candidate_pool)
 
     return PipelineResult(
         success=any(c.converged for c in candidates),
@@ -80,11 +99,58 @@ def run(
     )
 
 
+def _run_candidates_sequential(contract_text: str, ctx: _RunContext) -> list[CandidateResult]:
+    candidates: list[CandidateResult] = []
+    for i in range(ctx.num_candidates):
+        candidate = _run_candidate(candidate_id=i, contract_text=contract_text, ctx=ctx)
+        if candidate is None:  # only reachable if cancelled — never on this path
+            continue
+        candidates.append(candidate)
+        if ctx.stop_on_first_convergence and candidate.converged:
+            break
+    return candidates
+
+
+def _run_candidates_concurrent(
+    contract_text: str, ctx: _RunContext, pool: ThreadPoolExecutor
+) -> list[CandidateResult]:
+    """Run candidates on the shared pool; cancel siblings on first convergence.
+
+    All candidates are submitted up front; the pool bounds how many run at once.
+    On ``stop_on_first_convergence`` we cancel this run's token — not-yet-started
+    candidates short-circuit at their entry checkpoint, in-flight ones at their
+    next iteration. Results are reordered by ``candidate_id`` (futures complete
+    out of order).
+    """
+    futures = {
+        pool.submit(_run_candidate, i, contract_text, ctx): i for i in range(ctx.num_candidates)
+    }
+    candidates: list[CandidateResult] = []
+    for future in as_completed(futures):
+        candidate = future.result()
+        if candidate is None:  # skipped — cancelled before it started
+            continue
+        candidates.append(candidate)
+        if ctx.stop_on_first_convergence and candidate.converged:
+            ctx.cancel.cancel()
+    candidates.sort(key=lambda c: c.candidate_id)
+    return candidates
+
+
 def _run_candidate(
     candidate_id: int,
     contract_text: str,
     ctx: _RunContext,
-) -> CandidateResult:
+) -> CandidateResult | None:
+    """Run one candidate, or return ``None`` if cancelled before it started.
+
+    A ``None`` only happens on the concurrent path (a sibling converged, or the
+    suite was cancelled) before this candidate ran — it is excluded from results,
+    mirroring how the sequential path simply stops launching more.
+    """
+    if ctx.cancel.cancelled:
+        return None
+
     gen_context = PromptContext(
         contract_text=contract_text,
         grammar_context=ctx.grammar_context if ctx.gen_include_grammar else None,
@@ -100,6 +166,8 @@ def _run_candidate(
 
     for iteration in range(1, ctx.max_iterations + 1):
         if not errors:
+            break
+        if ctx.cancel.cancelled:  # cooperative checkpoint between iterations
             break
         corr_context = PromptContext(
             current_code=code,

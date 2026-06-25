@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from symboleo_llm_tool.api import routes
 from symboleo_llm_tool.api._paths import FRONTEND_DIST, UI_CONFIG_PATH
-from symboleo_llm_tool.api.jobs import cleanup_expired
+from symboleo_llm_tool.api.jobs import cancel_abandoned, cleanup_expired
 from symboleo_llm_tool.config.models import SymboleoConfig
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
@@ -44,9 +44,16 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         pass
 
 
+# Short so abandoned runs (involuntary drops) are cancelled within ~grace +
+# interval ≈ 10–15s rather than riding the old 60s cadence. The scan is a cheap
+# pass over a handful of jobs.
+_SWEEP_INTERVAL_SECONDS = 5
+
+
 async def _ttl_cleanup_loop() -> None:
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(_SWEEP_INTERVAL_SECONDS)
+        cancel_abandoned()  # trip the cancel token of long-detached streams
         cleanup_expired()
 
 

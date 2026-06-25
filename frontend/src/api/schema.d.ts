@@ -38,6 +38,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Run
+         * @description Trip a job's cancellation token. Works for runs and suites (shared store).
+         *
+         *     The pipeline stops at its next cooperative checkpoint, so no further LLM calls
+         *     are made — though an in-flight call (at most one per concurrent candidate)
+         *     finishes, since a blocking call can't be interrupted. Idempotent: a completed
+         *     job is a harmless no-op; an unknown/expired one returns 404.
+         */
+        post: operations["cancel_run_api_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/stream": {
         parameters: {
             query?: never;
@@ -269,6 +294,8 @@ export interface components {
             contract_text: string;
             /** Experiments */
             experiments: components["schemas"]["ExperimentRequest"][];
+            /** Max Concurrency */
+            max_concurrency?: number | null;
         };
         /** SuiteResult */
         SuiteResult: {
@@ -399,6 +426,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunCreatedResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_api_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

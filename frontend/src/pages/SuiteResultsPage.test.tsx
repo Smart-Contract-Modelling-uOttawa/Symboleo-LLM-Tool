@@ -197,6 +197,19 @@ describe('SuiteResultsPage', () => {
     expect(screen.getByText(/temperature ignored/)).toBeInTheDocument()
   })
 
+  it('shows a Stop button while running and switches to Stopping when clicked', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'running',
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
+  })
+
   it('navigates to /experiments when New Suite is clicked', async () => {
     const user = userEvent.setup()
     mockUseSuiteStream.mockReturnValue({
