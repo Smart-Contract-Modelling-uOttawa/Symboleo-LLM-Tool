@@ -24,6 +24,17 @@ export interface AdvancedFormValues {
   save_intermediates: boolean
 }
 
+// One experiment card in a suite: a name plus a full pipeline config (both
+// stages + advanced). The composite reused by ExperimentsPage and the axis
+// expander; lives here (the config layer) so neither depends on the page.
+export interface ExperimentFormValues {
+  id: string
+  name: string
+  generation: StageFormValues
+  correction: StageFormValues
+  advanced: AdvancedFormValues
+}
+
 export const FEW_SHOT = 'few_shot'
 
 export const DEFAULTS = {

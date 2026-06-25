@@ -19,7 +19,11 @@ function AccordionItem({
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn("border-b last:border-b-0", className)}
+      // No default border: every usage styles items as self-contained cards
+      // (`border rounded-lg`). The stock shadcn `border-b last:border-b-0`
+      // divider fought that — `last:border-b-0` stripped the bottom edge off the
+      // last card (and off single-candidate cards). Borders live in the consumer.
+      className={cn(className)}
       {...props}
     />
   )
