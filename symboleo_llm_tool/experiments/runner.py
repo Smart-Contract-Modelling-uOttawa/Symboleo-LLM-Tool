@@ -45,14 +45,17 @@ def run_suite(
     cancelling it short-circuits the whole suite.
     """
     if suite.max_concurrency == 1:
-        experiments = _run_sequential(suite, input_file, on_progress)
+        experiments = _run_sequential(suite, input_file, on_progress, cancel)
     else:
         experiments = _run_concurrent(suite, input_file, on_progress, cancel or CancellationToken())
     return SuiteResult(timestamp=datetime.now(), input_file=input_file, experiments=experiments)
 
 
 def _run_sequential(
-    suite: SuiteConfig, input_file: str, on_progress: SuiteProgressCallback | None
+    suite: SuiteConfig,
+    input_file: str,
+    on_progress: SuiteProgressCallback | None,
+    cancel: CancellationToken | None,
 ) -> list[ExperimentResult]:
     experiments: list[ExperimentResult] = []
     for index, experiment in enumerate(suite.experiments):
@@ -61,6 +64,7 @@ def _run_sequential(
             experiment.config,
             input_file=input_file,
             on_progress=_cell_callback(on_progress, index),
+            cancel=cancel,
         )
         experiments.append(ExperimentResult(name=experiment.name, result=result))
     return experiments

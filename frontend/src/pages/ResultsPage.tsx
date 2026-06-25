@@ -5,6 +5,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Accordion } from '@/components/ui/accordion'
 import { CandidateItem } from '@/components/results/CandidateItem'
 import { useStream } from '@/hooks/useStream'
+import { useRunCancel } from '@/hooks/useRunCancel'
 import { formatProgressLabel } from '@/lib/progress'
 import type { PipelineResult } from '@/api/types'
 
@@ -22,6 +23,8 @@ export default function ResultsPage() {
   const navigate = useNavigate()
   const { state } = useLocation()
   const { status, progress, result, errorMessage } = useStream(runId!)
+  const isRunning = status === 'connecting' || status === 'running' || status === 'reconnecting'
+  const { stopping, stop } = useRunCancel(runId!, isRunning)
 
   const warnings = (state as ResultsNavState)?.warnings ?? []
 
@@ -47,16 +50,21 @@ export default function ResultsPage() {
         </Alert>
       )}
 
-      {(status === 'connecting' || status === 'running' || status === 'reconnecting') && (
-        <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
-          <Loader2 className="animate-spin" size={20} />
-          <span>
-            {status === 'reconnecting'
-              ? 'Connection dropped — retrying...'
-              : progress
-              ? formatProgressLabel(progress)
-              : 'Connecting...'}
-          </span>
+      {isRunning && (
+        <div className="flex flex-col items-center gap-4 py-16">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Loader2 className="animate-spin" size={20} />
+            <span>
+              {status === 'reconnecting'
+                ? 'Connection dropped — retrying...'
+                : progress
+                ? formatProgressLabel(progress)
+                : 'Connecting...'}
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={stop} disabled={stopping}>
+            {stopping ? 'Stopping…' : 'Stop'}
+          </Button>
         </div>
       )}
 
@@ -66,7 +74,16 @@ export default function ResultsPage() {
         </Alert>
       )}
 
-      {status === 'complete' && result && <ResultsView result={result} />}
+      {status === 'complete' && result && (
+        <>
+          {stopping && (
+            <Alert className="mb-4">
+              <AlertDescription>Run stopped — showing partial results.</AlertDescription>
+            </Alert>
+          )}
+          <ResultsView result={result} />
+        </>
+      )}
     </div>
   )
 }

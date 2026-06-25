@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from symboleo_llm_tool.concurrency import CancellationToken
 from symboleo_llm_tool.config.models import (
     Experiment,
     LLMConfig,
@@ -69,7 +70,7 @@ def test_calls_pipeline_run_with_contract_and_each_config() -> None:
 def test_forwards_progress_with_experiment_index_prepended() -> None:
     error = make_issue()
 
-    def fake_run(contract_text, config, input_file="", on_progress=None):
+    def fake_run(contract_text, config, input_file="", on_progress=None, cancel=None):
         if on_progress is not None:
             # pipeline-level args: candidate_id, iteration, errors, totals
             on_progress(0, 1, [error], 2, 3)
@@ -144,6 +145,22 @@ def test_concurrent_fails_fast_and_propagates_on_exception() -> None:
 def test_max_concurrency_is_clamped() -> None:
     assert _suite("zero_shot", max_concurrency=64).max_concurrency == 8
     assert _suite("zero_shot", max_concurrency=0).max_concurrency == 1
+
+
+def test_sequential_suite_forwards_cancel_to_pipeline() -> None:
+    # The K=1 path must thread the request-scoped token through to pipeline.run so
+    # a disconnect can abort it (phase 2).
+    token = CancellationToken()
+    captured: dict[str, object] = {}
+
+    def fake_run(contract_text, config, input_file="", on_progress=None, cancel=None):
+        captured["cancel"] = cancel
+        return _result()
+
+    with patch("symboleo_llm_tool.pipeline.run", side_effect=fake_run):
+        runner.run_suite(_suite("zero_shot", max_concurrency=1), cancel=token)
+
+    assert captured["cancel"] is token
 
 
 def test_empty_suite_is_rejected() -> None:

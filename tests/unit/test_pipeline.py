@@ -242,3 +242,18 @@ def test_coordinator_stop_on_first_convergence_keeps_at_least_one(mock_deps):
     assert result.success is True
     assert 1 <= len(result.candidates) <= 3
     assert all(c.converged for c in result.candidates)
+
+
+def test_cancel_token_skips_sequential_candidates(mock_deps):
+    # The single-run cancel path (no coordinator): a tripped token aborts the
+    # sequential run cooperatively — used by the API on client disconnect.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    cancel = CancellationToken()
+    cancel.cancel()
+    result = pipeline.run("contract text", _make_config(num_candidates=2), cancel=cancel)
+
+    assert result.candidates == []
+    assert result.success is False

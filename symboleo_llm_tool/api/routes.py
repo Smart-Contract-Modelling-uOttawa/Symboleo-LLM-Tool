@@ -19,6 +19,7 @@ from symboleo_llm_tool.api.jobs import (
     Job,
     create_job,
     create_suite_job,
+    get_any_job,
     get_job,
     get_suite_job,
 )
@@ -106,7 +107,7 @@ async def _run_pipeline(
 
     try:
         result = await run_in_threadpool(
-            pipeline.run, contract_text, config, on_progress=on_progress
+            pipeline.run, contract_text, config, on_progress=on_progress, cancel=job.cancel
         )
         job.result = result
         job.completed_at = datetime.now()
@@ -176,7 +177,9 @@ async def _run_suite(
         loop.call_soon_threadsafe(job.queue.put_nowait, event)
 
     try:
-        result = await run_in_threadpool(run_suite, suite_config, on_progress=on_progress)
+        result = await run_in_threadpool(
+            run_suite, suite_config, on_progress=on_progress, cancel=job.cancel
+        )
         job.result = result
         job.completed_at = datetime.now()
         await job.queue.put(SuiteCompleteEvent(result=result))
@@ -184,6 +187,26 @@ async def _run_suite(
         job.error = str(exc)
         job.completed_at = datetime.now()
         await job.queue.put(ErrorEvent(message=str(exc)))
+
+
+# ---------------------------------------------------------------------------
+# POST /runs/{run_id}/cancel — explicit stop (runs and suites; shared store)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/runs/{run_id}/cancel", status_code=204)
+async def cancel_run(run_id: str) -> None:
+    """Trip a job's cancellation token. Works for runs and suites (shared store).
+
+    The pipeline stops at its next cooperative checkpoint, so no further LLM calls
+    are made — though an in-flight call (at most one per concurrent candidate)
+    finishes, since a blocking call can't be interrupted. Idempotent: a completed
+    job is a harmless no-op; an unknown/expired one returns 404.
+    """
+    job = get_any_job(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found or expired")
+    job.cancel.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +259,13 @@ async def _stream_job(
                 yield _sse(ErrorEvent(message=job.error))
             return
 
+        job.mark_attached()  # a live consumer is now reading this job's stream
         while True:
             if await request.is_disconnected():
+                # Start the grace timer instead of cancelling now — EventSource
+                # auto-reconnect reattaches within seconds; only a client that
+                # stays gone past the window is cancelled (cancel_abandoned).
+                job.mark_detached()
                 break
             try:
                 event = await asyncio.wait_for(job.queue.get(), timeout=1.0)

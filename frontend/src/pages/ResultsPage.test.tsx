@@ -205,6 +205,19 @@ describe('ResultsPage', () => {
     expect(screen.queryByText('Configuration warnings')).not.toBeInTheDocument()
   })
 
+  it('shows a Stop button while running and switches to Stopping when clicked', async () => {
+    const user = userEvent.setup()
+    mockUseStream.mockReturnValue({
+      status: 'running',
+      progress: { candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
+  })
+
   it('navigates to / when New Run is clicked', async () => {
     const user = userEvent.setup()
     mockUseStream.mockReturnValue({

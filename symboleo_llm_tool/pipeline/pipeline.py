@@ -50,13 +50,22 @@ def run(
     input_file: str = "",
     on_progress: ProgressCallback | None = None,
     coordinator: RunCoordinator | None = None,
+    cancel: CancellationToken | None = None,
 ) -> PipelineResult:
     """Generate and correction-loop candidates for one contract.
 
     ``coordinator`` is supplied only by the suite runner for concurrent execution;
     its absence selects the unchanged sequential path (CLI, single-run API).
+    ``cancel`` lets a caller abort that sequential path cooperatively (e.g. the
+    API on client disconnect); a ``coordinator``'s own token takes precedence.
     """
     tracing = config.observability.langsmith.enabled
+    if coordinator is not None:
+        cancel_token = coordinator.cancel
+    elif cancel is not None:
+        cancel_token = cancel
+    else:
+        cancel_token = CancellationToken()
     ctx = _RunContext(
         wrapper=SymboleoWrapper(config.symboleo.jar_path, config.symboleo.java_executable),
         gen_llm=create_adapter(config.generation.llm, tracing_enabled=tracing),
@@ -74,7 +83,7 @@ def run(
         max_iterations=config.pipeline.max_iterations,
         stop_on_first_convergence=config.pipeline.stop_on_first_convergence,
         on_progress=on_progress,
-        cancel=coordinator.cancel if coordinator is not None else CancellationToken(),
+        cancel=cancel_token,
     )
 
     if coordinator is None:

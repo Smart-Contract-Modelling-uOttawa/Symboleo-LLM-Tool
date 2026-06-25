@@ -37,3 +37,10 @@ export function createSuite(request: SuiteRequest): Promise<RunCreatedResponse> 
     body: JSON.stringify(request),
   })
 }
+
+// Cancel a run or suite by id. Best-effort and fire-and-forget: the endpoint
+// returns 204 (no body, so not apiFetch), and a finished/expired run is fine to
+// "cancel" — we don't surface failures to the user who just asked to stop.
+export async function cancelRun(runId: string): Promise<void> {
+  await fetch(`/api/runs/${runId}/cancel`, { method: 'POST' }).catch(() => {})
+}
