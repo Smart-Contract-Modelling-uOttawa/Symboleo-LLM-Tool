@@ -191,6 +191,15 @@ def test_options_returns_parameter_defaults(client: TestClient, parameters_confi
     assert params["temperature"]["default"] is None
 
 
+def test_options_returns_max_concurrency_default(
+    client: TestClient, parameters_config: None
+) -> None:
+    response = client.get("/api/options")
+    param = response.json()["parameters"]["max_concurrency"]
+    assert param["default"] == 2  # SuiteConfig default
+    assert (param["min"], param["max"]) == (1, 8)
+
+
 # ---------------------------------------------------------------------------
 # POST /generate: correction stage
 # ---------------------------------------------------------------------------

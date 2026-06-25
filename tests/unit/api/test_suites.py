@@ -137,6 +137,24 @@ def test_create_suite_empty_contract_returns_422(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_create_suite_forwards_max_concurrency_to_config(client: TestClient) -> None:
+    body = {**_VALID_SUITE_BODY, "max_concurrency": 4}
+    with patch("symboleo_llm_tool.api.routes._run_suite", new_callable=AsyncMock) as mock_run:
+        response = client.post("/api/suites", json=body)
+    assert response.status_code == 200
+    # _run_suite(job, suite_config, loop) — inspect the config it was handed.
+    suite_config = mock_run.call_args.args[1]
+    assert suite_config.max_concurrency == 4
+
+
+def test_create_suite_uses_default_max_concurrency_when_omitted(client: TestClient) -> None:
+    with patch("symboleo_llm_tool.api.routes._run_suite", new_callable=AsyncMock) as mock_run:
+        response = client.post("/api/suites", json=_VALID_SUITE_BODY)
+    assert response.status_code == 200
+    suite_config = mock_run.call_args.args[1]
+    assert suite_config.max_concurrency == 2
+
+
 def test_create_suite_labels_warnings_by_experiment_name(
     client: TestClient, patch_run_suite: None
 ) -> None:

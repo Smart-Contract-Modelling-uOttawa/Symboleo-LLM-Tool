@@ -132,7 +132,13 @@ async def create_suite(req: SuiteRequest) -> RunCreatedResponse:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    suite_config = SuiteConfig(contract_text=req.contract_text, experiments=experiments)
+    suite_kwargs: dict[str, Any] = {
+        "contract_text": req.contract_text,
+        "experiments": experiments,
+    }
+    if req.max_concurrency is not None:
+        suite_kwargs["max_concurrency"] = req.max_concurrency
+    suite_config = SuiteConfig(**suite_kwargs)
 
     warnings = [
         f"{experiment.name}: {warning}"

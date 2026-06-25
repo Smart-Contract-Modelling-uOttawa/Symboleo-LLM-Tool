@@ -21,6 +21,10 @@ parameters:
     type: integer
     min: 1
     max: 20
+  max_concurrency:
+    type: integer
+    min: 1
+    max: 8
   temperature:
     type: float
     min: 0.0

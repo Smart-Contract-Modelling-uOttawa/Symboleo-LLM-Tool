@@ -12,6 +12,8 @@ import {
   type StageFormValues,
   type AdvancedFormValues,
   type ExperimentFormValues,
+  DEFAULTS,
+  getParamDefault,
   makeDefaultStage,
   makeDefaultAdvanced,
   buildStageRequest,
@@ -44,6 +46,7 @@ export default function ExperimentsPage() {
   const [contractText, setContractText] = useState('')
   const [fileName, setFileName] = useState('')
   const [experiments, setExperiments] = useState<ExperimentFormValues[] | null>(null)
+  const [maxConcurrency, setMaxConcurrency] = useState('')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -51,6 +54,9 @@ export default function ExperimentsPage() {
     if (options && !experiments) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setExperiments([makeDefaultExperiment(options, 0)])
+      setMaxConcurrency(
+        String(getParamDefault(options.parameters, 'max_concurrency', DEFAULTS.max_concurrency)),
+      )
     }
   }, [options, experiments])
 
@@ -103,6 +109,7 @@ export default function ExperimentsPage() {
     setSubmitError(null)
     setSubmitting(true)
     try {
+      const parsedConcurrency = parseInt(maxConcurrency, 10)
       const request: SuiteRequest = {
         contract_text: contractText,
         experiments: experiments.map(exp => ({
@@ -111,6 +118,8 @@ export default function ExperimentsPage() {
           correction: buildStageRequest(exp.correction),
           ...buildAdvancedFields(exp.advanced),
         })),
+        // Omit when blank → backend applies the SuiteConfig default.
+        ...(Number.isNaN(parsedConcurrency) ? {} : { max_concurrency: parsedConcurrency }),
       }
       const { run_id, warnings } = await createSuite(request)
       navigate(`/suites/${run_id}`, { state: { warnings: warnings ?? [] } })
@@ -161,13 +170,33 @@ export default function ExperimentsPage() {
         />
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-base">
-              Experiments ({experiments.length})
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              One contract, compared across each configuration
-            </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <Label className="text-base">
+                Experiments ({experiments.length})
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                One contract, compared across each configuration
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="max-concurrency"
+                className="text-xs text-muted-foreground font-normal whitespace-nowrap"
+              >
+                Concurrency
+              </Label>
+              <Input
+                id="max-concurrency"
+                type="number"
+                min={1}
+                max={8}
+                value={maxConcurrency}
+                onChange={e => setMaxConcurrency(e.target.value)}
+                className="w-16 h-8"
+                title="Max experiments/candidates running at once"
+              />
+            </div>
           </div>
 
           {experiments.map(exp => (

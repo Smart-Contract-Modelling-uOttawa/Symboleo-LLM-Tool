@@ -35,6 +35,7 @@ def parameters_config() -> None:
             "parameters": {
                 "num_candidates": {"type": "int", "min": 1, "max": 10},
                 "temperature": {"type": "float", "min": 0.0, "max": 2.0},
+                "max_concurrency": {"type": "integer", "min": 1, "max": 8},
             },
         }
     )

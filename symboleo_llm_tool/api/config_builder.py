@@ -10,6 +10,7 @@ from symboleo_llm_tool.config.models import (
     PipelineConfig,
     RunConfig,
     StageConfig,
+    SuiteConfig,
 )
 from symboleo_llm_tool.prompts.strategies import get_strategy
 
@@ -20,6 +21,7 @@ _PARAM_SOURCES: dict[str, tuple[type[BaseModel], str]] = {
     "temperature": (LLMConfig, "temperature"),
     "include_grammar": (StageConfig, "include_grammar"),
     "save_intermediates": (OutputConfig, "save_intermediates"),
+    "max_concurrency": (SuiteConfig, "max_concurrency"),
 }
 
 

@@ -153,4 +153,30 @@ describe('ExperimentsPage', () => {
       expect(body.experiments).toHaveLength(2)
     })
   })
+
+  it('defaults the concurrency control and includes the edited value in the payload', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/api/suites', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ run_id: TEST_RUN_ID })
+      })
+    )
+    const { container } = renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    const concurrency = screen.getByLabelText('Concurrency') as HTMLInputElement
+    expect(concurrency.value).toBe('2') // DEFAULTS fallback (mock options have no params)
+    fireEvent.change(concurrency, { target: { value: '4' } })
+
+    await uploadContract(container, 'My contract')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Run 1 experiment/ })).not.toBeDisabled()
+    )
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement)
+
+    await waitFor(() => {
+      expect((capturedBody as { max_concurrency: number }).max_concurrency).toBe(4)
+    })
+  })
 })

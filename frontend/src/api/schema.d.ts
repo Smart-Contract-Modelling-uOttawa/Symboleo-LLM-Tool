@@ -269,6 +269,8 @@ export interface components {
             contract_text: string;
             /** Experiments */
             experiments: components["schemas"]["ExperimentRequest"][];
+            /** Max Concurrency */
+            max_concurrency?: number | null;
         };
         /** SuiteResult */
         SuiteResult: {
