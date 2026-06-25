@@ -11,22 +11,17 @@ import { AdvancedSection } from '@/components/config/AdvancedSection'
 import {
   type StageFormValues,
   type AdvancedFormValues,
+  type ExperimentFormValues,
   makeDefaultStage,
   makeDefaultAdvanced,
   buildStageRequest,
   buildAdvancedFields,
 } from '@/components/config/stageForm'
+import { AxisExpander } from '@/components/config/AxisExpander'
+import { expandAxis, type AxisDef } from '@/components/config/axisExpand'
 import { useOptions } from '@/hooks/useOptions'
 import { createSuite } from '@/api/client'
 import type { OptionsResponse, SuiteRequest } from '@/api/types'
-
-interface ExperimentFormValues {
-  id: string
-  name: string
-  generation: StageFormValues
-  correction: StageFormValues
-  advanced: AdvancedFormValues
-}
 
 // Stable ids for React keys + add/remove, without depending on crypto in tests.
 let _expCounter = 0
@@ -93,6 +88,13 @@ export default function ExperimentsPage() {
 
   function removeExperiment(id: string) {
     setExperiments(prev => (prev && prev.length > 1 ? prev.filter(e => e.id !== id) : prev))
+  }
+
+  // Append one auto-named card per axis value, cloned from the first experiment.
+  function expandByAxis(axis: AxisDef, values: string[]) {
+    setExperiments(prev =>
+      prev ? [...prev, ...expandAxis(prev[0], axis, values, nextId)] : prev,
+    )
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -183,6 +185,8 @@ export default function ExperimentsPage() {
           <Button type="button" variant="outline" className="w-full" onClick={addExperiment}>
             <Plus size={16} /> Add experiment
           </Button>
+
+          <AxisExpander options={options} onGenerate={expandByAxis} />
         </div>
 
         {submitError && (

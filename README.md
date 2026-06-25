@@ -177,7 +177,7 @@ docker compose up symboleo-api
 
 ### Experiment Suites
 
-The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence and iterations-to-convergence per experiment — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. It maps to `POST /api/suites`; experiments run sequentially and stream progress over a single multiplexed SSE connection.
+The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence, iterations-to-convergence, and token/cost totals per experiment, plus a suite-wide total — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. To build a comparison quickly, the **Generate variants** control expands one axis (strategy or model) into auto-named experiment cards, holding everything else constant. It maps to `POST /api/suites`; experiments run sequentially and stream progress over a single multiplexed SSE connection.
 
 ## Development
 

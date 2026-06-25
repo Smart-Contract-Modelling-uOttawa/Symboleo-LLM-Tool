@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -64,6 +64,21 @@ describe('ExperimentsPage', () => {
     expect(screen.getByText('Experiments (2)')).toBeInTheDocument()
     await user.click(screen.getAllByTitle('Remove')[0])
     expect(screen.getByText('Experiments (1)')).toBeInTheDocument()
+  })
+
+  it('generates one experiment per selected axis value via the expander', async () => {
+    const user = userEvent.setup()
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    // Strategy is the default axis; few_shot is excluded, leaving zero_shot + cot.
+    const expander = screen.getByRole('group', { name: 'Generate variants' })
+    await user.click(within(expander).getByRole('button', { name: 'zero_shot' }))
+    await user.click(within(expander).getByRole('button', { name: 'cot' }))
+    await user.click(within(expander).getByRole('button', { name: /Generate/ }))
+
+    // 1 base experiment + 2 generated variants
+    expect(screen.getByText('Experiments (3)')).toBeInTheDocument()
   })
 
   it('disables submit until a contract is uploaded', async () => {
