@@ -114,6 +114,17 @@ class SuiteConfig(BaseModel):
 
     contract_text: str
     experiments: list[Experiment]
+    # Max candidates running concurrently across the whole suite (one global
+    # throttle for both axes; see docs/suite-concurrency-design.md). 1 is the
+    # sequential floor — the unchanged single-threaded path.
+    max_concurrency: int = 2
+
+    @field_validator("max_concurrency")
+    @classmethod
+    def _clamp_max_concurrency(cls, v: int) -> int:
+        # Clamp rather than reject: a config typo shouldn't break a run, and it
+        # must never oversubscribe the machine (each unit may spawn a JVM).
+        return max(1, min(v, 8))
 
     @field_validator("experiments")
     @classmethod
