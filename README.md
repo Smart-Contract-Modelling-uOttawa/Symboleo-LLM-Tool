@@ -1,6 +1,6 @@
 # Symboleo LLM Tool
 
-A Python CLI and FastAPI web service that converts plain-English legal contracts into valid [SymboleoAC](https://github.com/Smart-Contract-Modelling-uOttawa/Symboleo-IDE) contracts using an LLM, with an automatic syntax-correction loop backed by the SymboleoAC headless CLI.
+A Python CLI and FastAPI web service that converts plain-English legal contracts into valid [SymboleoAC](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE) contracts using an LLM, with an automatic correction loop backed by the SymboleoAC headless CLI validator (Xtext parser + `@Check` rules, including the access-control layer).
 
 ## How It Works
 
