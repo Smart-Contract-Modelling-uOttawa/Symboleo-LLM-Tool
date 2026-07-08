@@ -22,7 +22,11 @@ def invalid_issues(wrapper: SymboleoWrapper) -> list:
 def test_valid_contract_returns_no_errors(wrapper: SymboleoWrapper) -> None:
     code = (FIXTURES / "valid.symboleo").read_text(encoding="utf-8")
     issues = wrapper.validate(code)
-    assert issues == []
+    # A valid AC contract yields no ERROR-severity issues. The validator may
+    # still emit stylistic WARNINGs (e.g. unused declarations), which do not
+    # make the contract invalid.
+    errors = [issue for issue in issues if issue.severity == "ERROR"]
+    assert errors == []
 
 
 def test_invalid_contract_returns_errors(invalid_issues: list) -> None:
