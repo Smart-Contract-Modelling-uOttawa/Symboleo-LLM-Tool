@@ -46,8 +46,19 @@ cp .env.example .env
 ### CLI
 
 ```bash
-uv run symboleo-tool <contract.txt> --config configs/openai.yaml
+# Single run
+uv run symboleo-tool run <contract.txt> --config configs/openai.yaml
+
+# Experiment suite — one contract against several named configs, compared
+uv run symboleo-tool suite <contract.txt> --config configs/suite_example.yaml
 ```
+
+A **suite** file lists named `experiments`, each holding a full pipeline `config`
+(same shape as a single-run config); the contract is the CLI argument, not part of
+the file. See `configs/suite_example.yaml`. Results are written to a timestamped
+`output/suite_*/` directory: a `suite_report.json`, a `summary.csv` comparison, a
+reloadable `suite.yaml`, and one subdirectory per experiment in the single-run
+layout.
 
 ## Configuration
 

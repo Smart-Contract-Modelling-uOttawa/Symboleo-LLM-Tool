@@ -4,9 +4,22 @@ from pathlib import Path
 
 import yaml
 
-from symboleo_llm_tool.config.models import LLMConfig, OutputConfig, PipelineConfig, StageConfig
-from symboleo_llm_tool.output.models import CandidateResult, IterationRecord, PipelineResult
-from symboleo_llm_tool.output.writer import write_results
+from symboleo_llm_tool.config.models import (
+    Experiment,
+    LLMConfig,
+    OutputConfig,
+    PipelineConfig,
+    StageConfig,
+    SuiteConfig,
+)
+from symboleo_llm_tool.output.models import (
+    CandidateResult,
+    ExperimentResult,
+    IterationRecord,
+    PipelineResult,
+    SuiteResult,
+)
+from symboleo_llm_tool.output.writer import write_results, write_suite_results
 from tests.helpers import make_issue
 
 
@@ -94,3 +107,62 @@ def test_write_results_saves_intermediates_when_enabled(tmp_path: Path) -> None:
     inter_dir = run_dir / "intermediates"
     assert (inter_dir / "iteration_0.symboleo").read_text(encoding="utf-8") == "bad code"
     assert (inter_dir / "iteration_1.symboleo").read_text(encoding="utf-8") == "Contract Fixed() {}"
+
+
+def _suite(tmp_path: Path) -> SuiteConfig:
+    return SuiteConfig(
+        contract_text="Seller shall deliver the goods.",
+        experiments=[
+            Experiment(name="zero-shot", config=_config(tmp_path)),
+            Experiment(name="cot run", config=_config(tmp_path)),  # space → slugged dir
+        ],
+    )
+
+
+def _suite_result() -> SuiteResult:
+    return SuiteResult(
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="test.txt",
+        experiments=[
+            ExperimentResult(name="zero-shot", result=_result()),
+            ExperimentResult(name="cot run", result=_result()),
+        ],
+    )
+
+
+def test_write_suite_creates_suite_dir_with_reports(tmp_path: Path) -> None:
+    suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    assert suite_dir.name.startswith("suite_")
+    assert (suite_dir / "suite_report.json").exists()
+    assert (suite_dir / "suite.yaml").exists()
+    assert (suite_dir / "summary.csv").exists()
+
+
+def test_write_suite_creates_per_experiment_subdirs(tmp_path: Path) -> None:
+    suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    # Index-prefixed, name-slugged, each in the single-run layout.
+    assert (suite_dir / "0_zero-shot" / "report.json").exists()
+    assert (suite_dir / "0_zero-shot" / "config.yaml").exists()
+    assert (suite_dir / "0_zero-shot" / "contract_final.symboleo").exists()
+    assert (suite_dir / "1_cot_run" / "contract_final.symboleo").exists()
+
+
+def test_write_suite_yaml_is_reloadable_without_contract(tmp_path: Path) -> None:
+    suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    data = yaml.safe_load((suite_dir / "suite.yaml").read_text(encoding="utf-8"))
+    assert "contract_text" not in data
+    assert [e["name"] for e in data["experiments"]] == ["zero-shot", "cot run"]
+
+
+def test_write_suite_summary_csv_mirrors_frontend_columns(tmp_path: Path) -> None:
+    suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    lines = (suite_dir / "summary.csv").read_text(encoding="utf-8").strip().split("\n")
+    assert lines[0] == "experiment,converged,iterations_to_convergence,total_tokens,cost_usd"
+    # success=True → lowercase "true"; no usage → total_tokens 0 and empty cost cell.
+    assert lines[1].startswith("zero-shot,true,")
+    assert lines[1].endswith(",0,")
+    assert len(lines) == 3  # header + 2 experiments
