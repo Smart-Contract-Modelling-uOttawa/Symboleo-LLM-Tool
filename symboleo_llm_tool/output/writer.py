@@ -55,9 +55,7 @@ def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
     suite_dir = suite.output_directory / f"suite_{timestamp}"
     suite_dir.mkdir(parents=True, exist_ok=True)
 
-    (suite_dir / "suite_report.json").write_text(
-        result.model_dump_json(indent=2), encoding="utf-8"
-    )
+    (suite_dir / "suite_report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     (suite_dir / "suite.yaml").write_text(_suite_file_yaml(suite), encoding="utf-8")
     (suite_dir / "summary.csv").write_text(_summary_csv(result), encoding="utf-8")
 
