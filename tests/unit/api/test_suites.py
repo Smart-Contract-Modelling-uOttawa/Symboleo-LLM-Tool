@@ -169,7 +169,7 @@ def test_create_suite_labels_warnings_by_experiment_name(
     # pipeline_param_warnings is patched to return one warning per experiment;
     # the route must prefix each with that experiment's name.
     with patch(
-        "symboleo_llm_tool.api.routes.pipeline_param_warnings",
+        "symboleo_llm_tool.llm.compatibility.pipeline_param_warnings",
         return_value=["generation: temperature will be ignored"],
     ):
         response = client.post("/api/suites", json=_VALID_SUITE_BODY)

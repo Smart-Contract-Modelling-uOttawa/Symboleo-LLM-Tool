@@ -1,0 +1,46 @@
+# Suite config — compare several experiment configs against ONE contract.
+#
+# Run with:
+#   symboleo-tool suite <contract.txt> --config configs/suite_example.yaml
+#
+# The contract is a CLI argument and must NOT appear in this file. Each
+# experiment's `config` is a full PipelineConfig (same shape as example.yaml).
+
+max_concurrency: 2   # candidates running at once across the whole suite (1 = sequential)
+
+experiments:
+  - name: zero-shot
+    config:
+      # Anchored on first use so the other experiments can reuse it. Note: YAML
+      # merge reuses whole sub-trees — to change one field (see zero-shot-hot
+      # below) you restate the block rather than override a single key.
+      generation:
+        llm: &sonnet
+          provider: anthropic
+          model: claude-sonnet-4-6
+          temperature: 0.2
+        strategy: zero_shot
+      correction:
+        llm: *sonnet
+        strategy: zero_shot
+
+  - name: cot
+    config:
+      generation:
+        llm: *sonnet
+        strategy: cot
+      correction:
+        llm: *sonnet
+        strategy: zero_shot
+
+  - name: zero-shot-hot
+    config:
+      generation:
+        llm: # a different temperature → restate the block (can't merge-override one field)
+          provider: anthropic
+          model: claude-sonnet-4-6
+          temperature: 0.7
+        strategy: zero_shot
+      correction:
+        llm: *sonnet
+        strategy: zero_shot

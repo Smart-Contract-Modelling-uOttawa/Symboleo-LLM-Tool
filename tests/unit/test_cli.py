@@ -1,5 +1,66 @@
-from symboleo_llm_tool.cli.main import _format_progress
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
+
+from typer.testing import CliRunner
+
+from symboleo_llm_tool.cli.main import _format_progress, app
+from symboleo_llm_tool.output.models import (
+    CandidateResult,
+    ExperimentResult,
+    PipelineResult,
+    SuiteResult,
+)
 from tests.helpers import make_issue
+
+runner = CliRunner()
+
+_SUITE_YAML = """
+experiments:
+  - name: zero-shot
+    config:
+      generation:
+        llm: {provider: openai, model: gpt-4o-mini}
+        strategy: zero_shot
+      correction:
+        llm: {provider: openai, model: gpt-4o-mini}
+        strategy: zero_shot
+  - name: cot
+    config:
+      generation:
+        llm: {provider: openai, model: gpt-4o-mini}
+        strategy: cot
+      correction:
+        llm: {provider: openai, model: gpt-4o-mini}
+        strategy: zero_shot
+"""
+
+
+def _fake_suite_result(names: list[str]) -> SuiteResult:
+    return SuiteResult(
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="contract.txt",
+        experiments=[
+            ExperimentResult(
+                name=name,
+                result=PipelineResult(
+                    success=True,
+                    timestamp=datetime(2026, 1, 1, 12, 0, 0),
+                    input_file="contract.txt",
+                    candidates=[
+                        CandidateResult(
+                            candidate_id=0,
+                            final_code="Contract C() {}",
+                            converged=True,
+                            iterations_used=1,
+                            error_history=[],
+                        )
+                    ],
+                ),
+            )
+            for name in names
+        ],
+    )
 
 
 def test_generation_with_errors():
@@ -35,3 +96,40 @@ def test_multi_candidate_shows_prefix():
 def test_single_candidate_no_prefix():
     msg = _format_progress(0, 0, [], num_candidates=1, max_iterations=3)
     assert "Candidate" not in msg
+
+
+def test_suite_command_loads_runs_and_reports(tmp_path: Path) -> None:
+    contract = tmp_path / "contract.txt"
+    contract.write_text("Seller shall deliver the goods.", encoding="utf-8")
+    config = tmp_path / "suite.yaml"
+    config.write_text(_SUITE_YAML, encoding="utf-8")
+
+    with (
+        patch(
+            "symboleo_llm_tool.cli.main.run_suite",
+            return_value=_fake_suite_result(["zero-shot", "cot"]),
+        ) as mock_run,
+        patch(
+            "symboleo_llm_tool.cli.main.write_suite_results",
+            return_value=tmp_path / "output" / "suite_x",
+        ) as mock_write,
+    ):
+        result = runner.invoke(app, ["suite", str(contract), "--config", str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert "zero-shot" in result.output
+    assert "cot" in result.output
+    # The loader bound the CLI contract and handed it to run_suite.
+    suite_arg = mock_run.call_args.args[0]
+    assert suite_arg.contract_text == "Seller shall deliver the goods."
+    mock_write.assert_called_once()
+
+
+def test_suite_command_errors_on_missing_contract(tmp_path: Path) -> None:
+    config = tmp_path / "suite.yaml"
+    config.write_text(_SUITE_YAML, encoding="utf-8")
+
+    result = runner.invoke(app, ["suite", str(tmp_path / "nope.txt"), "--config", str(config)])
+
+    assert result.exit_code == 1
+    assert "not found" in result.output
