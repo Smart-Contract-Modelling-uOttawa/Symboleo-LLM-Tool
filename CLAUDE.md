@@ -233,11 +233,6 @@ This is a gap the JAR refresh left: that change updated the *integration test* t
 ### Frontend suite export (deferred)
 The CLI now consumes suite files (`symboleo-tool suite <contract.txt> --config suite.yaml`; see Experiment Suites), but the suite-config UI cannot yet **export** one. We want the frontend to emit the exact same suite-file format the CLI reads (nested/explicit `SuiteConfig` minus `contract_text`), so a comparison built in the browser can be re-run headlessly from the CLI. The frontend already has the pieces: it holds the per-experiment form values and can resolve `model → provider` from `/api/options` (grouped by provider), and `components/results/download.ts`'s `triggerDownload` is the client-side download primitive. Purely additive — no backend change (it writes the CLI's existing schema).
 
-### Privacy — LangSmith
-LangSmith sends prompt data (including contract text) to LangChain's servers. Currently acceptable because contracts are synthetic/fake for research. **Must be migrated to self-hosted LangFuse before use with real legal contracts.**
-
-LangFuse is the planned replacement: open source, Docker-based, near-identical feature set to LangSmith, and LiteLLM has native integration — the migration is a config change, not a code change.
-
 ### Grammar Context Size
 The full Xtext grammar may push against LLM context window limits or significantly increase token costs across many iterations. Starting point is full grammar injection; selective/relevant excerpt injection is a future optimization.
 
