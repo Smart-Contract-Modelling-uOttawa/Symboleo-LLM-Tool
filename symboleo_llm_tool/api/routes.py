@@ -36,7 +36,7 @@ from symboleo_llm_tool.api.models import (
 )
 from symboleo_llm_tool.config.models import Experiment, PipelineConfig, SuiteConfig
 from symboleo_llm_tool.experiments import run_suite
-from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings
+from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
 from symboleo_llm_tool.prompts.strategies import list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
@@ -141,11 +141,7 @@ async def create_suite(req: SuiteRequest) -> RunCreatedResponse:
         suite_kwargs["max_concurrency"] = req.max_concurrency
     suite_config = SuiteConfig(**suite_kwargs)
 
-    warnings = [
-        f"{experiment.name}: {warning}"
-        for experiment in suite_config.experiments
-        for warning in pipeline_param_warnings(experiment.config)
-    ]
+    warnings = [f"{name}: {warning}" for name, warning in suite_param_warnings(suite_config)]
 
     suite_id = str(uuid.uuid4())
     job = create_suite_job(suite_id)

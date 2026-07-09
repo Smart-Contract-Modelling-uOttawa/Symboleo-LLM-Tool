@@ -50,13 +50,9 @@ def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
     """Persist a suite run: a suite directory holding a suite-level report, a
     reloadable copy of the suite file, a comparison CSV, and one subdirectory per
     experiment (each in the single-run layout).
-
-    The base output directory is taken from the first experiment's config — a suite
-    file has no top-level output section, and in practice every experiment shares
-    one. ``suite.experiments`` is non-empty (enforced by ``SuiteConfig``).
     """
     timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
-    suite_dir = suite.experiments[0].config.output.directory / f"suite_{timestamp}"
+    suite_dir = suite.output_directory / f"suite_{timestamp}"
     suite_dir.mkdir(parents=True, exist_ok=True)
 
     (suite_dir / "suite_report.json").write_text(
@@ -65,15 +61,15 @@ def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
     (suite_dir / "suite.yaml").write_text(_suite_file_yaml(suite), encoding="utf-8")
     (suite_dir / "summary.csv").write_text(_summary_csv(result), encoding="utf-8")
 
-    # Order is preserved end-to-end (run_suite returns experiments in input order),
-    # so index-zipping the results with their source configs is safe; strict=True
-    # turns any drift into an error rather than a silent mismatch.
-    for index, (experiment, spec) in enumerate(
-        zip(result.experiments, suite.experiments, strict=True)
-    ):
+    # Pair each result with its source config by name, not by position — no
+    # dependency on run_suite preserving experiment order. The lookup is total:
+    # run_suite builds every ExperimentResult from these same experiments, so each
+    # result name is present, and names are unique per suite (SuiteConfig validator).
+    specs = {experiment.name: experiment for experiment in suite.experiments}
+    for index, experiment in enumerate(result.experiments):
         exp_dir = suite_dir / f"{index}_{_slug(experiment.name)}"
         exp_dir.mkdir(exist_ok=True)
-        _write_run(experiment.result, spec.config, exp_dir)
+        _write_run(experiment.result, specs[experiment.name].config, exp_dir)
 
     return suite_dir
 

@@ -9,7 +9,7 @@ from rich.table import Table
 
 from symboleo_llm_tool.config.loader import load_config, load_suite_config
 from symboleo_llm_tool.experiments import run_suite
-from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings
+from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
 from symboleo_llm_tool.output.writer import write_results, write_suite_results
 from symboleo_llm_tool.pipeline import run as run_pipeline
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
@@ -28,6 +28,26 @@ console = Console()
 def _fatal(message: str) -> NoReturn:
     console.print(f"[red]Error:[/red] {message}")
     raise typer.Exit(1)
+
+
+def _enable_langsmith(project: str) -> None:
+    """Turn on LangSmith tracing for the process. Fatal if the flag is set but the
+    optional package is absent — a config error, distinct from a runtime flush
+    failure (see ``_flush_langsmith``). Shared by the ``run`` and ``suite`` commands.
+    """
+    if _LangSmithClient is None:
+        _fatal("langsmith is not installed but LangSmith observability is enabled")
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGSMITH_PROJECT"] = project
+
+
+def _flush_langsmith() -> None:
+    """Best-effort flush of buffered traces; a failure here warns but never fails
+    the run (the results are already written)."""
+    try:
+        _LangSmithClient().flush()
+    except Exception as e:
+        console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
 
 
 def _format_progress(
@@ -84,10 +104,7 @@ def run(
         )
 
     if config.observability.langsmith.enabled:
-        if _LangSmithClient is None:
-            _fatal("langsmith is not installed but observability.langsmith.enabled is true")
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGSMITH_PROJECT"] = config.observability.langsmith.project
+        _enable_langsmith(config.observability.langsmith.project)
 
     console.print("[bold green]Running pipeline...[/bold green]")
     try:
@@ -128,10 +145,7 @@ def run(
     console.print(f"\n[dim]Output written to: {run_dir}[/dim]")
 
     if config.observability.langsmith.enabled:
-        try:
-            _LangSmithClient().flush()
-        except Exception as e:
-            console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
+        _flush_langsmith()
 
 
 @app.command()
@@ -155,19 +169,16 @@ def suite(
     except Exception as e:
         _fatal(f"Config error: {e}")
 
-    # Per-experiment param warnings, labelled by name (mirrors the API).
-    for experiment in suite_config.experiments:
-        for warning in pipeline_param_warnings(experiment.config):
-            console.print(f"[yellow]Warning:[/yellow] [{experiment.name}] {warning}")
+    # Per-experiment param warnings, from the same (name, warning) source the API
+    # uses; the CLI just formats the pair with Rich markup.
+    for name, warning in suite_param_warnings(suite_config):
+        console.print(f"[yellow]Warning:[/yellow] [{name}] {warning}")
 
     # Observability is per-experiment; the LangSmith env is process-global, so
     # enable it once if any experiment opts in (project from the first such).
     traced = [e for e in suite_config.experiments if e.config.observability.langsmith.enabled]
     if traced:
-        if _LangSmithClient is None:
-            _fatal("langsmith is not installed but an experiment enables observability.langsmith")
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGSMITH_PROJECT"] = traced[0].config.observability.langsmith.project
+        _enable_langsmith(traced[0].config.observability.langsmith.project)
 
     names = [e.name for e in suite_config.experiments]
 
@@ -218,10 +229,7 @@ def suite(
     console.print(f"\n[dim]Output written to: {suite_dir}[/dim]")
 
     if traced:
-        try:
-            _LangSmithClient().flush()
-        except Exception as e:
-            console.print(f"[yellow]Warning:[/yellow] LangSmith flush failed: {e}")
+        _flush_langsmith()
 
 
 def main() -> None:

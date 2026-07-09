@@ -8,7 +8,7 @@ upgraded.
 
 import litellm
 
-from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig
+from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, SuiteConfig
 
 
 def reasoning_param_warnings(config: LLMConfig) -> list[str]:
@@ -60,4 +60,18 @@ def pipeline_param_warnings(config: PipelineConfig) -> list[str]:
         f"{label}: {warning}"
         for label, stage in stages
         for warning in reasoning_param_warnings(stage.llm)
+    ]
+
+
+def suite_param_warnings(suite: SuiteConfig) -> list[tuple[str, str]]:
+    """``(experiment name, warning)`` pairs across a suite.
+
+    The single source for the per-experiment param warnings both the CLI and the
+    API surface — each formats the pair its own way (Rich markup vs. a plain
+    ``<name>: <warning>`` string), but the pairing lives in one place.
+    """
+    return [
+        (experiment.name, warning)
+        for experiment in suite.experiments
+        for warning in pipeline_param_warnings(experiment.config)
     ]

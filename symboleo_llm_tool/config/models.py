@@ -135,3 +135,12 @@ class SuiteConfig(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("experiment names must be unique within a suite")
         return v
+
+    @property
+    def output_directory(self) -> Path:
+        """Output root for the whole suite — borrowed from the first experiment (a
+        suite file has no output section of its own; experiments share one root in
+        practice). Encapsulated here so the writer is handed a directory rather than
+        reaching through the experiment list to infer one.
+        """
+        return self.experiments[0].config.output.directory
