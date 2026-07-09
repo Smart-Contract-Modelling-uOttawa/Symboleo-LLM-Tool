@@ -221,6 +221,18 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 
 ## Known Issues / Future Flags
 
+### Convergence counts WARNINGs as blocking (regression exposed by the AC JAR refresh)
+`pipeline.py` decides convergence with `converged = not errors`, where `errors = wrapper.validate(code)` returns **every** issue regardless of severity. So convergence requires **zero issues — WARNINGs included**, and the correction loop feeds warnings back to the LLM as if they were errors.
+
+This was harmless until the AC JAR refresh (`lib/symboleo-cli.jar` → the July validator): the new validator emits `W13` unused-declaration **WARNINGs** liberally (unused params/types/declarations), whereas the old jar emitted none for these fixtures. Now any contract that is **ERROR-free but warns** — e.g. the canonical `MeatSale` (0 errors, 4 warnings) — **never converges**: it spins through all `max_iterations` and reports "failed to converge." It affects **single runs and suites** (the whole tool), and depresses the apparent success rate on realistic contracts. The bare `converged` smoke tests that still pass do so only because those minimal contracts happen to have 0 warnings.
+
+This is a gap the JAR refresh left: that change updated the *integration test* to accept warnings (`test_valid_contract_returns_no_errors` asserts **no ERROR-severity** issues), but the **pipeline** never got the same update — the two now disagree.
+
+**Planned fix (deferred; own PR):** gate convergence on ERROR severity — `converged = not any(e.severity == "ERROR" for e in errors)` — and feed only ERROR-severity issues to the correction prompt so the LLM doesn't churn on stylistic warnings. Filter **at the pipeline, not in `wrapper.validate()`**, so `report.json` still records warnings (no research-data loss). One product decision to settle when picking it up: ignore warnings entirely for the loop, vs. still surface them (output/progress) while not blocking — leaning surface-but-don't-block.
+
+### Frontend suite export (deferred)
+The CLI now consumes suite files (`symboleo-tool suite <contract.txt> --config suite.yaml`; see Experiment Suites), but the suite-config UI cannot yet **export** one. We want the frontend to emit the exact same suite-file format the CLI reads (nested/explicit `SuiteConfig` minus `contract_text`), so a comparison built in the browser can be re-run headlessly from the CLI. The frontend already has the pieces: it holds the per-experiment form values and can resolve `model → provider` from `/api/options` (grouped by provider), and `components/results/download.ts`'s `triggerDownload` is the client-side download primitive. Purely additive — no backend change (it writes the CLI's existing schema).
+
 ### Privacy — LangSmith
 LangSmith sends prompt data (including contract text) to LangChain's servers. Currently acceptable because contracts are synthetic/fake for research. **Must be migrated to self-hosted LangFuse before use with real legal contracts.**
 
