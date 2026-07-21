@@ -96,6 +96,13 @@ def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None
     assert "3" in prompt
 
 
+def test_unknown_strategy_param_rejected(any_strategy: PromptStrategy) -> None:
+    # strategy_params is a free-form dict, so the config models' extra="forbid"
+    # cannot reach into it -- the strategy is the only place a typo can surface.
+    with pytest.raises(ValueError, match="exmaple_files"):
+        type(any_strategy)({"exmaple_files": ["x"]})
+
+
 # --- Few-shot specific ---
 
 
