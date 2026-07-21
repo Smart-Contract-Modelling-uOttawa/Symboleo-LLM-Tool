@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from symboleo_llm_tool.config.loader import dump_suite_file
 from symboleo_llm_tool.config.models import PipelineConfig, SuiteConfig
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
 
@@ -56,7 +57,9 @@ def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
     suite_dir.mkdir(parents=True, exist_ok=True)
 
     (suite_dir / "suite_report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
-    (suite_dir / "suite.yaml").write_text(_suite_file_yaml(suite), encoding="utf-8")
+    # Not `minimal`: this is the record of a run, so it keeps values that merely
+    # happen to equal a current default (see dump_suite_file).
+    (suite_dir / "suite.yaml").write_text(dump_suite_file(suite), encoding="utf-8")
     (suite_dir / "summary.csv").write_text(_summary_csv(result), encoding="utf-8")
 
     # Pair each result with its source config by name, not by position — no
@@ -70,16 +73,6 @@ def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
         _write_run(experiment.result, specs[experiment.name].config, exp_dir)
 
     return suite_dir
-
-
-def _suite_file_yaml(suite: SuiteConfig) -> str:
-    """Dump the suite as the reloadable input-file schema — everything except the
-    contract, which is supplied as a CLI argument (and rejected in the file).
-    """
-    data = suite.model_dump(mode="json")
-    data.pop("contract_text", None)
-    suite_yaml: str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    return suite_yaml
 
 
 def _summary_csv(result: SuiteResult) -> str:

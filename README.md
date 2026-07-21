@@ -145,6 +145,7 @@ The FastAPI server exposes these endpoints:
 - `GET /api/runs/{run_id}/stream` — SSE stream of progress and final result
 - `POST /api/suites` — submit one contract and multiple named configs (an experiment suite), returns a `run_id`
 - `GET /api/suites/{run_id}/stream` — multiplexed SSE stream of progress and the final comparison
+- `POST /api/suites/export` — render the current experiments as a `suite.yaml` the CLI can run
 - `GET /api/options` — available models, strategies, and parameter constraints
 
 ### Running the API
@@ -188,7 +189,9 @@ docker compose up symboleo-api
 
 ### Experiment Suites
 
-The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence, iterations-to-convergence, and token/cost totals per experiment, plus a suite-wide total — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. To build a comparison quickly, the **Generate variants** control expands one axis (strategy or model) into auto-named experiment cards, holding everything else constant. It maps to `POST /api/suites`; experiments run sequentially and stream progress over a single multiplexed SSE connection.
+The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence, iterations-to-convergence, and token/cost totals per experiment, plus a suite-wide total — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. To build a comparison quickly, the **Generate variants** control expands one axis (strategy or model) into auto-named experiment cards, holding everything else constant. It maps to `POST /api/suites`, streaming progress over a single multiplexed SSE connection; the **Concurrency** control caps how many experiments and candidates run at once.
+
+**Download suite config** saves the experiments you have configured as a `suite.yaml` — the same format `symboleo-tool suite` reads — so a comparison assembled in the browser can be re-run headlessly, checked into version control, or edited by hand. It needs no contract, since the contract is a CLI argument.
 
 ## Development
 

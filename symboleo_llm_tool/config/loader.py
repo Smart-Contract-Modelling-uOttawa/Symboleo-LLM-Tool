@@ -29,3 +29,25 @@ def load_suite_config(path: Path, contract_text: str) -> SuiteConfig:
             "as a CLI argument."
         )
     return SuiteConfig(contract_text=contract_text, **data)
+
+
+def dump_suite_file(suite: SuiteConfig, *, minimal: bool = False) -> str:
+    """Serialize a suite to the input-file schema ``load_suite_config`` accepts.
+
+    Lives beside its inverse so "which keys the file carries" is stated once: the
+    contract is dropped here because the loader above rejects it.
+
+    ``minimal`` selects the policy, which differs by purpose and must not be
+    unified:
+
+    - ``False`` (default) for a **record of a run** — every value the run used,
+      including ones equal to today's defaults. Omitting them would make the
+      artifact replay a *different* run if a default later changes.
+    - ``True`` for an **export the user will edit** — only what was configured,
+      which also drops this machine's ``jar_path``/``output.directory`` and makes
+      the file portable.
+    """
+    data = suite.model_dump(mode="json", exclude_defaults=minimal)
+    data.pop("contract_text", None)
+    dumped: str = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    return dumped

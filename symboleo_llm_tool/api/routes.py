@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from symboleo_llm_tool import pipeline
 from symboleo_llm_tool.api.config_builder import (
     build_pipeline_config,
+    build_suite_config,
     get_parameter_defaults,
 )
 from symboleo_llm_tool.api.jobs import (
@@ -31,9 +32,12 @@ from symboleo_llm_tool.api.models import (
     ProgressEvent,
     RunCreatedResponse,
     SuiteCompleteEvent,
+    SuiteFileResponse,
     SuiteRequest,
+    SuiteSettings,
 )
-from symboleo_llm_tool.config.models import Experiment, PipelineConfig, SuiteConfig
+from symboleo_llm_tool.config.loader import dump_suite_file
+from symboleo_llm_tool.config.models import PipelineConfig, SuiteConfig
 from symboleo_llm_tool.experiments import run_suite
 from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
@@ -45,6 +49,10 @@ router = APIRouter()
 
 _ui_config: dict[str, Any] = {}
 _model_to_provider: dict[str, str] = {}
+
+# SuiteConfig requires a contract; an export has none and dump_suite_file drops
+# the key, so this value is never serialized.
+_EXPORT_CONTRACT_PLACEHOLDER = "placeholder"
 
 
 def init_router(ui_config: dict[str, Any]) -> None:
@@ -126,20 +134,9 @@ async def _run_pipeline(
 @router.post("/suites", response_model=RunCreatedResponse)
 async def create_suite(req: SuiteRequest) -> RunCreatedResponse:
     try:
-        experiments = [
-            Experiment(name=exp.name, config=build_pipeline_config(exp, _model_to_provider))
-            for exp in req.experiments
-        ]
+        suite_config = build_suite_config(req, _model_to_provider, req.contract_text)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    suite_kwargs: dict[str, Any] = {
-        "contract_text": req.contract_text,
-        "experiments": experiments,
-    }
-    if req.max_concurrency is not None:
-        suite_kwargs["max_concurrency"] = req.max_concurrency
-    suite_config = SuiteConfig(**suite_kwargs)
 
     warnings = [f"{name}: {warning}" for name, warning in suite_param_warnings(suite_config)]
 
@@ -183,6 +180,37 @@ async def _run_suite(
         job.error = str(exc)
         job.completed_at = datetime.now()
         await job.queue.put(ErrorEvent(message=str(exc)))
+
+
+# ---------------------------------------------------------------------------
+# POST /suites/export — the CLI's suite-file schema, built in the browser
+# ---------------------------------------------------------------------------
+
+
+@router.post("/suites/export", response_model=SuiteFileResponse)
+async def export_suite(req: SuiteSettings) -> SuiteFileResponse:
+    """Emit a suite file `symboleo-tool suite` can run, for a comparison built here.
+
+    Built through the same ``build_suite_config`` a run uses, so an export cannot
+    emit a config this server would itself reject — an invalid strategy or param
+    fails here as a 422 rather than later, against a file that looks
+    authoritative. It is not a guarantee for *every* machine: `few_shot` example
+    names resolve against this server's corpus, so a CLI host without those
+    examples still rejects the file.
+
+    Returns the same reasoning-model warnings as ``POST /suites``, since the
+    emitted file can carry a temperature the model will not accept.
+    """
+    try:
+        suite_config = build_suite_config(req, _model_to_provider, _EXPORT_CONTRACT_PLACEHOLDER)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return SuiteFileResponse(
+        filename="suite.yaml",
+        content=dump_suite_file(suite_config, minimal=True),
+        warnings=[f"{name}: {warning}" for name, warning in suite_param_warnings(suite_config)],
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -8,11 +8,14 @@ import { TEST_RUN_ID } from '@/test/handlers'
 import ExperimentsPage from './ExperimentsPage'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
+const mockTriggerDownload = vi.hoisted(() => vi.fn())
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useNavigate: () => mockNavigate }
 })
+
+vi.mock('@/components/results/download', () => ({ triggerDownload: mockTriggerDownload }))
 
 function renderExperimentsPage() {
   return render(
@@ -32,7 +35,10 @@ async function uploadContract(container: HTMLElement, content = 'Contract text')
 }
 
 describe('ExperimentsPage', () => {
-  beforeEach(() => mockNavigate.mockReset())
+  beforeEach(() => {
+    mockNavigate.mockReset()
+    mockTriggerDownload.mockReset()
+  })
 
   it('renders one experiment by default after options load', async () => {
     renderExperimentsPage()
@@ -152,6 +158,93 @@ describe('ExperimentsPage', () => {
       expect(body.contract_text).toBe('My legal contract')
       expect(body.experiments).toHaveLength(2)
     })
+  })
+
+  it('downloads the suite config the server builds', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/api/suites/export', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ filename: 'suite.yaml', content: 'experiments:\n  - name: x\n' })
+      })
+    )
+    const user = userEvent.setup()
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+    await user.click(screen.getByRole('button', { name: /Add experiment/ }))
+
+    await user.click(screen.getByRole('button', { name: /Download suite config/ }))
+
+    await waitFor(() =>
+      expect(mockTriggerDownload).toHaveBeenCalledWith(
+        'experiments:\n  - name: x\n',
+        'suite.yaml',
+        'application/yaml',
+      )
+    )
+    // One entry per card, and no contract: the file is a config, and the loader
+    // rejects a contract_text key outright.
+    const body = capturedBody as { experiments: unknown[]; contract_text?: string }
+    expect(body.experiments).toHaveLength(2)
+    expect(body.contract_text).toBeUndefined()
+    // A type="submit" button here would run the suite instead of exporting it.
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('allows downloading the config before a contract is chosen', async () => {
+    // The contract is a CLI argument, not part of the file, so export must not
+    // inherit the Run button's disabled-until-uploaded rule.
+    server.use(
+      http.post('/api/suites/export', () =>
+        HttpResponse.json({ filename: 'suite.yaml', content: 'experiments: []\n' })
+      )
+    )
+    const user = userEvent.setup()
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    expect(screen.getByRole('button', { name: /Run 1 experiment/ })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /Download suite config/ }))
+
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalled())
+  })
+
+  it('surfaces export warnings without blocking the download', async () => {
+    server.use(
+      http.post('/api/suites/export', () =>
+        HttpResponse.json({
+          filename: 'suite.yaml',
+          content: 'experiments: []\n',
+          warnings: ['haiku: temperature=0.7 is set, but it is a reasoning model'],
+        })
+      )
+    )
+    const user = userEvent.setup()
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    await user.click(screen.getByRole('button', { name: /Download suite config/ }))
+
+    // The file is valid — the warning is about a param the model rejects at run
+    // time, so it must not suppress the download.
+    await screen.findByText(/temperature=0.7 is set/)
+    expect(mockTriggerDownload).toHaveBeenCalled()
+  })
+
+  it('shows an error alert when the export fails', async () => {
+    server.use(
+      http.post('/api/suites/export', () =>
+        HttpResponse.json({ detail: 'Unknown model: gpt-9-ultra' }, { status: 422 })
+      )
+    )
+    const user = userEvent.setup()
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    await user.click(screen.getByRole('button', { name: /Download suite config/ }))
+
+    await screen.findByText('Unknown model: gpt-9-ultra')
+    expect(mockTriggerDownload).not.toHaveBeenCalled()
   })
 
   it('defaults the concurrency control and includes the edited value in the payload', async () => {

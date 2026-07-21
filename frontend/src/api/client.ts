@@ -1,5 +1,12 @@
 import type { components } from './schema'
-import type { GenerateRequest, RunCreatedResponse, OptionsResponse, SuiteRequest } from './types'
+import type {
+  GenerateRequest,
+  RunCreatedResponse,
+  OptionsResponse,
+  SuiteRequest,
+  SuiteSettings,
+  SuiteFileResponse,
+} from './types'
 
 type ErrorBody = components['schemas']['HTTPValidationError'] | { detail?: string }
 
@@ -32,6 +39,17 @@ export function generate(request: GenerateRequest): Promise<RunCreatedResponse> 
 
 export function createSuite(request: SuiteRequest): Promise<RunCreatedResponse> {
   return apiFetch<RunCreatedResponse>('/api/suites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+}
+
+// The suite file is built server-side rather than here: the CLI's own loader
+// re-parses it, so producer and parser share one definition instead of the
+// shape being mirrored in a second language.
+export function exportSuite(request: SuiteSettings): Promise<SuiteFileResponse> {
+  return apiFetch<SuiteFileResponse>('/api/suites/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),

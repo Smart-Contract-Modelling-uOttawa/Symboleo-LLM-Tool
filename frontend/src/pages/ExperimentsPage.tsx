@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Copy, Trash2 } from 'lucide-react'
+import { Plus, Copy, Trash2, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,8 +22,9 @@ import {
 import { AxisExpander } from '@/components/config/AxisExpander'
 import { expandAxis, type AxisDef } from '@/components/config/axisExpand'
 import { useOptions } from '@/hooks/useOptions'
-import { createSuite } from '@/api/client'
-import type { OptionsResponse, SuiteRequest } from '@/api/types'
+import { createSuite, exportSuite } from '@/api/client'
+import { triggerDownload } from '@/components/results/download'
+import type { OptionsResponse, SuiteRequest, SuiteSettings } from '@/api/types'
 
 // Stable ids for React keys + add/remove, without depending on crypto in tests.
 let _expCounter = 0
@@ -47,8 +48,10 @@ export default function ExperimentsPage() {
   const [fileName, setFileName] = useState('')
   const [experiments, setExperiments] = useState<ExperimentFormValues[] | null>(null)
   const [maxConcurrency, setMaxConcurrency] = useState('')
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [exportWarnings, setExportWarnings] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (options && !experiments) {
@@ -103,30 +106,58 @@ export default function ExperimentsPage() {
     )
   }
 
+  // Shared by run and export so the exported file describes the same suite the
+  // Run button would submit — the contract is the only difference.
+  function buildSuiteFields(cards: ExperimentFormValues[]): SuiteSettings {
+    const parsedConcurrency = parseInt(maxConcurrency, 10)
+    return {
+      experiments: cards.map(exp => ({
+        name: exp.name,
+        generation: buildStageRequest(exp.generation),
+        correction: buildStageRequest(exp.correction),
+        ...buildAdvancedFields(exp.advanced),
+      })),
+      // Omit when blank → backend applies the SuiteConfig default.
+      ...(Number.isNaN(parsedConcurrency) ? {} : { max_concurrency: parsedConcurrency }),
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!contractText || !experiments) return
-    setSubmitError(null)
+    setFormError(null)
     setSubmitting(true)
     try {
-      const parsedConcurrency = parseInt(maxConcurrency, 10)
       const request: SuiteRequest = {
         contract_text: contractText,
-        experiments: experiments.map(exp => ({
-          name: exp.name,
-          generation: buildStageRequest(exp.generation),
-          correction: buildStageRequest(exp.correction),
-          ...buildAdvancedFields(exp.advanced),
-        })),
-        // Omit when blank → backend applies the SuiteConfig default.
-        ...(Number.isNaN(parsedConcurrency) ? {} : { max_concurrency: parsedConcurrency }),
+        ...buildSuiteFields(experiments),
       }
       const { run_id, warnings } = await createSuite(request)
       navigate(`/suites/${run_id}`, { state: { warnings: warnings ?? [] } })
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Submission failed')
+      setFormError(err instanceof Error ? err.message : 'Submission failed')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // No contract required: it is a CLI argument, and the loader rejects a
+  // contract_text key inside the file.
+  async function handleExport() {
+    if (!experiments) return
+    setFormError(null)
+    setExportWarnings([])
+    setExporting(true)
+    try {
+      const { filename, content, warnings } = await exportSuite(buildSuiteFields(experiments))
+      triggerDownload(content, filename, 'application/yaml')
+      // Shown after the download rather than blocking it: the file is valid, but
+      // a param in it may be one the model rejects at run time.
+      setExportWarnings(warnings ?? [])
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -218,15 +249,41 @@ export default function ExperimentsPage() {
           <AxisExpander options={options} onGenerate={expandByAxis} />
         </div>
 
-        {submitError && (
+        {formError && (
           <Alert variant="destructive">
-            <AlertDescription>{submitError}</AlertDescription>
+            <AlertDescription>{formError}</AlertDescription>
           </Alert>
         )}
 
-        <Button type="submit" className="w-full" disabled={!contractText || submitting}>
-          {submitting ? 'Submitting...' : `Run ${experiments.length} experiment${experiments.length !== 1 ? 's' : ''}`}
-        </Button>
+        {exportWarnings.length > 0 && (
+          <Alert>
+            <AlertDescription>
+              <p className="font-medium">Downloaded, with warnings:</p>
+              <ul className="list-disc pl-4 mt-1">
+                {exportWarnings.map(w => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-2">
+          <Button type="submit" className="w-full" disabled={!contractText || submitting}>
+            {submitting ? 'Submitting...' : `Run ${experiments.length} experiment${experiments.length !== 1 ? 's' : ''}`}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleExport}
+            disabled={exporting}
+            title="Save this suite as a YAML file you can re-run with the CLI"
+          >
+            <Download size={16} />
+            {exporting ? 'Preparing...' : 'Download suite config'}
+          </Button>
+        </div>
       </form>
     </div>
   )

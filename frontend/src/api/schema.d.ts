@@ -38,6 +38,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/suites/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Suite
+         * @description Emit a suite file `symboleo-tool suite` can run, for a comparison built here.
+         *
+         *     Built through the same ``build_suite_config`` a run uses, so an export cannot
+         *     emit a config this server would itself reject — an invalid strategy or param
+         *     fails here as a 422 rather than later, against a file that looks
+         *     authoritative. It is not a guarantee for *every* machine: `few_shot` example
+         *     names resolve against this server's corpus, so a CLI host without those
+         *     examples still rejects the file.
+         *
+         *     Returns the same reasoning-model warnings as ``POST /suites``, since the
+         *     emitted file can carry a temperature the model will not accept.
+         */
+        post: operations["export_suite_api_suites_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -288,14 +318,23 @@ export interface components {
             type: components["schemas"]["EventType"];
             result: components["schemas"]["SuiteResult"];
         };
+        /** SuiteFileResponse */
+        SuiteFileResponse: {
+            /** Filename */
+            filename: string;
+            /** Content */
+            content: string;
+            /** Warnings */
+            warnings?: string[];
+        };
         /** SuiteRequest */
         SuiteRequest: {
-            /** Contract Text */
-            contract_text: string;
             /** Experiments */
             experiments: components["schemas"]["ExperimentRequest"][];
             /** Max Concurrency */
             max_concurrency?: number | null;
+            /** Contract Text */
+            contract_text: string;
         };
         /** SuiteResult */
         SuiteResult: {
@@ -312,6 +351,20 @@ export interface components {
             readonly total_tokens: number;
             /** Total Cost Usd */
             readonly total_cost_usd: number | null;
+        };
+        /**
+         * SuiteSettings
+         * @description The suite-level configuration shared by running a suite and exporting one.
+         *
+         *     Named for what it is, like ``RunSettings`` above: ``SuiteRequest`` adds only
+         *     the contract, which an export has no use for (the exported file never carries
+         *     one — see ``config/loader.py``).
+         */
+        SuiteSettings: {
+            /** Experiments */
+            experiments: components["schemas"]["ExperimentRequest"][];
+            /** Max Concurrency */
+            max_concurrency?: number | null;
         };
         /** SymboleoIssue */
         SymboleoIssue: {
@@ -425,6 +478,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_suite_api_suites_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuiteSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteFileResponse"];
                 };
             };
             /** @description Validation Error */
