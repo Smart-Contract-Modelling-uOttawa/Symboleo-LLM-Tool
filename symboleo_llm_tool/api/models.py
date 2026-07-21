@@ -59,8 +59,14 @@ class ExperimentRequest(RunSettings):
     name: str
 
 
-class SuiteRequest(BaseModel):
-    contract_text: ContractText
+class SuiteSettings(BaseModel):
+    """The suite-level configuration shared by running a suite and exporting one.
+
+    Named for what it is, like ``RunSettings`` above: ``SuiteRequest`` adds only
+    the contract, which an export has no use for (the exported file never carries
+    one — see ``config/loader.py``).
+    """
+
     experiments: list[ExperimentRequest]
     # Suite-wide concurrency cap; None → the SuiteConfig default. Bounds are
     # enforced by SuiteConfig (clamped to [1, 8]).
@@ -75,6 +81,10 @@ class SuiteRequest(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("experiment names must be unique within a suite")
         return v
+
+
+class SuiteRequest(SuiteSettings):
+    contract_text: ContractText
 
 
 class ProgressEvent(BaseModel):
@@ -104,6 +114,15 @@ class ErrorEvent(BaseModel):
 
 class RunCreatedResponse(BaseModel):
     run_id: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SuiteFileResponse(BaseModel):
+    filename: str
+    content: str
+    # Same reasoning-model advisories POST /suites returns. The exported file can
+    # legitimately carry a temperature the model will reject, and the user is
+    # standing right here — deferring the notice to CLI run time hides it.
     warnings: list[str] = Field(default_factory=list)
 
 

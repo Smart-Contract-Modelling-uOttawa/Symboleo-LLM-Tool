@@ -6,6 +6,8 @@ export type RunCreatedResponse = components['schemas']['RunCreatedResponse']
 export type OptionsResponse = components['schemas']['OptionsResponse']
 
 export type SuiteRequest = components['schemas']['SuiteRequest']
+export type SuiteSettings = components['schemas']['SuiteSettings']
+export type SuiteFileResponse = components['schemas']['SuiteFileResponse']
 export type ExperimentRequest = components['schemas']['ExperimentRequest']
 export type SuiteResult = components['schemas']['SuiteResult']
 export type ExperimentResult = components['schemas']['ExperimentResult']

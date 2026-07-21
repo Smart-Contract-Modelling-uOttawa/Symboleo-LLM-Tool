@@ -2,8 +2,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from symboleo_llm_tool.api.models import RunSettings, StageRequest
+from symboleo_llm_tool.api.models import RunSettings, StageRequest, SuiteSettings
 from symboleo_llm_tool.config.models import (
+    Experiment,
     LLMConfig,
     OutputConfig,
     PipelineConfig,
@@ -69,6 +70,26 @@ def build_pipeline_config(
         pipeline=RunConfig(**run_kwargs),
         output=OutputConfig(**output_kwargs),
     )
+
+
+def build_suite_config(
+    settings: SuiteSettings, model_to_provider: dict[str, str], contract_text: str
+) -> SuiteConfig:
+    """Assemble a ``SuiteConfig`` from request-layer settings.
+
+    Shared by the suite-run and suite-export endpoints. Export has no contract of
+    its own and passes a placeholder, because ``SuiteConfig`` requires one and the
+    exported file must not carry it (``load_suite_config`` rejects the key).
+    Raises ``ValueError`` so the route can convert it to a 422.
+    """
+    experiments = [
+        Experiment(name=exp.name, config=build_pipeline_config(exp, model_to_provider))
+        for exp in settings.experiments
+    ]
+    kwargs: dict[str, Any] = {"contract_text": contract_text, "experiments": experiments}
+    if settings.max_concurrency is not None:
+        kwargs["max_concurrency"] = settings.max_concurrency
+    return SuiteConfig(**kwargs)
 
 
 def build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:
