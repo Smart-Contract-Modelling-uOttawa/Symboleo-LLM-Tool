@@ -149,7 +149,7 @@ def test_max_concurrency_is_clamped() -> None:
 
 def test_sequential_suite_forwards_cancel_to_pipeline() -> None:
     # The K=1 path must thread the request-scoped token through to pipeline.run so
-    # a disconnect can abort it (phase 2).
+    # a disconnect or explicit cancel can abort it.
     token = CancellationToken()
     captured: dict[str, object] = {}
 

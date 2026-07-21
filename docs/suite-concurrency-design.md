@@ -1,6 +1,7 @@
 # Suite Concurrency & Cancellation — Design Sketch
 
-> Status: **design only**, not implemented. Drafted for review.
+> Status: **implemented** — phases 1 & 2 shipped. Retained for the design
+> rationale.
 
 ## 1. Goal & scope
 
@@ -24,7 +25,7 @@ Hard requirements:
 - **Opt-in**: default behavior stays exactly sequential (back-compat for the CLI
   and existing tests).
 
-## 2. What we have today
+## 2. Starting point (pre-implementation)
 
 - `pipeline.run` runs candidates sequentially; `run_suite` runs experiments
   sequentially (`experiments/runner.py`).
@@ -119,7 +120,8 @@ For an average dev machine (~8–16 GB RAM, 4–8 logical cores):
 **On `K = 1` (the sequential floor).** `K = 1` is *exactly* the current
 implementation, by design — not a degenerate "pool of size 1". `run_suite`
 detects it and takes the literal sequential path with **no executor, no
-coordinator, no cancellation machinery** spun up. It's a valid value so a user can
+coordinator** spun up (the request-scoped cancel token still flows through, so
+Stop/disconnect cancellation works sequentially too). It's a valid value so a user can
 force deterministic, one-at-a-time execution (debugging, or a rate-limited API
 key) — the explicit opt-out from concurrency.
 
@@ -139,10 +141,11 @@ class RunCoordinator:
 `pipeline.run` stays config-agnostic about concurrency — it's driven *only* by
 whether a coordinator is passed:
 
-- `pipeline.run(contract, config, *, on_progress=None, coordinator=None)`:
-  - `coordinator is None` → the **existing sequential loop**, unchanged. This is
-    the path for **single runs** (CLI, `POST /generate`) and for a `K = 1` suite,
-    so those are byte-for-byte untouched.
+- `pipeline.run(contract, config, on_progress=None, coordinator=None, cancel=None)`:
+  - `coordinator is None` → the **existing sequential loop**. This is the path
+    for **single runs** (CLI, `POST /generate`) and for a `K = 1` suite; it is
+    behaviorally unchanged unless a `cancel` token is tripped (the loop only
+    gains cooperative checkpoints).
   - `coordinator` given → submit candidates to `coordinator.candidate_pool`.
 - `run_suite` reads `suite.max_concurrency`: `K == 1` → call `pipeline.run` with no
   coordinator (today's sequential suite); `K > 1` → build the shared
@@ -220,8 +223,7 @@ high-value, low-risk half** and should ship first.
 
 ### 5.4 Trigger 2 — client disconnect (the subtle one)
 
-Today `_stream_job` breaks on `request.is_disconnected()` but **does not cancel
-the task**. Naively wiring "disconnect → `request_token.cancel()`" collides with
+Naively wiring "disconnect → `request_token.cancel()`" collides with
 **EventSource auto-reconnect**: a transient network blip drops the connection, the
 browser immediately reconnects with a *new* request, but we'd have already
 cancelled the run. We'd kill runs on every hiccup.
@@ -249,8 +251,8 @@ call can't be interrupted without abandoning the thread model.
 
 ### 5.5 Exceptions
 
-A candidate that raises is captured in its `Future`; `pipeline.run` collects
-per-candidate outcomes rather than letting one failure abort the gather. Suite
+A raising candidate propagates out of `pipeline.run` (`future.result()`
+re-raises; the gather aborts). Suite
 level keeps today's semantics (a hard failure surfaces as an `ErrorEvent`).
 **Decided: fail-fast** on an unexpected exception — `request_token.cancel()` to
 stop siblings and surface the error — while **continuing** on ordinary
@@ -264,20 +266,21 @@ so threads are always reclaimed:
 
 ```python
 with ThreadPoolExecutor(max_workers=K) as candidate_pool, \
-     ThreadPoolExecutor(max_workers=min(E, 32)) as experiment_pool:
+     ThreadPoolExecutor(max_workers=min(E, K)) as experiment_pool:
     ...
 # __exit__ → shutdown(wait=True): in-flight candidates drain (cooperative cancel
 # has already short-circuited the rest), then threads are freed.
 ```
 
-Not-yet-started futures are cancelled via `future.cancel()`; started ones rely on
-the cooperative checkpoint to exit promptly.
+Not-yet-started candidates short-circuit at the token's entry checkpoint
+(returning `None`); started ones rely on the cooperative checkpoint to exit
+promptly.
 
 ## 6. Code-quality mapping
 
 - **SoC.** `pipeline.run` owns candidate orchestration; `run_suite` owns
   experiment orchestration; a new `concurrency.py` owns the reusable primitives
-  (`CancellationToken`, `RunCoordinator`, pool construction); the API owns only
+  (`CancellationToken`, `RunCoordinator`); the API owns only
   disconnect→cancel wiring. Each concern stays in one place.
 - **DRY.** One `CancellationToken` for both triggers (linked children); one shared
   `candidate_pool`; the sequential and concurrent paths share the *same*
@@ -286,21 +289,22 @@ the cooperative checkpoint to exit promptly.
   `coordinator.cancel.cancelled` / submit to `coordinator.candidate_pool` — no
   reaching through nested config. Mirrors the existing flat `_RunContext`.
 - **Open/Closed / compose-don't-modify.** Concurrency is an additive, optional
-  branch. `coordinator=None` + `max_concurrency=1` ⇒ byte-for-byte the current
-  sequential behavior. `run_suite` composes `pipeline.run` as before.
+  branch. `coordinator=None` + `max_concurrency=1` ⇒ the sequential behavior,
+  unchanged unless a cancel token is tripped. `run_suite` composes
+  `pipeline.run` as before.
 - **Naming.** `RunCoordinator`, `CancellationToken.child()/cancelled/cancel()`,
   `candidate_pool` / `experiment_pool`, `max_concurrency` — say what they are.
 
-## 7. What changes, file by file
+## 7. What changed, file by file
 
 | File | Change |
 |---|---|
-| `concurrency.py` (new) | `CancellationToken`, `RunCoordinator`, a small `bounded_pool()` helper. No domain knowledge — pure primitives. |
+| `concurrency.py` (new) | `CancellationToken`, `RunCoordinator`. No domain knowledge — pure primitives (pools are plain `ThreadPoolExecutor` context managers in `runner.py`). |
 | `config/models.py` | `SuiteConfig.max_concurrency: int = 2`, clamped `[1, 8]` by a validator. Suite-level (decision #2) — `RunConfig`/`pipeline.run` stay concurrency-agnostic. |
 | `pipeline/pipeline.py` | optional `coordinator` param; a concurrent candidate branch alongside the existing sequential one; cooperative checkpoints in the correction loop. `_run_candidate` body unchanged. |
 | `experiments/runner.py` | read `max_concurrency`; `K==1` → today's sequential path; `K>1` → build the two pools + request token, per-experiment child tokens, submit experiments to `experiment_pool`, gather + regroup, fail-fast on exceptions. Still composes `pipeline.run`. |
-| `api/routes.py` + `api/jobs.py` + `api/app.py` | (phase 2) `Job` holds a request-scoped `cancel` token + `detached_at`; `_stream_job` marks attached/detached; `POST /runs/{id}/cancel` trips the token (Stop button + `pagehide` beacon); the cleanup loop (5 s) cancels jobs detached past the 10 s grace. `pipeline.run` gains a `cancel` param so single runs honor it too. |
-| tests | New: `CancellationToken` (linked semantics), bounded-pool throttle, candidate/experiment concurrency vs. a fake pipeline, `stop_on_first_convergence` cancellation, ordering, fail-fast. Existing `test_suite_runner.py` order/call-sequence assertions pin `max_concurrency=1` (the default is now concurrent). No live LLM needed. |
+| `api/routes.py` + `api/jobs.py` + `api/app.py` | `Job` holds a request-scoped `cancel` token + `detached_at`; `_stream_job` marks attached/detached; `POST /runs/{id}/cancel` trips the token (Stop button + `pagehide` beacon); the cleanup loop (5 s) cancels jobs detached past the 10 s grace. `pipeline.run` gains a `cancel` param so single runs honor it too. |
+| tests | `CancellationToken` (linked semantics), bounded-pool throttle, candidate/experiment concurrency vs. a fake pipeline, `stop_on_first_convergence` cancellation, ordering, fail-fast. Existing `test_suite_runner.py` order/call-sequence assertions pin `max_concurrency=1` (the default is concurrent). No live LLM needed. |
 
 ## 8. Limiting factors → handling
 
@@ -308,7 +312,7 @@ the cooperative checkpoint to exit promptly.
 |---|---|
 | Threads can't be force-killed | Cooperative checkpoints; in-flight call finishes then discarded (≤ `K` wasted iterations). |
 | Nested submission deadlock | Two pools with distinct roles (§4.2). |
-| JVM memory / rate limits | Single global `K` (default 4, clamped `[1,8]`); `K` bounds concurrent JVMs and request streams. |
+| JVM memory / rate limits | Single global `K` (default 2, clamped `[1,8]`); `K` bounds concurrent JVMs and request streams. |
 | Amdahl (sequential correction loop) | Accepted; concurrency helps across *many similar-cost* units, not one dominant chain. |
 | Dropped SSE + auto-reconnect | Explicit cancel (Stop / beacon) is immediate; detached-with-grace (10 s, 5 s sweep) is the fallback so a blip doesn't kill a run (§5.4). |
 | No cost reduction | Documented; concurrency cuts wall-clock only, not tokens/cost. |
@@ -316,14 +320,14 @@ the cooperative checkpoint to exit promptly.
 | `stop_on_first_convergence` saves less under concurrency | Up to `K` candidates may already be in flight when one converges; they run to their next checkpoint before the cancel lands, so >1 may converge. Harmless (`success = any converged`), but the token-cancel saving is partial, not the clean sequential `break`. |
 | Frontend live counter assumes one active unit | The single "Experiment N — Candidate M — Iteration I" label (`lib/progress.ts`) flickers between concurrently-running experiments. Cosmetic only; follow-up = a per-experiment progress list or an "N running" summary. Not a blocker (progress events already carry `experiment_index`). |
 
-## 9. Recommended phasing
+## 9. Phasing (both shipped)
 
-- **Phase 1 (high value, low risk):** candidate + experiment concurrency via the
+- **Phase 1:** candidate + experiment concurrency via the
   suite-level `max_concurrency` (default 2), with `stop_on_first_convergence`
   cooperative cancellation (§5.3) and fail-fast on errors (§5.5). Disconnect stays
   fire-and-forget. No API change. Single runs are untouched (concurrency is
   suite-only).
-- **Phase 2 (committed):** explicit cancellation — a Stop button + `pagehide`
+- **Phase 2:** explicit cancellation — a Stop button + `pagehide`
   beacon → `POST /runs/{id}/cancel` (primary, immediate) — with
   detached-with-grace (10 s grace, 5 s sweep) as the fallback for involuntary
   drops (§5.4). Touches `routes.py`/`jobs.py`/`app.py`, adds a `cancel` param to

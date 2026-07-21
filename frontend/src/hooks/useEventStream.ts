@@ -16,8 +16,9 @@ interface UseEventStreamResult<TResult> {
   errorMessage: string | null
 }
 
-// Literal-typed wire shape so `data.type === '...'` narrows correctly (the same
-// reason api/types defines WithLiteralType). result is generic per stream.
+// Literal-typed wire shape so `data.type === '...'` narrows correctly (the
+// generated schema shares one EventType enum across the event variants, which
+// blocks discriminated-union narrowing). result is generic per stream.
 type StreamEvent<TResult> =
   | { type: 'progress'; experiment_index?: number | null; candidate_id: number; iteration: number }
   | { type: 'complete'; result: TResult }

@@ -40,9 +40,9 @@ def run_suite(
 
     ``suite.max_concurrency == 1`` is the unchanged sequential path. Higher values
     run candidates across all experiments on one bounded pool. ``cancel`` is an
-    optional request-scoped token the caller may trip externally (phase 2: a
-    dropped connection) — it is the parent of each experiment's own token, so
-    cancelling it short-circuits the whole suite.
+    optional request-scoped token the caller may trip externally (a dropped
+    connection or an explicit cancel) — it is the parent of each experiment's own
+    token, so cancelling it short-circuits the whole suite.
     """
     if suite.max_concurrency == 1:
         experiments = _run_sequential(suite, input_file, on_progress, cancel)
