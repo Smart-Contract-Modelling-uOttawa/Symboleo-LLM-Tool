@@ -44,7 +44,7 @@ symboleo_llm_tool/
 ├── pipeline/       # Orchestration: generation stage + correction loop
 ├── experiments/    # Suite orchestration: run_suite() composes pipeline.run() over N configs
 ├── llm/            # LiteLLM-backed adapters (abstract base + concrete implementations)
-├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model
+├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model; examples.py (few-shot corpus)
 ├── symboleo/       # Subprocess wrapper around the SymboleoAC headless CLI JAR
 ├── config/         # Pydantic config models + YAML loader (incl. SuiteConfig/Experiment)
 ├── output/         # Result models (PipelineResult/CandidateResult/IterationRecord/SuiteResult) + metrics.py (computed-rollup derivation) + writer.py
@@ -88,7 +88,7 @@ Input .txt
 | Strategy | Key `strategy_params` | Notes |
 |---|---|---|
 | `zero_shot` | none | Baseline — grammar + contract, no examples |
-| `few_shot` | `example_files: [list of paths]` | Loads `contract_text`/`symboleo_code` pairs from external YAML files in `examples/` |
+| `few_shot` | `example_files: [list of names]` | Loads `contract_text`/`symboleo_code` pairs by name from the corpus (see Example Corpus) |
 | `cot` | none | Adds step-by-step reasoning instructions before generation; output is still code-only (Option A) |
 
 **CoT Option B (future flag):** Currently CoT uses Option A — the model reasons internally but outputs only code. Option B would add a `post_process_response()` hook to `PromptStrategy` so strategies can extract code from a mixed reasoning+code response, preserving reasoning in `report.json`. Deferred until research value is confirmed.
@@ -133,6 +133,14 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 
 **Why LangGPT over DSPy now:** DSPy automatically optimizes prompt text but requires labeled (contract_text → correct Symboleo) training data. LangGPT provides a principled hand-crafted baseline while that dataset accumulates from successful runs. See Future Directions — DSPy.
 
+### Example Corpus (few-shot)
+- **`example_files` holds example *names*, never paths** — one contract across every entry point (CLI config, suite file, API request). A config means the same thing on any machine and survives a round trip through a suite file.
+- **Resolution happens at point of use** (`prompts/examples.py`), not in the config loader. Resolving during load would leave the in-memory model holding machine-specific paths, so everything that dumps a config — the run record, `suite.yaml`, the export — would emit them again. That is self-defeating for a file whose purpose is to be portable.
+- `examples.py` owns both directions: `load_example(name)` for `FewShotStrategy`, `list_example_names()` for `GET /options`. Two consumers is why this is a module rather than a private helper inside `few_shot.py` — the alternative strands the directory constant in `api/_paths.py` for the options route, splitting ownership of the corpus across two modules. The directory itself is private (`_examples_dir`): the module's contract is the two public functions, and exposing the directory invites a third consumer to `glob` it and re-create the split.
+- The corpus root defaults to a CWD-relative `examples/` (matching Docker's `WORKDIR /app` + `./examples:/app/examples:ro` mount) and is overridable with `SYMBOLEO_EXAMPLES_DIR`, so the CLI works outside the repo root. Read per call, not captured at import: import-time capture pins a long-running API process to its startup value and lands before the CLI's `load_dotenv()`, so a `.env` entry would never apply.
+- **Env var, not a config field** — even though `symboleo.jar_path` and `output.directory` *are* paths in the config schema. Those are a per-run choice and a fixed default respectively; the corpus root is neither. A config field would be dumped into `report.json`/`suite.yaml`/the export, putting a machine-specific path into the artifact whose whole purpose is portability, and a corresponding `StageRequest` field would let any browser client repoint the server's corpus. The repo therefore has two conventions for "filesystem location" — knowingly, on the secrets-and-deployment-facts → env, research-variables → YAML line (cf. `CORS_ORIGINS`).
+- A path-shaped entry (contains a separator, or ends `.yaml`) is rejected with a message naming the bare name to use. Rejecting separators is also the **containment boundary**: `example_files` reaches `load_example` unfiltered from an HTTP body, and `<corpus>/../secret.yaml` would otherwise read an outside file into the prompt — so supporting subdirectories later needs a containment check, not just a wider enumeration. Deliberately **no** dual-accepting shim: accepting both names and paths would reinstate two contracts for one field.
+
 ### Config Schema
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)
 - **Config input is closed.** Every config model inherits `_StrictModel` (`extra="forbid"`) in `config/models.py`, so an unknown or misspelled key fails the load at whatever level it appears rather than falling back to the default. This is a research data-integrity rule, not a UX nit: `report.json` records the config *as loaded*, so a silently-ignored `temprature` would leave no trace in the durable artifact either. Stated on the shared base so a new config model cannot opt out by omission. **Scoped to config files** — the API request models (`api/models.py`) stay `extra="ignore"` deliberately, because there a strict model turns frontend/backend version skew into a 422, a different risk profile from a hand-edited research config.
@@ -167,8 +175,8 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - Both entry points call the same core with no core-layer changes
 - Config as Pydantic models means the same object can be populated from YAML or a JSON request body
 - **`ProgressCallback` type:** `Callable[[int, int, list[SymboleoIssue], int, int], None]` — args are `(candidate_id, iteration, errors, total_candidates, total_iterations)`. The pipeline passes `total_candidates` and `total_iterations` so callers (CLI, API) do not need to reach into config themselves.
-- **`api/config_builder.py`** separates config construction (provider resolution, `StageConfig` assembly, example path resolution) from routing logic. Functions raise `ValueError`; `routes.py` converts these to `HTTPException(422)` in a single `try/except` block alongside strategy validation.
-- **`api/_paths.py`** holds the deployment path constants. All modules in `api/` that reference filesystem paths import from here — never inline `Path("configs/ui_config.yaml")` elsewhere.
+- **`api/config_builder.py`** separates config construction (provider resolution, `StageConfig` assembly) from routing logic. Functions raise `ValueError`; `routes.py` converts these to `HTTPException(422)` in a single `try/except` block alongside strategy validation. It passes `strategy_params` through untouched — see Example Corpus for why resolution does not belong here.
+- **`api/_paths.py`** holds the deployment path constants. All modules in `api/` that reference filesystem paths import from here — never inline `Path("configs/ui_config.yaml")` elsewhere. Scoped to paths the *deployment* owns; a path that belongs to a domain concept lives with that concept.
 
 ### Experiment Suites (Multi-Config Comparison)
 - A **suite** runs one contract against N named configurations (`Experiment` = name + full `PipelineConfig`) and compares them; convergence/metrics are per-experiment.
@@ -338,7 +346,7 @@ max_iterations: int | None                  # defaults from Pydantic
 save_intermediates: bool | None             # defaults from Pydantic
 stop_on_first_convergence: bool | None      # defaults from Pydantic
 ```
-Provider is derived from model name via `configs/ui_config.yaml`. For `few_shot`, `strategy_params.example_files` takes example names (not full paths) — `config_builder.py` resolves them to `examples/<name>.yaml`. Early validation is done in `routes.py` by calling `get_strategy()` synchronously before the job thread starts; `ValueError` from the strategy layer (unknown strategy name, missing example file) is caught and converted to `HTTPException(422)`, so errors surface as HTTP 422 rather than an `ErrorEvent` on the SSE stream.
+Provider is derived from model name via `configs/ui_config.yaml`. For `few_shot`, `strategy_params.example_files` takes example names, which reach `StageConfig` unchanged and are resolved by `prompts/examples.py` at point of use. Early validation is done in `routes.py` by calling `get_strategy()` synchronously before the job thread starts; `ValueError` from the strategy layer (unknown strategy name, missing example file) is caught and converted to `HTTPException(422)`, so errors surface as HTTP 422 rather than an `ErrorEvent` on the SSE stream.
 
 **`GET /options` response:**
 ```

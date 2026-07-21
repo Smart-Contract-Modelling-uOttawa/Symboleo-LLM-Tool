@@ -2,7 +2,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from symboleo_llm_tool.api._paths import EXAMPLES_DIR
 from symboleo_llm_tool.api.models import RunSettings, StageRequest
 from symboleo_llm_tool.config.models import (
     LLMConfig,
@@ -80,7 +79,7 @@ def build_stage_config(stage_req: StageRequest, provider: str) -> StageConfig:
     stage_kwargs: dict[str, Any] = {
         "llm": LLMConfig(**llm_kwargs),
         "strategy": stage_req.strategy,
-        "strategy_params": _resolve_example_paths(stage_req.strategy_params),
+        "strategy_params": stage_req.strategy_params,
     }
     if stage_req.include_grammar is not None:
         stage_kwargs["include_grammar"] = stage_req.include_grammar
@@ -97,13 +96,3 @@ def get_parameter_defaults(ui_params: dict[str, Any]) -> dict[str, Any]:
             entry["default"] = model_cls.model_fields[field_name].default
         result[param_name] = entry
     return result
-
-
-def _resolve_example_paths(strategy_params: dict[str, Any]) -> dict[str, Any]:
-    if "example_files" not in strategy_params:
-        return strategy_params
-    resolved = dict(strategy_params)
-    resolved["example_files"] = [
-        str(EXAMPLES_DIR / f"{name}.yaml") for name in strategy_params["example_files"]
-    ]
-    return resolved

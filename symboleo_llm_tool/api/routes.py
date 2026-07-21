@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from symboleo_llm_tool import pipeline
-from symboleo_llm_tool.api._paths import EXAMPLES_DIR
 from symboleo_llm_tool.api.config_builder import (
     build_pipeline_config,
     get_parameter_defaults,
@@ -38,6 +37,7 @@ from symboleo_llm_tool.config.models import Experiment, PipelineConfig, SuiteCon
 from symboleo_llm_tool.experiments import run_suite
 from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
+from symboleo_llm_tool.prompts.examples import list_example_names
 from symboleo_llm_tool.prompts.strategies import list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
@@ -290,10 +290,9 @@ def _sse(event: BaseModel) -> str:
 @router.get("/options", response_model=OptionsResponse)
 async def get_options() -> OptionsResponse:
     parameters = get_parameter_defaults(_ui_config.get("parameters", {}))
-    examples = sorted(p.stem for p in EXAMPLES_DIR.glob("*.yaml")) if EXAMPLES_DIR.exists() else []
     return OptionsResponse(
         strategies=list_strategies(),
         models=_ui_config.get("models", {}),
         parameters=parameters,
-        examples=examples,
+        examples=list_example_names(),
     )

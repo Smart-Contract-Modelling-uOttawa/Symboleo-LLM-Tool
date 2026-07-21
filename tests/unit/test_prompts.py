@@ -14,22 +14,30 @@ _EXAMPLE_CONTENT = (
 )
 
 
+@pytest.fixture
+def corpus(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the example corpus at a tmp dir holding one example named 'sale'.
+
+    Overriding via the env var rather than patching a module attribute keeps the
+    test on the same resolution path a deployment uses.
+    """
+    (tmp_path / "sale.yaml").write_text(_EXAMPLE_CONTENT, encoding="utf-8")
+    monkeypatch.setenv("SYMBOLEO_EXAMPLES_DIR", str(tmp_path))
+    return tmp_path
+
+
 @pytest.fixture(params=["zero_shot", "few_shot", "cot"])
-def any_strategy(request: pytest.FixtureRequest, tmp_path: Path) -> PromptStrategy:
+def any_strategy(request: pytest.FixtureRequest, corpus: Path) -> PromptStrategy:
     if request.param == "zero_shot":
         return ZeroShotStrategy({})
     if request.param == "few_shot":
-        example_file = tmp_path / "example.yaml"
-        example_file.write_text(_EXAMPLE_CONTENT, encoding="utf-8")
-        return FewShotStrategy({"example_files": [str(example_file)]})
+        return FewShotStrategy({"example_files": ["sale"]})
     return CoTStrategy({})
 
 
 @pytest.fixture
-def few_shot(tmp_path: Path) -> FewShotStrategy:
-    example_file = tmp_path / "example.yaml"
-    example_file.write_text(_EXAMPLE_CONTENT, encoding="utf-8")
-    return FewShotStrategy({"example_files": [str(example_file)]})
+def few_shot(corpus: Path) -> FewShotStrategy:
+    return FewShotStrategy({"example_files": ["sale"]})
 
 
 @pytest.fixture
@@ -123,16 +131,22 @@ def test_few_shot_invalid_example_files_param_raises() -> None:
         FewShotStrategy({"example_files": "not a list"})
 
 
-def test_few_shot_missing_example_file_raises() -> None:
-    with pytest.raises(ValueError, match="not found"):
-        FewShotStrategy({"example_files": ["./nonexistent.yaml"]})
+def test_few_shot_missing_example_raises(corpus: Path) -> None:
+    with pytest.raises(ValueError, match="'nonexistent' not found"):
+        FewShotStrategy({"example_files": ["nonexistent"]})
 
 
-def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
-    bad_file = tmp_path / "bad.yaml"
-    bad_file.write_text("wrong_key: value\n", encoding="utf-8")
+def test_few_shot_malformed_example_raises(corpus: Path) -> None:
+    (corpus / "bad.yaml").write_text("wrong_key: value\n", encoding="utf-8")
     with pytest.raises(ValueError, match="must have"):
-        FewShotStrategy({"example_files": [str(bad_file)]})
+        FewShotStrategy({"example_files": ["bad"]})
+
+
+def test_few_shot_rejects_a_path_shaped_entry(corpus: Path) -> None:
+    # A path-shaped entry names a file that exists, so a bare "not found" would
+    # read as a typo. The message has to name the contract instead.
+    with pytest.raises(ValueError, match="names, not paths"):
+        FewShotStrategy({"example_files": [str(corpus / "sale.yaml")]})
 
 
 # --- CoT specific ---

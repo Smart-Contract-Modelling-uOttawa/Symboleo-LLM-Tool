@@ -5,8 +5,6 @@ The endpoints' happy-path tests patch the pipeline away and can only assert a
 correction defaulting to generation — is exercised directly instead.
 """
 
-from pathlib import Path
-
 import pytest
 
 from symboleo_llm_tool.api.config_builder import (
@@ -66,24 +64,19 @@ class TestStageConfig:
         stage = build_stage_config(request, "openai")
         assert stage.include_grammar is True
 
-    def test_resolves_example_names_to_paths_under_the_examples_dir(self) -> None:
+    def test_passes_strategy_params_through_unchanged(self) -> None:
+        # example_files especially: resolution belongs to prompts/examples.py,
+        # so a name must reach StageConfig as written. Expanding it to a path
+        # here would put a machine-specific path into every config dump.
         stage = build_stage_config(
             StageRequest(
                 model="gpt-4o-mini",
                 strategy="zero_shot",
-                strategy_params={"example_files": ["sale_contract"]},
+                strategy_params={"example_files": ["sale_contract"], "k": "v"},
             ),
             "openai",
         )
-        resolved = stage.strategy_params["example_files"]
-        assert [Path(p).name for p in resolved] == ["sale_contract.yaml"]
-
-    def test_leaves_strategy_params_alone_when_no_examples_are_named(self) -> None:
-        stage = build_stage_config(
-            StageRequest(model="gpt-4o-mini", strategy="zero_shot", strategy_params={"k": "v"}),
-            "openai",
-        )
-        assert stage.strategy_params == {"k": "v"}
+        assert stage.strategy_params == {"example_files": ["sale_contract"], "k": "v"}
 
 
 class TestPipelineConfig:

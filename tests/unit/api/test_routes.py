@@ -113,7 +113,7 @@ def test_generate_missing_example_returns_422(
     }
     response = client.post("/api/generate", json=body)
     assert response.status_code == 422
-    assert "Example not found" in response.json()["detail"]
+    assert "Example 'any_example' not found" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
