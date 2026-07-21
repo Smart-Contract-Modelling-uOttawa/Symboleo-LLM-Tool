@@ -27,7 +27,8 @@ def _require_nonempty_contract(v: str) -> str:
 
 
 # Reusable validated type: the non-empty rule travels with the field wherever a
-# contract appears — a single request now, or list[ContractText] per suite later.
+# contract appears — single-run and suite requests, or a future
+# list[ContractText] for multi-contract suites.
 ContractText = Annotated[str, AfterValidator(_require_nonempty_contract)]
 
 

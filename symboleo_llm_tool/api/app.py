@@ -45,8 +45,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # Short so abandoned runs (involuntary drops) are cancelled within ~grace +
-# interval ≈ 10–15s rather than riding the old 60s cadence. The scan is a cheap
-# pass over a handful of jobs.
+# interval ≈ 10–15s. The scan is a cheap pass over a handful of jobs.
 _SWEEP_INTERVAL_SECONDS = 5
 
 

@@ -39,8 +39,9 @@ class _RunContext:
     max_iterations: int
     stop_on_first_convergence: bool
     on_progress: ProgressCallback | None
-    # Never cancelled on the sequential path; on the concurrent path it is this
-    # run's per-experiment token (a child of the suite's request-scoped token).
+    # Resolved by run(): the coordinator's per-experiment token on the concurrent
+    # path, a caller-supplied token on the sequential path (e.g. the API on
+    # disconnect or explicit cancel), or an inert default when neither is given.
     cancel: CancellationToken
 
 
@@ -103,7 +104,7 @@ def _run_candidates_sequential(contract_text: str, ctx: _RunContext) -> list[Can
     candidates: list[CandidateResult] = []
     for i in range(ctx.num_candidates):
         candidate = _run_candidate(candidate_id=i, contract_text=contract_text, ctx=ctx)
-        if candidate is None:  # only reachable if cancelled — never on this path
+        if candidate is None:  # cancelled before this candidate started — skip it
             continue
         candidates.append(candidate)
         if ctx.stop_on_first_convergence and candidate.converged:
@@ -144,9 +145,9 @@ def _run_candidate(
 ) -> CandidateResult | None:
     """Run one candidate, or return ``None`` if cancelled before it started.
 
-    A ``None`` only happens on the concurrent path (a sibling converged, or the
-    suite was cancelled) before this candidate ran — it is excluded from results,
-    mirroring how the sequential path simply stops launching more.
+    A ``None`` happens when the run was cancelled before this candidate ran — a
+    sibling converged on the concurrent path, or the caller's token was tripped
+    (Stop, disconnect) — and is excluded from results on both paths.
     """
     if ctx.cancel.cancelled:
         return None

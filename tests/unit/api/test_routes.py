@@ -187,7 +187,7 @@ def test_options_returns_parameter_defaults(client: TestClient, parameters_confi
     response = client.get("/api/options")
     params = response.json()["parameters"]
     assert params["num_candidates"]["default"] == 1
-    # temperature is now optional (no forced default) so it is only sent when set.
+    # temperature has no default (None) so it is only sent when set.
     assert params["temperature"]["default"] is None
 
 
