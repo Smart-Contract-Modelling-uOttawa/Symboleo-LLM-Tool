@@ -132,6 +132,10 @@ def test_concurrent_forwards_progress_for_every_experiment() -> None:
 
 
 def test_concurrent_fails_fast_and_propagates_on_exception() -> None:
+    # Fail-fast has two halves: the error propagates, *and* the request token is
+    # tripped so sibling experiments short-circuit instead of burning tokens.
+    token = CancellationToken()
+
     def fake_run(contract_text, config, input_file="", on_progress=None, coordinator=None):
         if config.generation.strategy == "cot":
             raise RuntimeError("boom")
@@ -139,7 +143,11 @@ def test_concurrent_fails_fast_and_propagates_on_exception() -> None:
 
     with patch("symboleo_llm_tool.pipeline.run", side_effect=fake_run):
         with pytest.raises(RuntimeError, match="boom"):
-            runner.run_suite(_suite("zero_shot", "cot", "few_shot", max_concurrency=2))
+            runner.run_suite(
+                _suite("zero_shot", "cot", "few_shot", max_concurrency=2), cancel=token
+            )
+
+    assert token.cancelled is True
 
 
 def test_max_concurrency_is_clamped() -> None:

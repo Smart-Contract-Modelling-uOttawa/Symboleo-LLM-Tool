@@ -52,6 +52,29 @@ def test_cost_failure_yields_none_but_keeps_tokens() -> None:
     assert result.usage.total_tokens == 120
 
 
+def test_temperature_omitted_when_unset() -> None:
+    # The load-bearing guard against reasoning-model 400s: a temperature that was
+    # never configured must not reach the provider (see CLAUDE.md).
+    with (
+        patch("litellm.completion", return_value=_response()) as mock_completion,
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        _adapter().generate("prompt")
+
+    assert "temperature" not in mock_completion.call_args.kwargs
+
+
+def test_temperature_sent_when_configured() -> None:
+    adapter = LiteLLMAdapter(LLMConfig(provider="openai", model="gpt-4o-mini", temperature=0.2))
+    with (
+        patch("litellm.completion", return_value=_response()) as mock_completion,
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        adapter.generate("prompt")
+
+    assert mock_completion.call_args.kwargs["temperature"] == 0.2
+
+
 def test_missing_usage_yields_zeros() -> None:
     with (
         patch("litellm.completion", return_value=_response(usage=SimpleNamespace())),

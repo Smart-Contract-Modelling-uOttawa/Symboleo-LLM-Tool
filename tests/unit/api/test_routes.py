@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from symboleo_llm_tool.api.jobs import create_job
 from symboleo_llm_tool.api.models import CompleteEvent, ErrorEvent, ProgressEvent
-from symboleo_llm_tool.api.routes import _run_pipeline
+from symboleo_llm_tool.api.routes import _run_pipeline, _stream_job
 from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.output.models import CandidateResult, PipelineResult
 
@@ -334,6 +334,42 @@ def test_stream_in_progress_job_yields_progress_then_complete(client: TestClient
     assert events[1]["type"] == "complete"
 
 
+class _StubRequest:
+    """Minimal stand-in for ``Request`` — ``_stream_job`` only polls disconnect."""
+
+    def __init__(self, disconnected: bool) -> None:
+        self._disconnected = disconnected
+
+    async def is_disconnected(self) -> bool:
+        return self._disconnected
+
+
+async def _drain(job: Any, request: _StubRequest) -> None:
+    response = await _stream_job(job, request, lambda result: CompleteEvent(result=result))
+    async for _ in response.body_iterator:
+        pass
+
+
+def test_stream_marks_job_detached_when_client_disconnects() -> None:
+    # detached_at is the only signal cancel_abandoned() keys on — if the stream
+    # stops stamping it, grace cancellation never fires for any job.
+    job = create_job("stream-detached")
+
+    asyncio.run(_drain(job, _StubRequest(disconnected=True)))
+
+    assert job.detached_at is not None
+
+
+def test_stream_marks_job_attached_clearing_an_earlier_detach() -> None:
+    job = create_job("stream-reattach")
+    job.detached_at = datetime.now()  # a previous stream dropped
+    job.queue.put_nowait(CompleteEvent(result=_make_pipeline_result()))
+
+    asyncio.run(_drain(job, _StubRequest(disconnected=False)))
+
+    assert job.detached_at is None
+
+
 # ---------------------------------------------------------------------------
 # _run_pipeline: async bridge
 # ---------------------------------------------------------------------------
@@ -358,6 +394,22 @@ def test_run_pipeline_puts_complete_event_on_queue() -> None:
     event = job.queue.get_nowait()
     assert isinstance(event, CompleteEvent)
     assert event.result is result
+
+
+def test_run_pipeline_forwards_job_cancel_token() -> None:
+    # Without this kwarg the Stop button is a no-op for every single run.
+    job = create_job("pipe-cancel")
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with patch(
+            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
+        ) as mock_tp:
+            mock_tp.return_value = _make_pipeline_result()
+            await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
+            assert mock_tp.call_args.kwargs["cancel"] is job.cancel
+
+    asyncio.run(run())
 
 
 def test_run_pipeline_puts_error_event_on_exception() -> None:

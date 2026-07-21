@@ -1,14 +1,21 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import { TEST_RUN_ID } from '@/test/handlers'
 import { useStream } from '@/hooks/useStream'
+import { cancelRun } from '@/api/client'
 import ResultsPage from './ResultsPage'
 import type { PipelineResult } from '@/api/types'
 
 vi.mock('@/hooks/useStream')
 const mockUseStream = vi.mocked(useStream)
+
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return { ...actual, cancelRun: vi.fn() }
+})
+const mockCancelRun = vi.mocked(cancelRun)
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 
@@ -63,7 +70,13 @@ describe('ResultsPage', () => {
   beforeEach(() => {
     mockNavigate.mockReset()
     mockUseStream.mockReset()
+    mockCancelRun.mockReset()
   })
+
+  // Each candidate's accordion trigger carries its own badge/iterations/tokens,
+  // so assertions are scoped to a row — a page-wide getByText would still pass
+  // with the values swapped between candidates.
+  const row = (label: RegExp) => screen.getByRole('button', { name: label })
 
   it('shows "Connecting..." on initial load', () => {
     mockUseStream.mockReturnValue({
@@ -143,8 +156,8 @@ describe('ResultsPage', () => {
       errorMessage: null,
     })
     renderResultsPage()
-    expect(screen.getByText('Converged')).toBeInTheDocument()
-    expect(screen.getByText('Failed to converge')).toBeInTheDocument()
+    expect(within(row(/^Candidate 1/)).getByText('Converged')).toBeInTheDocument()
+    expect(within(row(/^Candidate 2/)).getByText('Failed to converge')).toBeInTheDocument()
   })
 
   it('shows "no candidates converged" when success is false', () => {
@@ -166,8 +179,8 @@ describe('ResultsPage', () => {
       errorMessage: null,
     })
     renderResultsPage()
-    expect(screen.getByText('2 iterations')).toBeInTheDocument()
-    expect(screen.getByText('3 iterations')).toBeInTheDocument()
+    expect(within(row(/^Candidate 1/)).getByText('2 iterations')).toBeInTheDocument()
+    expect(within(row(/^Candidate 2/)).getByText('3 iterations')).toBeInTheDocument()
   })
 
   it('displays per-candidate token and cost totals (unknown cost as a dash)', () => {
@@ -178,8 +191,8 @@ describe('ResultsPage', () => {
       errorMessage: null,
     })
     renderResultsPage()
-    expect(screen.getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
-    expect(screen.getByText('800 tokens · —')).toBeInTheDocument()
+    expect(within(row(/^Candidate 1/)).getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
+    expect(within(row(/^Candidate 2/)).getByText('800 tokens · —')).toBeInTheDocument()
   })
 
   it('renders configuration warnings forwarded via navigation state', () => {
@@ -215,6 +228,9 @@ describe('ResultsPage', () => {
     })
     renderResultsPage()
     await user.click(screen.getByRole('button', { name: 'Stop' }))
+    // The backend call is the point of the button; the label flip alone would
+    // still pass with the cancel request removed.
+    expect(mockCancelRun).toHaveBeenCalledWith(TEST_RUN_ID)
     expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
   })
 

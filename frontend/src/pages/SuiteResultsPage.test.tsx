@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import { useSuiteStream } from '@/hooks/useSuiteStream'
 import { triggerDownload } from '@/components/results/download'
+import { cancelRun } from '@/api/client'
 import SuiteResultsPage from './SuiteResultsPage'
 import type { PipelineResult, SuiteResult } from '@/api/types'
 
@@ -12,6 +13,12 @@ const mockUseSuiteStream = vi.mocked(useSuiteStream)
 
 vi.mock('@/components/results/download', () => ({ triggerDownload: vi.fn() }))
 const mockTriggerDownload = vi.mocked(triggerDownload)
+
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return { ...actual, cancelRun: vi.fn() }
+})
+const mockCancelRun = vi.mocked(cancelRun)
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 
@@ -82,7 +89,13 @@ describe('SuiteResultsPage', () => {
     mockNavigate.mockReset()
     mockUseSuiteStream.mockReset()
     mockTriggerDownload.mockReset()
+    mockCancelRun.mockReset()
   })
+
+  // Each experiment's accordion trigger carries its own badge/iterations/tokens,
+  // so assertions are scoped to a row — a page-wide getByText would still pass
+  // with the values swapped between experiments.
+  const row = (label: RegExp) => screen.getByRole('button', { name: label })
 
   it('shows "Connecting..." on initial load', () => {
     mockUseSuiteStream.mockReturnValue({
@@ -138,11 +151,13 @@ describe('SuiteResultsPage', () => {
       errorMessage: null,
     })
     renderSuiteResultsPage()
-    expect(screen.getByText('Converged')).toBeInTheDocument()
-    expect(screen.getByText('Failed to converge')).toBeInTheDocument()
+    const convergedRow = row(/^zero-shot/)
+    const failedRow = row(/^cot/)
+    expect(within(convergedRow).getByText('Converged')).toBeInTheDocument()
+    expect(within(failedRow).getByText('Failed to converge')).toBeInTheDocument()
     // converged experiment shows its iteration count; the failed one shows a dash
-    expect(screen.getByText('2 iterations')).toBeInTheDocument()
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(within(convergedRow).getByText('2 iterations')).toBeInTheDocument()
+    expect(within(failedRow).getByText('—')).toBeInTheDocument()
   })
 
   it('shows per-experiment token totals and cost', () => {
@@ -153,8 +168,8 @@ describe('SuiteResultsPage', () => {
       errorMessage: null,
     })
     renderSuiteResultsPage()
-    expect(screen.getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
-    expect(screen.getByText('2,000 tokens · $0.0040')).toBeInTheDocument()
+    expect(within(row(/^zero-shot/)).getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
+    expect(within(row(/^cot/)).getByText('2,000 tokens · $0.0040')).toBeInTheDocument()
   })
 
   it('shows the suite-wide token and cost total', () => {
@@ -207,6 +222,9 @@ describe('SuiteResultsPage', () => {
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: 'Stop' }))
+    // The backend call is the point of the button; the label flip alone would
+    // still pass with the cancel request removed.
+    expect(mockCancelRun).toHaveBeenCalledWith(TEST_SUITE_ID)
     expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
   })
 

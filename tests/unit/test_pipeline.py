@@ -225,23 +225,44 @@ def test_coordinator_skips_all_candidates_when_pre_cancelled(mock_deps):
     assert result.success is False
 
 
-def test_coordinator_stop_on_first_convergence_keeps_at_least_one(mock_deps):
+def test_coordinator_stop_on_first_convergence_cancels_siblings(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = make_generation("valid")
     mock_wrapper.validate.return_value = []
 
+    cancel = CancellationToken()
     with ThreadPoolExecutor(max_workers=2) as pool:
         result = pipeline.run(
             "contract text",
             _make_config(num_candidates=3, stop_on_first_convergence=True),
-            coordinator=RunCoordinator(candidate_pool=pool, cancel=CancellationToken()),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=cancel),
         )
 
-    # In-flight candidates may finish before the cancel lands, so >1 can converge,
-    # but never zero and never more than requested.
+    # The tripped token is the deterministic effect; how many in-flight candidates
+    # finish before it lands is a race, so only the bounds are asserted.
+    assert cancel.cancelled is True
     assert result.success is True
     assert 1 <= len(result.candidates) <= 3
     assert all(c.converged for c in result.candidates)
+
+
+def test_coordinator_without_stop_on_first_convergence_leaves_token_untripped(mock_deps):
+    # Negative control for the test above: without the flag no candidate cancels
+    # its siblings, so all of them run.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    cancel = CancellationToken()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=3, stop_on_first_convergence=False),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=cancel),
+        )
+
+    assert cancel.cancelled is False
+    assert len(result.candidates) == 3
 
 
 def test_cancel_token_skips_sequential_candidates(mock_deps):

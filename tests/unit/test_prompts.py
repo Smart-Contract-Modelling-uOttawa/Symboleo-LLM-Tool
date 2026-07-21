@@ -60,6 +60,18 @@ def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
     assert "some symboleo code" in any_strategy.build_correction_prompt(ctx)
 
 
+def test_generation_includes_output_format(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    assert "## Output Format" in any_strategy.build_generation_prompt(ctx)
+
+
+def test_correction_includes_output_format(any_strategy: PromptStrategy) -> None:
+    # Correction carries the same structural grounding as generation; without it
+    # the model over-edits lines that have no listed error (see CLAUDE.md).
+    ctx = PromptContext(current_code="some symboleo code", errors=[], grammar_context=None)
+    assert "## Output Format" in any_strategy.build_correction_prompt(ctx)
+
+
 def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(
         current_code="code",
