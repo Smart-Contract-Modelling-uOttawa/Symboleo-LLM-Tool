@@ -120,16 +120,23 @@ def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
 
 
 def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
+    # Both assertions quote the ## Workflow block, which is what makes this
+    # strategy CoT — text shared with the other strategies would not.
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
     prompt = cot.build_generation_prompt(ctx)
     assert "Identify all parties" in prompt
-    assert "obligation" in prompt
+    assert "Map every element to the correct SymboleoAC construct." in prompt
 
 
-def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
+def test_cot_correction_includes_reasoning_workflow(cot: CoTStrategy) -> None:
+    # Anchored on the ## Workflow steps, not the word "reason" — that also appears
+    # in the constraint telling the model *not* to emit its reasoning, so the old
+    # assertion held even with the whole workflow deleted.
     ctx = PromptContext(
         current_code="code",
         errors=[make_issue(line=5, column=3, message="missing ';'")],
         grammar_context=None,
     )
-    assert "reason" in cot.build_correction_prompt(ctx).lower()
+    prompt = cot.build_correction_prompt(ctx)
+    assert "## Workflow" in prompt
+    assert "Apply the minimal fix that resolves the error." in prompt

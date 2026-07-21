@@ -20,7 +20,7 @@ from symboleo_llm_tool.output.models import (
     SuiteResult,
 )
 from symboleo_llm_tool.output.writer import write_results, write_suite_results
-from tests.helpers import make_issue
+from tests.helpers import make_issue, make_usage
 
 
 def _stage() -> StageConfig:
@@ -119,13 +119,57 @@ def _suite(tmp_path: Path) -> SuiteConfig:
     )
 
 
+def _experiment_result(
+    name: str,
+    *,
+    converged: bool,
+    iterations_used: int,
+    prompt: int,
+    completion: int,
+    cost: float | None,
+) -> ExperimentResult:
+    return ExperimentResult(
+        name=name,
+        result=PipelineResult(
+            success=converged,
+            timestamp=datetime(2026, 1, 1, 12, 0, 0),
+            input_file="test.txt",
+            candidates=[
+                CandidateResult(
+                    candidate_id=0,
+                    final_code="Contract C0() {}",
+                    converged=converged,
+                    iterations_used=iterations_used,
+                    error_history=[
+                        IterationRecord(
+                            iteration=0,
+                            code="",
+                            errors=[],
+                            usage=make_usage(
+                                prompt_tokens=prompt, completion_tokens=completion, cost_usd=cost
+                            ),
+                        )
+                    ],
+                )
+            ],
+        ),
+    )
+
+
 def _suite_result() -> SuiteResult:
+    # Every CSV cell differs from every other, and the two rows exercise opposite
+    # branches of both conditional columns (a value vs. the empty-cell fallback),
+    # so a column swap or a wrong branch fails the exact-row assertions.
     return SuiteResult(
         timestamp=datetime(2026, 1, 1, 12, 0, 0),
         input_file="test.txt",
         experiments=[
-            ExperimentResult(name="zero-shot", result=_result()),
-            ExperimentResult(name="cot run", result=_result()),
+            _experiment_result(
+                "zero-shot", converged=True, iterations_used=2, prompt=30, completion=12, cost=0.005
+            ),
+            _experiment_result(
+                "cot run", converged=False, iterations_used=4, prompt=80, completion=7, cost=None
+            ),
         ],
     )
 
@@ -133,7 +177,7 @@ def _suite_result() -> SuiteResult:
 def test_write_suite_creates_suite_dir_with_reports(tmp_path: Path) -> None:
     suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
 
-    assert suite_dir.name.startswith("suite_")
+    assert suite_dir.name == "suite_20260101_120000"
     assert (suite_dir / "suite_report.json").exists()
     assert (suite_dir / "suite.yaml").exists()
     assert (suite_dir / "summary.csv").exists()
@@ -162,7 +206,10 @@ def test_write_suite_summary_csv_mirrors_frontend_columns(tmp_path: Path) -> Non
 
     lines = (suite_dir / "summary.csv").read_text(encoding="utf-8").strip().split("\n")
     assert lines[0] == "experiment,converged,iterations_to_convergence,total_tokens,cost_usd"
-    # success=True → lowercase "true"; no usage → total_tokens 0 and empty cost cell.
-    assert lines[1].startswith("zero-shot,true,")
-    assert lines[1].endswith(",0,")
+    # Derived from the fixture: converged → "true" and the candidate's
+    # iterations_used (2); tokens are prompt + completion (30 + 12).
+    assert lines[1] == "zero-shot,true,2,42,0.005"
+    # Not converged → "false", an empty iterations cell, and an empty cost cell
+    # (None means "not reported", which is distinct from 0.0).
+    assert lines[2] == "cot run,false,,87,"
     assert len(lines) == 3  # header + 2 experiments

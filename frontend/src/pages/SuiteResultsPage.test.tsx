@@ -33,11 +33,15 @@ type Totals = { tokens: number; cost: number | null }
 
 // Token/cost totals and iterations_to_convergence are computed_fields on the
 // backend models, so they arrive as authoritative values — the page reads them
-// directly rather than re-deriving from error_history.
+// directly rather than re-deriving from error_history. `splits` gives each
+// experiment two candidates whose totals sum to the experiment's without
+// matching it, so a page reading candidate-level rollups instead of the
+// experiment's own field fails.
 function pipelineResult(
   converged: boolean,
   iterations: number,
-  totals: Totals = { tokens: 0, cost: null },
+  totals: Totals,
+  splits: Totals[],
 ): PipelineResult {
   return {
     success: converged,
@@ -46,17 +50,15 @@ function pipelineResult(
     total_tokens: totals.tokens,
     total_cost_usd: totals.cost,
     iterations_to_convergence: converged ? iterations : null,
-    candidates: [
-      {
-        candidate_id: 0,
-        final_code: 'Contract C() {}',
-        converged,
-        iterations_used: iterations,
-        error_history: [],
-        total_tokens: totals.tokens,
-        total_cost_usd: totals.cost,
-      },
-    ],
+    candidates: splits.map((split, index) => ({
+      candidate_id: index,
+      final_code: 'Contract C() {}',
+      converged,
+      iterations_used: iterations,
+      error_history: [],
+      total_tokens: split.tokens,
+      total_cost_usd: split.cost,
+    })),
   }
 }
 
@@ -66,8 +68,20 @@ const MOCK_SUITE_RESULT: SuiteResult = {
   total_tokens: 3500,
   total_cost_usd: 0.007,
   experiments: [
-    { name: 'zero-shot', result: pipelineResult(true, 2, { tokens: 1500, cost: 0.003 }) },
-    { name: 'cot', result: pipelineResult(false, 3, { tokens: 2000, cost: 0.004 }) },
+    {
+      name: 'zero-shot',
+      result: pipelineResult(true, 2, { tokens: 1500, cost: 0.003 }, [
+        { tokens: 900, cost: 0.002 },
+        { tokens: 600, cost: 0.001 },
+      ]),
+    },
+    {
+      name: 'cot',
+      result: pipelineResult(false, 3, { tokens: 2000, cost: 0.004 }, [
+        { tokens: 1200, cost: 0.0025 },
+        { tokens: 800, cost: 0.0015 },
+      ]),
+    },
   ],
 }
 
@@ -194,10 +208,14 @@ describe('SuiteResultsPage', () => {
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
 
-    const csv = mockTriggerDownload.mock.calls[0][0] as string
-    expect(csv).toContain('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
-    expect(csv).toContain('zero-shot,true,2,1500,')
-    expect(csv).toContain('cot,false,,2000,')
+    const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
+    expect(rows[0]).toBe('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
+    // Full rows, so the cost column and the column order are both pinned — a
+    // trailing-comma prefix match left the cost cell free to be anything.
+    expect(rows[1]).toBe('zero-shot,true,2,1500,0.003')
+    // Not converged → empty iterations cell, and the experiment's own totals
+    // (2000/0.004), not either candidate's.
+    expect(rows[2]).toBe('cot,false,,2000,0.004')
   })
 
   it('renders configuration warnings forwarded via navigation state', () => {

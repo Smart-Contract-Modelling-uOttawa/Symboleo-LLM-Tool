@@ -153,6 +153,9 @@ def test_concurrent_fails_fast_and_propagates_on_exception() -> None:
 def test_max_concurrency_is_clamped() -> None:
     assert _suite("zero_shot", max_concurrency=64).max_concurrency == 8
     assert _suite("zero_shot", max_concurrency=0).max_concurrency == 1
+    # In-range values pass through untouched: a validator that snapped everything
+    # to a bound would satisfy the two out-of-range assertions above.
+    assert _suite("zero_shot", max_concurrency=4).max_concurrency == 4
 
 
 def test_sequential_suite_forwards_cancel_to_pipeline() -> None:

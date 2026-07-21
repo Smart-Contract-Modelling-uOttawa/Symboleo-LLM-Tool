@@ -30,6 +30,11 @@ def test_cleanup_expired_keeps_recent_completed_jobs() -> None:
 
 def test_cleanup_expired_keeps_incomplete_jobs() -> None:
     create_job("running")
+    job = get_job("running")
+    assert job is not None
+    # Backdated past the TTL: a cleanup measuring age from *creation* rather than
+    # completion would reap this live job mid-run.
+    job.created_at = datetime.now() - TTL - timedelta(seconds=1)
     cleanup_expired()
     assert get_job("running") is not None
 
@@ -74,9 +79,12 @@ def test_cancel_abandoned_ignores_recently_detached_job() -> None:
 
 def test_cancel_abandoned_ignores_attached_job() -> None:
     create_job("attached")  # detached_at is None
-    cancel_abandoned()
     job = get_job("attached")
     assert job is not None
+    # Old enough to be cancelled if the grace were measured from creation instead
+    # of the detach stamp — an attached job must survive regardless of its age.
+    job.created_at = datetime.now() - DETACH_GRACE - timedelta(seconds=1)
+    cancel_abandoned()
     assert job.cancel.cancelled is False
 
 
