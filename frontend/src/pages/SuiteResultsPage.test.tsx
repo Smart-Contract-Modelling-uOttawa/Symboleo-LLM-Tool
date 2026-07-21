@@ -246,6 +246,63 @@ describe('SuiteResultsPage', () => {
     expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
   })
 
+  it('tells the user the browser is retrying a dropped connection', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'reconnecting',
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Experiment 1 — Candidate 1 — Iteration 1')
+    ).not.toBeInTheDocument()
+  })
+
+  it('flags the results as partial once a stopped suite completes', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'running',
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    // Clicking Stop re-renders, by which point the stream has completed.
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+    })
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+
+    expect(screen.getByText('Suite stopped — showing partial results.')).toBeInTheDocument()
+  })
+
+  it('quotes an experiment name containing a comma so the CSV stays parseable', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: {
+        ...MOCK_SUITE_RESULT,
+        // Experiment names are free text, and the axis expander encourages
+        // descriptive ones — an unescaped comma would shift every later column.
+        experiments: [
+          { name: 'zero-shot, temp 0.2', result: MOCK_SUITE_RESULT.experiments[0].result },
+        ],
+      },
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    await user.click(screen.getByRole('button', { name: /Download CSV/ }))
+
+    const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
+    expect(rows[1]).toBe('"zero-shot, temp 0.2",true,2,1500,0.003')
+  })
+
   it('navigates to /experiments when New Suite is clicked', async () => {
     const user = userEvent.setup()
     mockUseSuiteStream.mockReturnValue({

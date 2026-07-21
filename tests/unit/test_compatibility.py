@@ -54,6 +54,16 @@ def test_no_warning_when_litellm_raises() -> None:
     assert warnings == []
 
 
+def test_unknown_model_yields_no_warning_against_real_litellm() -> None:
+    # Deliberately unpatched: the "no false alarm for an unrecognized model"
+    # property is a claim about real LiteLLM behaviour, so patching the lookup
+    # would assert nothing about it.
+    warnings = reasoning_param_warnings(
+        LLMConfig(provider="openai", model="totally-made-up-model-xyz", temperature=0.2)
+    )
+    assert warnings == []
+
+
 def test_pipeline_warnings_label_each_stage() -> None:
     with patch(_TARGET, return_value=True):
         warnings = pipeline_param_warnings(_pipeline(temperature=0.2))

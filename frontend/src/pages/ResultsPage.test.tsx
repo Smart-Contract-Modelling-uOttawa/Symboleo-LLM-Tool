@@ -234,6 +234,52 @@ describe('ResultsPage', () => {
     expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
   })
 
+  it('tells the user the browser is retrying a dropped connection', () => {
+    mockUseStream.mockReturnValue({
+      status: 'reconnecting',
+      progress: { candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    // The retry message replaces the progress counter, so a reader is not left
+    // watching a stalled iteration number.
+    expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
+    expect(screen.queryByText('Candidate 1 — Iteration 1')).not.toBeInTheDocument()
+  })
+
+  it('flags the results as partial once a stopped run completes', async () => {
+    const user = userEvent.setup()
+    mockUseStream.mockReturnValue({
+      status: 'running',
+      progress: { candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    // Clicking Stop re-renders, by which point the stream has completed.
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+    })
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+
+    expect(screen.getByText('Run stopped — showing partial results.')).toBeInTheDocument()
+  })
+
+  it('shows no partial-results notice for a run that finished on its own', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(screen.queryByText('Run stopped — showing partial results.')).not.toBeInTheDocument()
+  })
+
   it('navigates to / when New Run is clicked', async () => {
     const user = userEvent.setup()
     mockUseStream.mockReturnValue({

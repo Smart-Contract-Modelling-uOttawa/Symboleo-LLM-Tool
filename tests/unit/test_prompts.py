@@ -60,6 +60,18 @@ def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
     assert "some symboleo code" in any_strategy.build_correction_prompt(ctx)
 
 
+def test_correction_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
+    # The grammar tests above cover generation only; a correction template that
+    # lost its include would ship silently.
+    ctx = PromptContext(current_code="code", errors=[], grammar_context="grammar rules here")
+    assert "grammar rules here" in any_strategy.build_correction_prompt(ctx)
+
+
+def test_correction_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(current_code="code", errors=[], grammar_context=None)
+    assert "Grammar Reference" not in any_strategy.build_correction_prompt(ctx)
+
+
 def test_generation_includes_output_format(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
     assert "## Output Format" in any_strategy.build_generation_prompt(ctx)

@@ -150,6 +150,31 @@ def test_concurrent_fails_fast_and_propagates_on_exception() -> None:
     assert token.cancelled is True
 
 
+def test_concurrent_gives_each_experiment_its_own_child_token() -> None:
+    # Each experiment must get a *child* of the request token: sharing the request
+    # token would let one experiment's first convergence cancel the whole suite,
+    # and an unlinked token would make an external cancel unreachable.
+    captured: list[object] = []
+
+    def fake_run(contract_text, config, input_file="", on_progress=None, coordinator=None):
+        captured.append(coordinator.cancel)
+        return _result()
+
+    token = CancellationToken()
+    with patch("symboleo_llm_tool.pipeline.run", side_effect=fake_run):
+        runner.run_suite(_suite("zero_shot", "cot", max_concurrency=2), cancel=token)
+
+    assert len(captured) == 2
+    assert all(c is not token for c in captured)
+
+    first, second = captured
+    first.cancel()  # type: ignore[attr-defined]
+    assert second.cancelled is False  # type: ignore[attr-defined]
+
+    token.cancel()  # the request token reaches every experiment
+    assert all(c.cancelled for c in captured)  # type: ignore[attr-defined]
+
+
 def test_max_concurrency_is_clamped() -> None:
     assert _suite("zero_shot", max_concurrency=64).max_concurrency == 8
     assert _suite("zero_shot", max_concurrency=0).max_concurrency == 1

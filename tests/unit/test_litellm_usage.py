@@ -9,6 +9,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from symboleo_llm_tool.config.models import LLMConfig
 from symboleo_llm_tool.llm.litellm_adapter import LiteLLMAdapter
 
@@ -17,7 +19,7 @@ def _adapter() -> LiteLLMAdapter:
     return LiteLLMAdapter(LLMConfig(provider="openai", model="gpt-4o-mini"))
 
 
-def _response(content: str = "Contract C() {}", *, usage: Any = None) -> SimpleNamespace:
+def _response(content: str | None = "Contract C() {}", *, usage: Any = None) -> SimpleNamespace:
     # No total_tokens — TokenUsage computes it from prompt + completion.
     if usage is None:
         usage = SimpleNamespace(prompt_tokens=100, completion_tokens=20)
@@ -50,6 +52,17 @@ def test_cost_failure_yields_none_but_keeps_tokens() -> None:
 
     assert result.usage.cost_usd is None
     assert result.usage.total_tokens == 120
+
+
+def test_empty_content_raises_rather_than_returning_none() -> None:
+    # A reasoning model can return only a thinking block; the pipeline would then
+    # try to validate None as Symboleo code.
+    with (
+        patch("litellm.completion", return_value=_response(content=None)),
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        with pytest.raises(RuntimeError, match="empty response"):
+            _adapter().generate("prompt")
 
 
 def test_temperature_omitted_when_unset() -> None:
