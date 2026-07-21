@@ -113,17 +113,17 @@ symboleo_code: |
   endContract
 ```
 
-Then reference it in your config:
+Then reference it in your config **by name** — not by path, so the config means the same thing on any machine:
 
 ```yaml
 generation:
   strategy: few_shot
   strategy_params:
     example_files:
-      - ./examples/your_example.yaml
+      - your_example    # resolves to examples/your_example.yaml
 ```
 
-The `examples/` directory is gitignored and mounted as a read-only volume when running the API via Docker.
+The `examples/` directory is gitignored and mounted as a read-only volume when running the API via Docker. It is resolved relative to the working directory; set `SYMBOLEO_EXAMPLES_DIR` to point at a corpus elsewhere.
 
 ## Output
 
