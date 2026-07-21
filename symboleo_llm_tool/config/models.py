@@ -1,10 +1,26 @@
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class LLMConfig(BaseModel):
+class _StrictModel(BaseModel):
+    """Base for every config model: config input is closed.
+
+    An unknown key is a typo or a stale field, and either way the value the
+    author intended is not the value the run uses. Ignoring it (Pydantic's
+    default) makes that undetectable after the fact: the run succeeds and
+    ``report.json`` records the config as *loaded*, so the durable artifact
+    shows the default rather than the misspelling that produced it.
+
+    Stated once here rather than per model so a new config model cannot opt out
+    by omission; ``extra="forbid"`` is inherited by subclasses.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LLMConfig(_StrictModel):
     provider: str
     model: str
     # Optional so it is only sent when explicitly set. Reasoning models (OpenAI
@@ -38,14 +54,14 @@ class LLMConfig(BaseModel):
         return f"{self.provider}/{self.model}"
 
 
-class StageConfig(BaseModel):
+class StageConfig(_StrictModel):
     llm: LLMConfig
     strategy: str
     strategy_params: dict[str, Any] = Field(default_factory=dict)
     include_grammar: bool = True
 
 
-class RunConfig(BaseModel):
+class RunConfig(_StrictModel):
     num_candidates: int = 1
     max_iterations: int = 3
     stop_on_first_convergence: bool = False
@@ -65,26 +81,26 @@ class RunConfig(BaseModel):
         return v
 
 
-class SymboleoConfig(BaseModel):
+class SymboleoConfig(_StrictModel):
     jar_path: Path = Path("./lib/symboleo-cli.jar")
     java_executable: str = "java"
 
 
-class OutputConfig(BaseModel):
+class OutputConfig(_StrictModel):
     directory: Path = Path("./output")
     save_intermediates: bool = False
 
 
-class LangSmithConfig(BaseModel):
+class LangSmithConfig(_StrictModel):
     enabled: bool = False
     project: str = "symboleo-research"
 
 
-class ObservabilityConfig(BaseModel):
+class ObservabilityConfig(_StrictModel):
     langsmith: LangSmithConfig = Field(default_factory=LangSmithConfig)
 
 
-class PipelineConfig(BaseModel):
+class PipelineConfig(_StrictModel):
     pipeline: RunConfig = Field(default_factory=RunConfig)
     generation: StageConfig
     correction: StageConfig
@@ -93,7 +109,7 @@ class PipelineConfig(BaseModel):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
 
-class Experiment(BaseModel):
+class Experiment(_StrictModel):
     """One named configuration in an experiment suite.
 
     The name labels the experiment in the comparison view; the config is a
@@ -105,7 +121,7 @@ class Experiment(BaseModel):
     config: PipelineConfig
 
 
-class SuiteConfig(BaseModel):
+class SuiteConfig(_StrictModel):
     """A set of experiments run against one contract for comparison.
 
     One contract is the deliberate v1 default: comparison is only

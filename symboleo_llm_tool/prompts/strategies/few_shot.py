@@ -27,6 +27,8 @@ def _load_examples(example_files: list[str]) -> list[dict[str, str]]:
 
 
 class FewShotStrategy(PromptStrategy):
+    _allowed_params = frozenset({"example_files"})
+
     def __init__(self, params: dict[str, Any]) -> None:
         super().__init__(params)
         example_files = params.get("example_files", [])

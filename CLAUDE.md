@@ -82,7 +82,7 @@ Input .txt
 - Strategy-specific data comes from `strategy_params` in config, passed to the strategy constructor
 - Prompt text lives in Jinja2 `.j2` templates, separate from Python logic
 - Grammar is baseline for all strategies — `include_grammar` is a per-stage flag, not a strategy characteristic
-- Adding a new strategy: add templates to `prompts/templates/`, add a strategy class in `prompts/strategies/`, then import it and add it to the `_STRATEGIES` dict in `prompts/strategies/__init__.py`
+- Adding a new strategy: add templates to `prompts/templates/`, add a strategy class in `prompts/strategies/`, declare its `_allowed_params` if it reads any `strategy_params`, then import it and add it to the `_STRATEGIES` dict in `prompts/strategies/__init__.py`
 
 **Available strategies:**
 | Strategy | Key `strategy_params` | Notes |
@@ -135,7 +135,8 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 
 ### Config Schema
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)
-- `strategy_params: {}` dict on each stage — strategies validate their own params internally
+- **Config input is closed.** Every config model inherits `_StrictModel` (`extra="forbid"`) in `config/models.py`, so an unknown or misspelled key fails the load at whatever level it appears rather than falling back to the default. This is a research data-integrity rule, not a UX nit: `report.json` records the config *as loaded*, so a silently-ignored `temprature` would leave no trace in the durable artifact either. Stated on the shared base so a new config model cannot opt out by omission. **Scoped to config files** — the API request models (`api/models.py`) stay `extra="ignore"` deliberately, because there a strict model turns frontend/backend version skew into a 422, a different risk profile from a hand-edited research config.
+- `strategy_params: {}` dict on each stage — `dict[str, Any]`, so `extra="forbid"` cannot see inside it. Each `PromptStrategy` therefore declares `_allowed_params` and `PromptStrategy.__init__` rejects unknown keys; a strategy's own semantic checks (e.g. `few_shot`'s list/emptiness rules) stay in that strategy
 - `include_grammar` is a per-stage research flag (not a strategy characteristic)
 - `output.save_intermediates` saves each iteration's `.symboleo` output — off by default
 - `stop_on_first_convergence` flag — default `false` (full research data), flip to `true` to save tokens

@@ -28,8 +28,21 @@ def build_jinja_env(*template_names: str) -> Environment:
 
 
 class PromptStrategy(ABC):
+    # Keys this strategy reads from ``strategy_params``. Enforced here rather
+    # than per strategy because ``StageConfig.strategy_params`` is a free-form
+    # dict, so the config models' extra="forbid" cannot see inside it -- this is
+    # the only place a misspelled param can be caught. A subclass assigns the
+    # complete set it accepts; if a shared param is ever added to this default,
+    # subclasses must union it in rather than keep overwriting.
+    _allowed_params: frozenset[str] = frozenset()
+
     def __init__(self, params: dict[str, Any]) -> None:
-        self._params = params
+        unknown = sorted(set(params) - self._allowed_params)
+        if unknown:
+            allowed = ", ".join(sorted(self._allowed_params)) or "none"
+            raise ValueError(
+                f"{type(self).__name__}: unknown strategy_params {unknown} (allowed: {allowed})"
+            )
 
     @abstractmethod
     def build_generation_prompt(self, context: PromptContext) -> str: ...
