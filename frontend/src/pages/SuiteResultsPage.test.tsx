@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import { useSuiteStream } from '@/hooks/useSuiteStream'
 import { triggerDownload } from '@/components/results/download'
+import { cancelRun } from '@/api/client'
 import SuiteResultsPage from './SuiteResultsPage'
 import type { PipelineResult, SuiteResult } from '@/api/types'
 
@@ -12,6 +13,12 @@ const mockUseSuiteStream = vi.mocked(useSuiteStream)
 
 vi.mock('@/components/results/download', () => ({ triggerDownload: vi.fn() }))
 const mockTriggerDownload = vi.mocked(triggerDownload)
+
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return { ...actual, cancelRun: vi.fn() }
+})
+const mockCancelRun = vi.mocked(cancelRun)
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 
@@ -26,11 +33,15 @@ type Totals = { tokens: number; cost: number | null }
 
 // Token/cost totals and iterations_to_convergence are computed_fields on the
 // backend models, so they arrive as authoritative values — the page reads them
-// directly rather than re-deriving from error_history.
+// directly rather than re-deriving from error_history. `splits` gives each
+// experiment two candidates whose totals sum to the experiment's without
+// matching it, so a page reading candidate-level rollups instead of the
+// experiment's own field fails.
 function pipelineResult(
   converged: boolean,
   iterations: number,
-  totals: Totals = { tokens: 0, cost: null },
+  totals: Totals,
+  splits: Totals[],
 ): PipelineResult {
   return {
     success: converged,
@@ -39,17 +50,15 @@ function pipelineResult(
     total_tokens: totals.tokens,
     total_cost_usd: totals.cost,
     iterations_to_convergence: converged ? iterations : null,
-    candidates: [
-      {
-        candidate_id: 0,
-        final_code: 'Contract C() {}',
-        converged,
-        iterations_used: iterations,
-        error_history: [],
-        total_tokens: totals.tokens,
-        total_cost_usd: totals.cost,
-      },
-    ],
+    candidates: splits.map((split, index) => ({
+      candidate_id: index,
+      final_code: 'Contract C() {}',
+      converged,
+      iterations_used: iterations,
+      error_history: [],
+      total_tokens: split.tokens,
+      total_cost_usd: split.cost,
+    })),
   }
 }
 
@@ -59,8 +68,20 @@ const MOCK_SUITE_RESULT: SuiteResult = {
   total_tokens: 3500,
   total_cost_usd: 0.007,
   experiments: [
-    { name: 'zero-shot', result: pipelineResult(true, 2, { tokens: 1500, cost: 0.003 }) },
-    { name: 'cot', result: pipelineResult(false, 3, { tokens: 2000, cost: 0.004 }) },
+    {
+      name: 'zero-shot',
+      result: pipelineResult(true, 2, { tokens: 1500, cost: 0.003 }, [
+        { tokens: 900, cost: 0.002 },
+        { tokens: 600, cost: 0.001 },
+      ]),
+    },
+    {
+      name: 'cot',
+      result: pipelineResult(false, 3, { tokens: 2000, cost: 0.004 }, [
+        { tokens: 1200, cost: 0.0025 },
+        { tokens: 800, cost: 0.0015 },
+      ]),
+    },
   ],
 }
 
@@ -82,7 +103,13 @@ describe('SuiteResultsPage', () => {
     mockNavigate.mockReset()
     mockUseSuiteStream.mockReset()
     mockTriggerDownload.mockReset()
+    mockCancelRun.mockReset()
   })
+
+  // Each experiment's accordion trigger carries its own badge/iterations/tokens,
+  // so assertions are scoped to a row — a page-wide getByText would still pass
+  // with the values swapped between experiments.
+  const row = (label: RegExp) => screen.getByRole('button', { name: label })
 
   it('shows "Connecting..." on initial load', () => {
     mockUseSuiteStream.mockReturnValue({
@@ -138,11 +165,13 @@ describe('SuiteResultsPage', () => {
       errorMessage: null,
     })
     renderSuiteResultsPage()
-    expect(screen.getByText('Converged')).toBeInTheDocument()
-    expect(screen.getByText('Failed to converge')).toBeInTheDocument()
+    const convergedRow = row(/^zero-shot/)
+    const failedRow = row(/^cot/)
+    expect(within(convergedRow).getByText('Converged')).toBeInTheDocument()
+    expect(within(failedRow).getByText('Failed to converge')).toBeInTheDocument()
     // converged experiment shows its iteration count; the failed one shows a dash
-    expect(screen.getByText('2 iterations')).toBeInTheDocument()
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(within(convergedRow).getByText('2 iterations')).toBeInTheDocument()
+    expect(within(failedRow).getByText('—')).toBeInTheDocument()
   })
 
   it('shows per-experiment token totals and cost', () => {
@@ -153,8 +182,8 @@ describe('SuiteResultsPage', () => {
       errorMessage: null,
     })
     renderSuiteResultsPage()
-    expect(screen.getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
-    expect(screen.getByText('2,000 tokens · $0.0040')).toBeInTheDocument()
+    expect(within(row(/^zero-shot/)).getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
+    expect(within(row(/^cot/)).getByText('2,000 tokens · $0.0040')).toBeInTheDocument()
   })
 
   it('shows the suite-wide token and cost total', () => {
@@ -179,10 +208,14 @@ describe('SuiteResultsPage', () => {
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
 
-    const csv = mockTriggerDownload.mock.calls[0][0] as string
-    expect(csv).toContain('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
-    expect(csv).toContain('zero-shot,true,2,1500,')
-    expect(csv).toContain('cot,false,,2000,')
+    const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
+    expect(rows[0]).toBe('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
+    // Full rows, so the cost column and the column order are both pinned — a
+    // trailing-comma prefix match left the cost cell free to be anything.
+    expect(rows[1]).toBe('zero-shot,true,2,1500,0.003')
+    // Not converged → empty iterations cell, and the experiment's own totals
+    // (2000/0.004), not either candidate's.
+    expect(rows[2]).toBe('cot,false,,2000,0.004')
   })
 
   it('renders configuration warnings forwarded via navigation state', () => {
@@ -207,7 +240,67 @@ describe('SuiteResultsPage', () => {
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: 'Stop' }))
+    // The backend call is the point of the button; the label flip alone would
+    // still pass with the cancel request removed.
+    expect(mockCancelRun).toHaveBeenCalledWith(TEST_SUITE_ID)
     expect(screen.getByRole('button', { name: /Stopping/ })).toBeInTheDocument()
+  })
+
+  it('tells the user the browser is retrying a dropped connection', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'reconnecting',
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Experiment 1 — Candidate 1 — Iteration 1')
+    ).not.toBeInTheDocument()
+  })
+
+  it('flags the results as partial once a stopped suite completes', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'running',
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      result: null,
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    // Clicking Stop re-renders, by which point the stream has completed.
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+    })
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+
+    expect(screen.getByText('Suite stopped — showing partial results.')).toBeInTheDocument()
+  })
+
+  it('quotes an experiment name containing a comma so the CSV stays parseable', async () => {
+    const user = userEvent.setup()
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: {
+        ...MOCK_SUITE_RESULT,
+        // Experiment names are free text, and the axis expander encourages
+        // descriptive ones — an unescaped comma would shift every later column.
+        experiments: [
+          { name: 'zero-shot, temp 0.2', result: MOCK_SUITE_RESULT.experiments[0].result },
+        ],
+      },
+      errorMessage: null,
+    })
+    renderSuiteResultsPage()
+    await user.click(screen.getByRole('button', { name: /Download CSV/ }))
+
+    const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
+    expect(rows[1]).toBe('"zero-shot, temp 0.2",true,2,1500,0.003')
   })
 
   it('navigates to /experiments when New Suite is clicked', async () => {

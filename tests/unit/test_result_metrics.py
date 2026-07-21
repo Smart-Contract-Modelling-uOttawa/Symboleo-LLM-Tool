@@ -90,13 +90,18 @@ class TestPipelineRollups:
         assert pipeline.total_cost_usd == pytest.approx(0.0015)
 
     def test_iterations_to_convergence_is_first_converged_candidate(self) -> None:
+        # Every number here is distinct so the oracle picks out one implementation:
+        # 5 is the *first converged* candidate's iterations_used — not its index
+        # (1), the converged count (2), the non-converged count (1), the last
+        # converger's count (2), the max (7), or the sum (14).
         pipeline = _pipeline(
             [
-                _candidate([], converged=False, iterations_used=3),
-                _candidate([], converged=True, iterations_used=1),
+                _candidate([], converged=False, iterations_used=7),
+                _candidate([], converged=True, iterations_used=5),
+                _candidate([], converged=True, iterations_used=2),
             ]
         )
-        assert pipeline.iterations_to_convergence == 1
+        assert pipeline.iterations_to_convergence == 5
 
     def test_iterations_to_convergence_is_none_when_none_converged(self) -> None:
         pipeline = _pipeline([_candidate([], converged=False, iterations_used=3)], success=False)
@@ -124,10 +129,15 @@ def test_suite_totals_sum_across_experiments() -> None:
 
 def test_computed_rollups_serialize_into_the_dump() -> None:
     pipeline = _pipeline(
-        [_candidate([make_usage(prompt_tokens=700, completion_tokens=0, cost_usd=0.001)])]
+        [
+            _candidate(
+                [make_usage(prompt_tokens=700, completion_tokens=0, cost_usd=0.001)],
+                iterations_used=3,  # ≠ the candidate's index, so the dumped value is unambiguous
+            )
+        ]
     )
     dumped = pipeline.model_dump()
     assert dumped["total_tokens"] == 700
     assert dumped["total_cost_usd"] == pytest.approx(0.001)
-    assert dumped["iterations_to_convergence"] == 0
+    assert dumped["iterations_to_convergence"] == 3
     assert dumped["candidates"][0]["total_tokens"] == 700

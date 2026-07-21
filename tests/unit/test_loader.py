@@ -5,7 +5,7 @@ import pytest
 from symboleo_llm_tool.config.loader import load_suite_config
 
 _SUITE_YAML = """
-max_concurrency: 2
+max_concurrency: 4
 experiments:
   - name: zero-shot
     config:
@@ -34,7 +34,9 @@ def test_load_suite_config_binds_cli_contract(tmp_path: Path) -> None:
 
     assert suite.contract_text == "Seller shall deliver the goods."
     assert [e.name for e in suite.experiments] == ["zero-shot", "cot"]
-    assert suite.max_concurrency == 2
+    # 4, not the SuiteConfig default of 2 — otherwise dropping the key entirely
+    # would still satisfy this.
+    assert suite.max_concurrency == 4
 
 
 def test_load_suite_config_rejects_inline_contract(tmp_path: Path) -> None:

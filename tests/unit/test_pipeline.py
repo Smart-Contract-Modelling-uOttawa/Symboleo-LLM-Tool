@@ -225,23 +225,95 @@ def test_coordinator_skips_all_candidates_when_pre_cancelled(mock_deps):
     assert result.success is False
 
 
-def test_coordinator_stop_on_first_convergence_keeps_at_least_one(mock_deps):
+def test_coordinator_stop_on_first_convergence_cancels_siblings(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = make_generation("valid")
     mock_wrapper.validate.return_value = []
 
+    cancel = CancellationToken()
     with ThreadPoolExecutor(max_workers=2) as pool:
         result = pipeline.run(
             "contract text",
             _make_config(num_candidates=3, stop_on_first_convergence=True),
-            coordinator=RunCoordinator(candidate_pool=pool, cancel=CancellationToken()),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=cancel),
         )
 
-    # In-flight candidates may finish before the cancel lands, so >1 can converge,
-    # but never zero and never more than requested.
+    # The tripped token is the deterministic effect; how many in-flight candidates
+    # finish before it lands is a race, so only the bounds are asserted.
+    assert cancel.cancelled is True
     assert result.success is True
     assert 1 <= len(result.candidates) <= 3
     assert all(c.converged for c in result.candidates)
+
+
+def test_coordinator_without_stop_on_first_convergence_leaves_token_untripped(mock_deps):
+    # Negative control for the test above: without the flag no candidate cancels
+    # its siblings, so all of them run.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    cancel = CancellationToken()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=3, stop_on_first_convergence=False),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=cancel),
+        )
+
+    assert cancel.cancelled is False
+    assert len(result.candidates) == 3
+
+
+def test_cancel_mid_run_stops_the_correction_loop(mock_deps):
+    # The entry checkpoint is covered above; this is the between-iterations one,
+    # which is what a Stop or disconnect actually hits during a long correction
+    # loop. Tripping the token from the progress callback is deterministic.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("invalid")
+    mock_wrapper.validate.return_value = [make_issue()]
+
+    cancel = CancellationToken()
+
+    def cancel_after_generation(candidate_id, iteration, errors, total_candidates, total_iters):
+        cancel.cancel()
+
+    result = pipeline.run(
+        "contract text",
+        _make_config(max_iterations=3),
+        on_progress=cancel_after_generation,
+        cancel=cancel,
+    )
+
+    # Generation recorded iteration 0, then the loop broke — without the
+    # checkpoint all three correction iterations would run.
+    candidate = result.candidates[0]
+    assert candidate.iterations_used == 0
+    assert len(candidate.error_history) == 1
+    assert mock_llm.generate.call_count == 1
+
+
+def test_coordinator_token_takes_precedence_over_a_bare_cancel(mock_deps):
+    # run() documents that a coordinator's own token wins; every other test
+    # supplies only one of the two, so the precedence itself was unverified.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid")
+    mock_wrapper.validate.return_value = []
+
+    already_cancelled = CancellationToken()
+    already_cancelled.cancel()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        result = pipeline.run(
+            "contract text",
+            _make_config(num_candidates=2),
+            coordinator=RunCoordinator(candidate_pool=pool, cancel=CancellationToken()),
+            cancel=already_cancelled,
+        )
+
+    # The live coordinator token governs, so the run proceeds despite the
+    # pre-cancelled bare token.
+    assert len(result.candidates) == 2
 
 
 def test_cancel_token_skips_sequential_candidates(mock_deps):

@@ -60,6 +60,30 @@ def test_correction_includes_current_code(any_strategy: PromptStrategy) -> None:
     assert "some symboleo code" in any_strategy.build_correction_prompt(ctx)
 
 
+def test_correction_grammar_included_when_provided(any_strategy: PromptStrategy) -> None:
+    # The grammar tests above cover generation only; a correction template that
+    # lost its include would ship silently.
+    ctx = PromptContext(current_code="code", errors=[], grammar_context="grammar rules here")
+    assert "grammar rules here" in any_strategy.build_correction_prompt(ctx)
+
+
+def test_correction_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(current_code="code", errors=[], grammar_context=None)
+    assert "Grammar Reference" not in any_strategy.build_correction_prompt(ctx)
+
+
+def test_generation_includes_output_format(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    assert "## Output Format" in any_strategy.build_generation_prompt(ctx)
+
+
+def test_correction_includes_output_format(any_strategy: PromptStrategy) -> None:
+    # Correction carries the same structural grounding as generation; without it
+    # the model over-edits lines that have no listed error (see CLAUDE.md).
+    ctx = PromptContext(current_code="some symboleo code", errors=[], grammar_context=None)
+    assert "## Output Format" in any_strategy.build_correction_prompt(ctx)
+
+
 def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(
         current_code="code",
@@ -108,16 +132,23 @@ def test_few_shot_malformed_example_file_raises(tmp_path: Path) -> None:
 
 
 def test_cot_generation_includes_step_instructions(cot: CoTStrategy) -> None:
+    # Both assertions quote the ## Workflow block, which is what makes this
+    # strategy CoT — text shared with the other strategies would not.
     ctx = PromptContext(contract_text="contract text", grammar_context=None)
     prompt = cot.build_generation_prompt(ctx)
     assert "Identify all parties" in prompt
-    assert "obligation" in prompt
+    assert "Map every element to the correct SymboleoAC construct." in prompt
 
 
-def test_cot_correction_includes_reasoning_instruction(cot: CoTStrategy) -> None:
+def test_cot_correction_includes_reasoning_workflow(cot: CoTStrategy) -> None:
+    # Anchored on the ## Workflow steps, not the word "reason" — that also appears
+    # in the constraint telling the model *not* to emit its reasoning, so the old
+    # assertion held even with the whole workflow deleted.
     ctx = PromptContext(
         current_code="code",
         errors=[make_issue(line=5, column=3, message="missing ';'")],
         grammar_context=None,
     )
-    assert "reason" in cot.build_correction_prompt(ctx).lower()
+    prompt = cot.build_correction_prompt(ctx)
+    assert "## Workflow" in prompt
+    assert "Apply the minimal fix that resolves the error." in prompt
