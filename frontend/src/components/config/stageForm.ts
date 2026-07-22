@@ -38,7 +38,9 @@ export interface ExperimentFormValues {
 export const FEW_SHOT = 'few_shot'
 
 export const DEFAULTS = {
-  temperature: 0.7,
+  // Low temperature by default: high-variance sampling swamps prompt effects
+  // on this task (see CLAUDE.md, "compare prompts at low temperature").
+  temperature: 0.2,
   include_grammar: true,
   num_candidates: 1,
   max_iterations: 3,
@@ -93,7 +95,10 @@ export function buildStageRequest(state: StageFormValues): StageRequest {
   return {
     model: state.model,
     strategy: state.strategy,
-    temperature: isNaN(temp) ? DEFAULTS.temperature : temp,
+    // A blank field means unset: omit the key so the backend keeps None and the
+    // adapter never sends the param — the only shape reasoning models accept,
+    // and the only way an exported suite file can omit its temperature line.
+    ...(!Number.isNaN(temp) && { temperature: temp }),
     include_grammar: state.include_grammar,
     ...(state.strategy === FEW_SHOT && {
       strategy_params: { example_files: state.example_files },
@@ -105,8 +110,8 @@ export function buildAdvancedFields(advanced: AdvancedFormValues) {
   const numCandidates = parseInt(advanced.num_candidates, 10)
   const maxIterations = parseInt(advanced.max_iterations, 10)
   return {
-    num_candidates: isNaN(numCandidates) ? DEFAULTS.num_candidates : numCandidates,
-    max_iterations: isNaN(maxIterations) ? DEFAULTS.max_iterations : maxIterations,
+    num_candidates: Number.isNaN(numCandidates) ? DEFAULTS.num_candidates : numCandidates,
+    max_iterations: Number.isNaN(maxIterations) ? DEFAULTS.max_iterations : maxIterations,
     stop_on_first_convergence: advanced.stop_on_first_convergence,
     save_intermediates: advanced.save_intermediates,
   }

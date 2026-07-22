@@ -1,8 +1,10 @@
+import type { OptionsResponse } from '@/api/types'
 import {
   DEFAULTS,
   buildAdvancedFields,
   buildStageRequest,
   getParamDefault,
+  makeDefaultStage,
   type StageFormValues,
 } from './stageForm'
 
@@ -37,8 +39,22 @@ describe('buildStageRequest', () => {
     })
   })
 
-  it('falls back to the default temperature when the field is blank', () => {
-    expect(buildStageRequest({ ...STAGE, temperature: '' }).temperature).toBe(DEFAULTS.temperature)
+  it('omits temperature entirely when the field is blank', () => {
+    // Blank = unset. Substituting a default here would make reasoning-model
+    // configs (which reject the param) inexpressible from the browser.
+    // Full-shape strict equality: pins that only temperature drops out on the
+    // blank path, and rejects a present-but-undefined key.
+    expect(buildStageRequest({ ...STAGE, temperature: '' })).toStrictEqual({
+      model: 'gpt-4o-mini',
+      strategy: 'zero_shot',
+      include_grammar: false,
+    })
+  })
+
+  it('keeps an explicit temperature of 0', () => {
+    // 0 is a valid chosen value (deterministic sampling), distinct from unset.
+    // A falsy-guard implementation of the omission would silently drop it.
+    expect(buildStageRequest({ ...STAGE, temperature: '0' })).toHaveProperty('temperature', 0)
   })
 })
 
@@ -91,5 +107,32 @@ describe('getParamDefault', () => {
     expect(getParamDefault({ include_grammar: { default: false } }, 'include_grammar', true)).toBe(
       false
     )
+  })
+})
+
+describe('makeDefaultStage', () => {
+  const OPTIONS: OptionsResponse = {
+    strategies: ['zero_shot', 'cot'],
+    models: { openai: ['gpt-4o-mini', 'gpt-4o'] },
+    parameters: {},
+    examples: [],
+  }
+
+  it('seeds the form from the first model/strategy and the local defaults', () => {
+    // The server reports no temperature default (backend default is None —
+    // unset), so the 0.2 seed lives only in DEFAULTS. This is the one direct
+    // pin on that seed; the page tests exercise it only incidentally.
+    expect(makeDefaultStage(OPTIONS)).toStrictEqual({
+      model: 'gpt-4o-mini',
+      strategy: 'zero_shot',
+      temperature: '0.2',
+      include_grammar: true,
+      example_files: [],
+    })
+  })
+
+  it('prefers a server-supplied parameter default over the local seed', () => {
+    const options = { ...OPTIONS, parameters: { temperature: { default: 0.5 } } }
+    expect(makeDefaultStage(options).temperature).toBe('0.5')
   })
 })
