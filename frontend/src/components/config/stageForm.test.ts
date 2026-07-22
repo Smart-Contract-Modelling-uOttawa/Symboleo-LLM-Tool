@@ -37,8 +37,10 @@ describe('buildStageRequest', () => {
     })
   })
 
-  it('falls back to the default temperature when the field is blank', () => {
-    expect(buildStageRequest({ ...STAGE, temperature: '' }).temperature).toBe(DEFAULTS.temperature)
+  it('omits temperature entirely when the field is blank', () => {
+    // Blank = unset. Substituting a default here would make reasoning-model
+    // configs (which reject the param) inexpressible from the browser.
+    expect(buildStageRequest({ ...STAGE, temperature: '' })).not.toHaveProperty('temperature')
   })
 })
 

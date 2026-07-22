@@ -163,4 +163,41 @@ describe('ConfigPage', () => {
       expect((capturedBody as Record<string, unknown>)?.contract_text).toBe('My legal contract')
     )
   })
+
+  it('omits temperature from a stage whose field was cleared', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/api/generate', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ run_id: TEST_RUN_ID })
+      })
+    )
+    const user = userEvent.setup()
+    const { container } = renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, makeFile())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
+    )
+
+    // Clear only the generation stage's field: generation must omit the key
+    // while correction (untouched) still carries a number — proving the
+    // omission is per-stage, not a global drop.
+    const [generationTemp] = screen.getAllByLabelText('Temperature')
+    await user.clear(generationTemp)
+
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement)
+
+    await waitFor(() => {
+      const body = capturedBody as {
+        generation?: Record<string, unknown>
+        correction?: Record<string, unknown>
+      }
+      expect(body?.generation).toBeDefined()
+      expect(body?.generation).not.toHaveProperty('temperature')
+      expect(body?.correction).toHaveProperty('temperature', 0.2)
+    })
+  })
 })
