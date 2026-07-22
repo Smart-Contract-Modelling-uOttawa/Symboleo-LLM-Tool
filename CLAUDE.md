@@ -268,7 +268,7 @@ We inject the raw `Symboleo.xtext` grammar verbatim ([_grammar_section.j2](symbo
 
 **Deferred — message enrichment.** The JAR's cryptic error messages (`"no viable alternative at input ''days''"`, validator crashes) are a plausible limiter for errors the notation explainer doesn't ground. If pursued, the better fix is **upstream** in SymboleoAC-IDE (Xtext `ISyntaxErrorMessageProvider`, `@Check` messages) than a downstream enrichment layer, since we consume the JAR as a black box.
 
-**Methodology — compare prompts at low temperature.** The temp-0.7 default produced run-to-run generations too variable to attribute prompt effects; temp 0.2 ([configs/openai.yaml](configs/openai.yaml)) collapsed the variance. High-temperature single samples measure sampling noise, not the prompt.
+**Methodology — compare prompts at low temperature.** An earlier temp-0.7 default produced run-to-run generations too variable to attribute prompt effects; temp 0.2 (the form seed and [configs/openai.yaml](configs/openai.yaml)) collapsed the variance. High-temperature single samples measure sampling noise, not the prompt.
 
 ### Reasoning-Model Parameter & Cost Compatibility
 Adding thinking-capable models beyond `gpt-4o-mini` (Claude Opus 4.8/4.7, Fable 5; OpenAI o-series/GPT-5) raises three concerns. The first (sampling-param rejection) is **handled**; the other two are still latent.
@@ -348,7 +348,7 @@ contract_text: str                          # required
 generation: StageRequest                    # required
   model: str                                # e.g. "gpt-4o-mini"
   strategy: str                             # e.g. "zero_shot"
-  temperature: float | None                 # defaults from Pydantic; per-stage
+  temperature: float | None                 # omitted/None = unset — param never sent (model default); per-stage
   include_grammar: bool | None              # defaults from Pydantic
   strategy_params: dict                     # e.g. {"example_files": ["sale_contract"]}
 correction: StageRequest | None             # defaults to generation if omitted
