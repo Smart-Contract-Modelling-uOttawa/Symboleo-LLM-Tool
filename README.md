@@ -208,8 +208,8 @@ uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing
 # Lint
 uv run ruff check .
 
-# Type check
-uv run mypy symboleo_llm_tool
+# Type check (mypy is run live, not pinned in the lock — see CLAUDE.md)
+uv run --with mypy mypy symboleo_llm_tool
 ```
 
 **Frontend:**
