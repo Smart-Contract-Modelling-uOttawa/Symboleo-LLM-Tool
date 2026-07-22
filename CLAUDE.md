@@ -244,6 +244,16 @@ This is a gap the JAR refresh left: that change updated the *integration test* t
 
 **Planned fix (deferred; own PR):** gate convergence on ERROR severity — `converged = not any(e.severity == "ERROR" for e in errors)` — and feed only ERROR-severity issues to the correction prompt so the LLM doesn't churn on stylistic warnings. Filter **at the pipeline, not in `wrapper.validate()`**, so `report.json` still records warnings (no research-data loss). One product decision to settle when picking it up: ignore warnings entirely for the loop, vs. still surface them (output/progress) while not blocking — leaning surface-but-don't-block.
 
+### `jar_path`/`output.directory` serialize with Windows backslashes (run records not cross-platform)
+`SymboleoConfig.jar_path` and `OutputConfig.directory` in `config/models.py` are plain `Path` fields with no custom serializer, so `model_dump(mode="json")` renders them via `str()` — on Windows that yields `lib\symboleo-cli.jar`. A backslash path in YAML is **not portable**: it reloads as a literal one-segment filename on POSIX. It reloads fine on Windows, which is why the bug stays latent.
+
+It manifests only in the **full-dump run records**: `output/run_*/config.yaml` and the per-experiment `config.yaml` inside a suite dir (via `_write_run` in `output/writer.py`), plus `output/suite_*/suite.yaml` (via `dump_suite_file(suite)` at the default `minimal=False`). **The suite export is already immune** — it calls `dump_suite_file(minimal=True)` → `exclude_defaults=True`, which drops `jar_path` (a default value) entirely. So a run recorded on Windows cannot be replayed on Linux/Mac; an export can.
+
+**Planned fix (deferred; own PR):** add a Pydantic `field_serializer` returning `Path.as_posix()` on the two `Path` fields, so *every* dump is portable regardless of which writer calls it (rather than patching each writer). Verified by probe that `as_posix()` yields `lib/symboleo-cli.jar` and round-trips correctly on Windows. A round-trip test (dump on the current platform → `load_config`/`load_suite_config` → assert the path reloads) is the fence.
+
+### CLI suite validation is late — tokens can be spent before a bad experiment is caught
+In a CLI suite, an invalid strategy name or `strategy_params` key in experiment N surfaces only when that experiment *starts* running — after experiments 1..N-1 have already spent LLM tokens. The API does not have this gap: `build_pipeline_config` (in `api/config_builder.py`) instantiates each stage's strategy up front for every experiment before any job starts, so a bad one is a 422 before the first token. **Planned fix (deferred):** extract a `validate_experiments(config)` the CLI `suite` command calls right after `load_suite_config`, mirroring the API's fail-fast. This is a pre-existing *class* of late detection (an unknown strategy name and a missing few-shot example already behave this way), so the fix should cover the class, not just `strategy_params`.
+
 ### Grammar Context Size
 The full Xtext grammar may push against LLM context window limits or significantly increase token costs across many iterations. Starting point is full grammar injection; selective/relevant excerpt injection is a future optimization.
 
