@@ -26,6 +26,16 @@ function makeFile(content = 'Contract text', name = 'contract.txt') {
   return new File([content], name, { type: 'text/plain' })
 }
 
+// Upload a contract and wait until it has loaded (Generate enables only after
+// the async FileReader completes — submitting before that is a silent no-op).
+async function uploadContract(container: HTMLElement, content = 'Contract text') {
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  await userEvent.upload(input, makeFile(content))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
+  )
+}
+
 describe('ConfigPage', () => {
   beforeEach(() => mockNavigate.mockReset())
 
@@ -59,29 +69,20 @@ describe('ConfigPage', () => {
   })
 
   it('enables Generate and shows the filename after a .txt file is uploaded', async () => {
-    const user = userEvent.setup()
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile())
+    await uploadContract(container)
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
     expect(screen.getByText('contract.txt')).toBeInTheDocument()
   })
 
   it('submits the form and navigates to the results page', async () => {
-    const user = userEvent.setup()
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile())
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    await uploadContract(container)
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
@@ -98,15 +99,10 @@ describe('ConfigPage', () => {
         HttpResponse.json({ run_id: TEST_RUN_ID, warnings: ['generation: temperature ignored'] })
       )
     )
-    const user = userEvent.setup()
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile())
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    await uploadContract(container)
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
@@ -123,15 +119,10 @@ describe('ConfigPage', () => {
         HttpResponse.json({ detail: 'Unknown model' }, { status: 422 })
       )
     )
-    const user = userEvent.setup()
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile())
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    await uploadContract(container)
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
@@ -147,15 +138,10 @@ describe('ConfigPage', () => {
         return HttpResponse.json({ run_id: 'test-run-id' })
       })
     )
-    const user = userEvent.setup()
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile('My legal contract'))
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    await uploadContract(container, 'My legal contract')
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)
 
@@ -176,16 +162,13 @@ describe('ConfigPage', () => {
     const { container } = renderConfigPage()
     await screen.findByRole('button', { name: 'Generate' })
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, makeFile())
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled()
-    )
+    await uploadContract(container)
 
     // Clear only the generation stage's field: generation must omit the key
     // while correction (untouched) still carries a number — proving the
     // omission is per-stage, not a global drop.
     const [generationTemp] = screen.getAllByLabelText('Temperature')
+    expect(generationTemp).toHaveAttribute('placeholder', 'Unset (model default)')
     await user.clear(generationTemp)
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement)

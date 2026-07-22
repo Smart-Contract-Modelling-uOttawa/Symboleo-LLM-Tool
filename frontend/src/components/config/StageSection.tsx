@@ -144,7 +144,7 @@ export function StageSection({
                 max={2}
                 step={0.1}
                 value={state.temperature}
-                placeholder="unset (model default)"
+                placeholder="Unset (model default)"
                 onChange={e => onChange(prev => ({ ...prev, temperature: e.target.value }))}
               />
             </div>
