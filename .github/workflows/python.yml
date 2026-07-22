@@ -16,11 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # --locked asserts uv.lock is in sync with pyproject and fails if not,
-      # rather than silently re-resolving. That is what pins the linters: ruff
-      # and mypy carry `>=` floors, so an unenforced sync could pull a newer
-      # ruff whose format output reddens an unrelated PR. (npm ci does this for
-      # the frontend already.)
+      # --locked asserts uv.lock matches pyproject and fails rather than silently
+      # re-resolving, which pins ruff: an unenforced sync could otherwise pull a
+      # newer ruff whose version-dependent format output reddens an unrelated PR.
+      # mypy deliberately stays unlocked — it runs live in the typecheck job below.
       - run: uv sync --extra dev --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
