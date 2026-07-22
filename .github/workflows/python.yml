@@ -16,7 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra dev
+      # --locked asserts uv.lock is in sync with pyproject and fails if not,
+      # rather than silently re-resolving. That is what pins the linters: ruff
+      # and mypy carry `>=` floors, so an unenforced sync could pull a newer
+      # ruff whose format output reddens an unrelated PR. (npm ci does this for
+      # the frontend already.)
+      - run: uv sync --extra dev --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
@@ -26,8 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra dev
-      - run: uv run mypy symboleo_llm_tool
+      - run: uv sync --extra dev --locked
+      # mypy runs live (latest), not from the lock: a type-checker's drift
+      # usually surfaces real bugs worth adopting, unlike a formatter's. --with
+      # overlays it on the locked project env so imports and stubs still resolve.
+      - run: uv run --no-sync --with mypy mypy symboleo_llm_tool
 
   unit-tests:
     name: Unit tests
@@ -35,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra dev
+      - run: uv sync --extra dev --locked
       - run: uv run pytest tests/unit -q --cov=symboleo_llm_tool --cov-report=term-missing
 
   integration-tests:
@@ -48,5 +56,5 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: uv sync --extra dev
+      - run: uv sync --extra dev --locked
       - run: uv run pytest tests/integration -q -m "not live"
