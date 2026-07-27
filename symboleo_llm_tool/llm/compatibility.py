@@ -1,9 +1,20 @@
 """Advisory model/parameter compatibility checks.
 
-These produce best-effort, non-fatal warnings — they never block a run. The
-model-capability signal comes from LiteLLM (``supports_reasoning``) rather than a
-hand-maintained model list, so the checks improve automatically as LiteLLM is
-upgraded.
+These produce best-effort, non-fatal warnings — they never block a run.
+
+This module is the single home for provider/model-specific parameter knowledge:
+which models reject a param, what value range a provider accepts. The dividing
+line: universal invariants (temperature within the cross-provider 0–2 envelope,
+``max_tokens >= 1``) are hard validators on the config models; anything keyed on
+*which* provider or model is in play is advisory and lives here. New quirks of
+that kind join these checks rather than scattering across layers.
+
+Signals: model capability comes from LiteLLM (``supports_reasoning``) rather
+than a hand-maintained model list, so that check improves automatically as
+LiteLLM is upgraded. Provider temperature ranges are hand-maintained below
+(LiteLLM's model map carries no param ranges) — acceptable because the table is
+tiny, the facts are stable, and an unknown provider yields no warning (see
+``temperature_range_warnings``).
 """
 
 import litellm
@@ -49,6 +60,42 @@ def reasoning_param_warnings(config: LLMConfig) -> list[str]:
     return warnings
 
 
+# Temperature ranges each provider's API accepts. The LLMConfig validator
+# enforces only the cross-provider envelope (0–2), so an in-envelope value can
+# still exceed the selected provider's cap.
+_TEMPERATURE_RANGES: dict[str, tuple[float, float]] = {
+    "openai": (0.0, 2.0),
+    "anthropic": (0.0, 1.0),
+}
+
+
+def temperature_range_warnings(config: LLMConfig) -> list[str]:
+    """Warn when a set temperature is outside the provider's accepted range.
+
+    An unknown provider yields no warning — the same fail-quiet contract as the
+    reasoning check: a missing table row costs a missed advisory, never a false
+    alarm or a blocked run.
+    """
+    if config.temperature is None:
+        return []
+    bounds = _TEMPERATURE_RANGES.get(config.provider)
+    if bounds is None:
+        return []
+    low, high = bounds
+    if low <= config.temperature <= high:
+        return []
+    return [
+        f"temperature={config.temperature} is outside the {low}–{high} range "
+        f"'{config.provider}' accepts — the provider will reject the request. "
+        "Adjust or remove this stage's temperature."
+    ]
+
+
+def llm_param_warnings(config: LLMConfig) -> list[str]:
+    """All per-``LLMConfig`` advisories — the seam future checks join."""
+    return [*reasoning_param_warnings(config), *temperature_range_warnings(config)]
+
+
 def pipeline_param_warnings(config: PipelineConfig) -> list[str]:
     """Stage-labeled param warnings across all pipeline stages.
 
@@ -59,7 +106,7 @@ def pipeline_param_warnings(config: PipelineConfig) -> list[str]:
     return [
         f"{label}: {warning}"
         for label, stage in stages
-        for warning in reasoning_param_warnings(stage.llm)
+        for warning in llm_param_warnings(stage.llm)
     ]
 
 

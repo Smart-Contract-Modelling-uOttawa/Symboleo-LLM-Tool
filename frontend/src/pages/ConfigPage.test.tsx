@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { vi } from 'vitest'
 import { server } from '@/test/server'
-import { TEST_RUN_ID } from '@/test/handlers'
+import { MOCK_OPTIONS, TEST_RUN_ID } from '@/test/handlers'
 import ConfigPage from './ConfigPage'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
@@ -148,6 +148,70 @@ describe('ConfigPage', () => {
     await waitFor(() =>
       expect((capturedBody as Record<string, unknown>)?.contract_text).toBe('My legal contract')
     )
+  })
+
+  it('applies server-supplied temperature bounds to the input', async () => {
+    server.use(
+      http.get('/api/options', () =>
+        HttpResponse.json({
+          ...MOCK_OPTIONS,
+          parameters: { temperature: { min: 0.5, max: 1.5 } },
+        })
+      )
+    )
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const [generationTemp] = screen.getAllByLabelText('Temperature')
+    expect(generationTemp).toHaveAttribute('min', '0.5')
+    expect(generationTemp).toHaveAttribute('max', '1.5')
+  })
+
+  it('falls back to the local temperature bounds when the server sends no constraints', async () => {
+    // The default MOCK_OPTIONS carries parameters: {} — the fallback path.
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const [generationTemp] = screen.getAllByLabelText('Temperature')
+    expect(generationTemp).toHaveAttribute('min', '0')
+    expect(generationTemp).toHaveAttribute('max', '2')
+  })
+
+  it('applies server-supplied advanced bounds to the inputs', async () => {
+    server.use(
+      http.get('/api/options', () =>
+        HttpResponse.json({
+          ...MOCK_OPTIONS,
+          parameters: {
+            num_candidates: { min: 1, max: 10 },
+            max_iterations: { min: 1, max: 20 },
+          },
+        })
+      )
+    )
+    const user = userEvent.setup()
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    await user.click(screen.getByText('Advanced Options'))
+
+    expect(screen.getByLabelText('Candidates')).toHaveAttribute('max', '10')
+    expect(screen.getByLabelText('Max Iterations')).toHaveAttribute('max', '20')
+  })
+
+  it('omits the max attribute on advanced inputs when the server sends no bound', async () => {
+    // Unlike temperature (local ?? 2), the advanced counts deliberately have
+    // no local max — an absent server bound means an unbounded input, not a
+    // client-invented cap.
+    const user = userEvent.setup()
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    await user.click(screen.getByText('Advanced Options'))
+
+    const candidates = screen.getByLabelText('Candidates')
+    expect(candidates).toHaveAttribute('min', '1')
+    expect(candidates).not.toHaveAttribute('max')
   })
 
   it('omits temperature from a stage whose field was cleared', async () => {

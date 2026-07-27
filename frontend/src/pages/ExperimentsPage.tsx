@@ -13,6 +13,7 @@ import {
   type AdvancedFormValues,
   type ExperimentFormValues,
   DEFAULTS,
+  getParamConstraint,
   getParamDefault,
   makeDefaultStage,
   makeDefaultAdvanced,
@@ -220,8 +221,8 @@ export default function ExperimentsPage() {
               <Input
                 id="max-concurrency"
                 type="number"
-                min={1}
-                max={8}
+                min={getParamConstraint(options.parameters, 'max_concurrency', 'min') ?? 1}
+                max={getParamConstraint(options.parameters, 'max_concurrency', 'max') ?? 8}
                 value={maxConcurrency}
                 onChange={e => setMaxConcurrency(e.target.value)}
                 className="w-16 h-8"
@@ -366,6 +367,7 @@ function ExperimentCard({
       <AdvancedSection
         idPrefix={`${value.id}-adv`}
         value={value.advanced}
+        options={options}
         onChange={updateAdvanced}
         open={advOpen}
         onOpenChange={setAdvOpen}
