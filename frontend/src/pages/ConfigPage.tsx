@@ -128,6 +128,7 @@ export default function ConfigPage() {
         <AdvancedSection
           idPrefix="advanced"
           value={advanced}
+          options={options}
           onChange={updateAdvanced}
           open={advancedOpen}
           onOpenChange={setAdvancedOpen}

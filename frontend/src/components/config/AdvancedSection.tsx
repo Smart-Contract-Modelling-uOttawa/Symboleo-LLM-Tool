@@ -7,12 +7,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import type { AdvancedFormValues } from './stageForm'
+import type { OptionsResponse } from '@/api/types'
+import { getParamConstraint, type AdvancedFormValues } from './stageForm'
 
 interface AdvancedSectionProps {
   // Prefixes element ids so multiple instances (one per experiment) don't collide.
   idPrefix: string
   value: AdvancedFormValues
+  options: OptionsResponse
   onChange: (updater: (prev: AdvancedFormValues) => AdvancedFormValues) => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -21,6 +23,7 @@ interface AdvancedSectionProps {
 export function AdvancedSection({
   idPrefix,
   value,
+  options,
   onChange,
   open,
   onOpenChange,
@@ -41,7 +44,8 @@ export function AdvancedSection({
             <Input
               id={`${idPrefix}-num_candidates`}
               type="number"
-              min={1}
+              min={getParamConstraint(options.parameters, 'num_candidates', 'min') ?? 1}
+              max={getParamConstraint(options.parameters, 'num_candidates', 'max')}
               value={value.num_candidates}
               onChange={e => onChange(prev => ({ ...prev, num_candidates: e.target.value }))}
             />
@@ -51,7 +55,8 @@ export function AdvancedSection({
             <Input
               id={`${idPrefix}-max_iterations`}
               type="number"
-              min={1}
+              min={getParamConstraint(options.parameters, 'max_iterations', 'min') ?? 1}
+              max={getParamConstraint(options.parameters, 'max_iterations', 'max')}
               value={value.max_iterations}
               onChange={e => onChange(prev => ({ ...prev, max_iterations: e.target.value }))}
             />

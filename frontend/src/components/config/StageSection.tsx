@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import type { OptionsResponse } from '@/api/types'
-import { FEW_SHOT, type StageFormValues } from './stageForm'
+import { FEW_SHOT, getParamConstraint, type StageFormValues } from './stageForm'
 
 interface StageSectionProps {
   title: string
@@ -140,8 +140,8 @@ export function StageSection({
               <Input
                 id={`${titleId}-temp`}
                 type="number"
-                min={0}
-                max={2}
+                min={getParamConstraint(options.parameters, 'temperature', 'min') ?? 0}
+                max={getParamConstraint(options.parameters, 'temperature', 'max') ?? 2}
                 step={0.1}
                 value={state.temperature}
                 placeholder="Unset (model default)"

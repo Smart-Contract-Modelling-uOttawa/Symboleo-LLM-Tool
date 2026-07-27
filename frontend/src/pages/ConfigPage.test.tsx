@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { vi } from 'vitest'
 import { server } from '@/test/server'
-import { TEST_RUN_ID } from '@/test/handlers'
+import { MOCK_OPTIONS, TEST_RUN_ID } from '@/test/handlers'
 import ConfigPage from './ConfigPage'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
@@ -148,6 +148,31 @@ describe('ConfigPage', () => {
     await waitFor(() =>
       expect((capturedBody as Record<string, unknown>)?.contract_text).toBe('My legal contract')
     )
+  })
+
+  it('applies server-supplied temperature bounds to the input', async () => {
+    server.use(
+      http.get('/api/options', () =>
+        HttpResponse.json({
+          ...MOCK_OPTIONS,
+          parameters: { temperature: { min: 0, max: 1.5 } },
+        })
+      )
+    )
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const [generationTemp] = screen.getAllByLabelText('Temperature')
+    expect(generationTemp).toHaveAttribute('max', '1.5')
+  })
+
+  it('falls back to the local temperature bound when the server sends no constraints', async () => {
+    // The default MOCK_OPTIONS carries parameters: {} — the fallback path.
+    renderConfigPage()
+    await screen.findByRole('button', { name: 'Generate' })
+
+    const [generationTemp] = screen.getAllByLabelText('Temperature')
+    expect(generationTemp).toHaveAttribute('max', '2')
   })
 
   it('omits temperature from a stage whose field was cleared', async () => {

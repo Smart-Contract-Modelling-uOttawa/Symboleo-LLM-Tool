@@ -63,6 +63,23 @@ export function getParamDefault<T>(
   return fallback
 }
 
+// Read a numeric input constraint (min/max) from the server-supplied options,
+// so ui_config.yaml bounds reach the form without a frontend deploy. Returns
+// undefined when the server supplies none — callers fall back to a local bound
+// or omit the attribute.
+export function getParamConstraint(
+  parameters: Record<string, unknown>,
+  key: string,
+  bound: 'min' | 'max',
+): number | undefined {
+  const entry = parameters[key]
+  if (entry !== null && typeof entry === 'object' && bound in entry) {
+    const val = (entry as Record<string, unknown>)[bound]
+    return typeof val === 'number' ? val : undefined
+  }
+  return undefined
+}
+
 export function makeDefaultStage(options: OptionsResponse): StageFormValues {
   const firstProvider = Object.keys(options.models)[0]
   const firstModel = (firstProvider && options.models[firstProvider]?.[0]) ?? ''

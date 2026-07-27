@@ -2,8 +2,11 @@ from unittest.mock import patch
 
 from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.llm.compatibility import (
+    _TEMPERATURE_RANGES,
+    llm_param_warnings,
     pipeline_param_warnings,
     reasoning_param_warnings,
+    temperature_range_warnings,
 )
 
 _TARGET = "symboleo_llm_tool.llm.compatibility.litellm.supports_reasoning"
@@ -11,6 +14,10 @@ _TARGET = "symboleo_llm_tool.llm.compatibility.litellm.supports_reasoning"
 
 def _cfg(temperature: float | None) -> LLMConfig:
     return LLMConfig(provider="openai", model="gpt-5", temperature=temperature)
+
+
+def _anthropic_cfg(temperature: float | None) -> LLMConfig:
+    return LLMConfig(provider="anthropic", model="claude-haiku-4-5", temperature=temperature)
 
 
 def _pipeline(temperature: float | None) -> PipelineConfig:
@@ -92,3 +99,69 @@ def test_pipeline_warnings_empty_for_non_reasoning() -> None:
     with patch(_TARGET, return_value=False):
         warnings = pipeline_param_warnings(_pipeline(temperature=0.2))
     assert warnings == []
+
+
+def test_range_warning_when_temperature_exceeds_provider_max() -> None:
+    warnings = temperature_range_warnings(_anthropic_cfg(temperature=1.5))
+    assert len(warnings) == 1
+    assert "anthropic" in warnings[0]
+    assert "1.5" in warnings[0]
+
+
+def test_no_range_warning_at_provider_boundaries() -> None:
+    assert temperature_range_warnings(_anthropic_cfg(temperature=1.0)) == []
+    assert temperature_range_warnings(_anthropic_cfg(temperature=0.0)) == []
+
+
+def test_no_range_warning_within_provider_range() -> None:
+    # 1.5 warns for anthropic (above) but is valid for openai — the check is
+    # provider-keyed, not a second global bound.
+    assert temperature_range_warnings(_cfg(temperature=1.5)) == []
+
+
+def test_no_range_warning_for_unknown_provider() -> None:
+    cfg = LLMConfig(provider="mistral", model="mistral-large", temperature=1.5)
+    assert temperature_range_warnings(cfg) == []
+
+
+def test_no_range_warning_when_temperature_unset() -> None:
+    assert temperature_range_warnings(_anthropic_cfg(temperature=None)) == []
+
+
+def test_pipeline_labels_range_warning_by_stage() -> None:
+    # Range warnings ride the same stage labeling as reasoning warnings; only
+    # the offending stage is named.
+    config = PipelineConfig(
+        generation=StageConfig(llm=_anthropic_cfg(1.5), strategy="zero_shot"),
+        correction=StageConfig(llm=_anthropic_cfg(0.2), strategy="zero_shot"),
+    )
+    with patch(_TARGET, return_value=False):
+        warnings = pipeline_param_warnings(config)
+    assert len(warnings) == 1
+    assert warnings[0].startswith("generation: ")
+    assert "anthropic" in warnings[0]
+
+
+def test_reasoning_and_range_warnings_compose() -> None:
+    # A set-and-out-of-range temperature on a reasoning model earns both
+    # advisories — one of each kind, not one kind twice.
+    with patch(_TARGET, return_value=True):
+        warnings = llm_param_warnings(_anthropic_cfg(temperature=1.5))
+    assert len(warnings) == 2
+    assert "reasoning model" in warnings[0]
+    assert "outside" in warnings[1]
+
+
+def test_unset_temperature_clears_both_composed_warnings() -> None:
+    with patch(_TARGET, return_value=True):
+        assert llm_param_warnings(_anthropic_cfg(temperature=None)) == []
+
+
+def test_range_table_stays_within_the_hard_envelope() -> None:
+    # A table row wider than the LLMConfig validator's envelope would advise a
+    # range the hard validator rejects — contradictory UX, and nothing else
+    # reddens. Constructing a config at each bound proves representability
+    # without duplicating the envelope literal here.
+    for provider, (low, high) in _TEMPERATURE_RANGES.items():
+        LLMConfig(provider=provider, model="any", temperature=low)
+        LLMConfig(provider=provider, model="any", temperature=high)

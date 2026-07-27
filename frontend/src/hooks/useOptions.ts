@@ -6,6 +6,13 @@ import type { OptionsResponse } from '@/api/types'
 // (e.g. navigating back via "New Run") skip the fetch and loading screen.
 let optionsCache: OptionsResponse | null = null
 
+// Test seam: without this, the module cache leaks options across tests, so a
+// test overriding GET /api/options is served an earlier test's payload.
+// Called from test/setup.ts's afterEach; production code never calls it.
+export function resetOptionsCache(): void {
+  optionsCache = null
+}
+
 interface UseOptionsResult {
   options: OptionsResponse | null
   loading: boolean

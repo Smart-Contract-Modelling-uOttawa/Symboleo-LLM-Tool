@@ -28,7 +28,9 @@ parameters:
   temperature:
     type: float
     min: 0.0
-    max: 1.0
+    # Cross-provider envelope (matches the LLMConfig validator). Per-provider
+    # caps (anthropic: 1.0) are advisory — see llm/compatibility.py.
+    max: 2.0
   stop_on_first_convergence:
     type: boolean
   include_grammar:

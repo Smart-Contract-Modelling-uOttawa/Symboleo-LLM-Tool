@@ -3,6 +3,7 @@ import {
   DEFAULTS,
   buildAdvancedFields,
   buildStageRequest,
+  getParamConstraint,
   getParamDefault,
   makeDefaultStage,
   type StageFormValues,
@@ -107,6 +108,32 @@ describe('getParamDefault', () => {
     expect(getParamDefault({ include_grammar: { default: false } }, 'include_grammar', true)).toBe(
       false
     )
+  })
+})
+
+describe('getParamConstraint', () => {
+  it('returns the server-supplied bound', () => {
+    expect(getParamConstraint({ temperature: { min: 0, max: 1.5 } }, 'temperature', 'max')).toBe(
+      1.5
+    )
+  })
+
+  it('keeps a falsy-but-real bound such as 0', () => {
+    expect(getParamConstraint({ temperature: { min: 0 } }, 'temperature', 'min')).toBe(0)
+  })
+
+  it('returns undefined when the parameter is absent', () => {
+    expect(getParamConstraint({}, 'temperature', 'max')).toBeUndefined()
+  })
+
+  it('returns undefined when the entry has no such bound', () => {
+    expect(
+      getParamConstraint({ temperature: { type: 'float' } }, 'temperature', 'max')
+    ).toBeUndefined()
+  })
+
+  it('returns undefined for a non-numeric bound', () => {
+    expect(getParamConstraint({ temperature: { max: '2' } }, 'temperature', 'max')).toBeUndefined()
   })
 })
 
