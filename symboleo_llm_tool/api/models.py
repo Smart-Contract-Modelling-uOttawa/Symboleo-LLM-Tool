@@ -120,7 +120,7 @@ class RunCreatedResponse(BaseModel):
 class SuiteFileResponse(BaseModel):
     filename: str
     content: str
-    # Same reasoning-model advisories POST /suites returns. The exported file can
+    # Same param advisories POST /suites returns. The exported file can
     # legitimately carry a temperature the model will reject, and the user is
     # standing right here — deferring the notice to CLI run time hides it.
     warnings: list[str] = Field(default_factory=list)

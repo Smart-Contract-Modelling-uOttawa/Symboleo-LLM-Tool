@@ -1,11 +1,21 @@
+from pathlib import Path
 from unittest.mock import patch
 
-from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
+import yaml
+
+from symboleo_llm_tool.config.models import (
+    Experiment,
+    LLMConfig,
+    PipelineConfig,
+    StageConfig,
+    SuiteConfig,
+)
 from symboleo_llm_tool.llm.compatibility import (
     _TEMPERATURE_RANGES,
     llm_param_warnings,
     pipeline_param_warnings,
     reasoning_param_warnings,
+    suite_param_warnings,
     temperature_range_warnings,
 )
 
@@ -148,8 +158,10 @@ def test_reasoning_and_range_warnings_compose() -> None:
     with patch(_TARGET, return_value=True):
         warnings = llm_param_warnings(_anthropic_cfg(temperature=1.5))
     assert len(warnings) == 2
-    assert "reasoning model" in warnings[0]
-    assert "outside" in warnings[1]
+    # Count by kind rather than position: no consumer depends on the order,
+    # so a reordered composite should not redden this test.
+    assert sum("reasoning model" in w for w in warnings) == 1
+    assert sum("outside" in w for w in warnings) == 1
 
 
 def test_unset_temperature_clears_both_composed_warnings() -> None:
@@ -161,7 +173,48 @@ def test_range_table_stays_within_the_hard_envelope() -> None:
     # A table row wider than the LLMConfig validator's envelope would advise a
     # range the hard validator rejects — contradictory UX, and nothing else
     # reddens. Constructing a config at each bound proves representability
-    # without duplicating the envelope literal here.
+    # without duplicating the envelope literal here. An inverted row (low >
+    # high) would warn on every set temperature — a constant false alarm the
+    # module contract forbids — and both endpoints still construct, so it
+    # needs its own assert.
+    assert _TEMPERATURE_RANGES
     for provider, (low, high) in _TEMPERATURE_RANGES.items():
+        assert low <= high, f"{provider} row is inverted"
         LLMConfig(provider=provider, model="any", temperature=low)
         LLMConfig(provider=provider, model="any", temperature=high)
+
+
+def test_shipped_ui_config_temperature_bounds_fit_the_hard_envelope() -> None:
+    # The shipped deployment file advertises the UI's temperature bounds; a
+    # bound outside the validator's envelope would let the form submit a value
+    # the backend 422s. Same construct-oracle as the table fence, applied to
+    # the repo's shipped copy (the file is deployment-mutable by design).
+    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    bounds = data["parameters"]["temperature"]
+    LLMConfig(provider="openai", model="any", temperature=bounds["min"])
+    LLMConfig(provider="openai", model="any", temperature=bounds["max"])
+
+
+def test_suite_warnings_pair_experiment_name_with_stage_labeled_range_warning() -> None:
+    # The one test that runs the real suite -> pipeline -> range chain
+    # unmocked: a composition bug (e.g. suite_param_warnings bypassing the
+    # stage labeling) passes every per-function test but fails here.
+    suite = SuiteConfig(
+        contract_text="c",
+        experiments=[
+            Experiment(
+                name="exp-a",
+                config=PipelineConfig(
+                    generation=StageConfig(llm=_anthropic_cfg(1.5), strategy="zero_shot"),
+                    correction=StageConfig(llm=_anthropic_cfg(0.2), strategy="zero_shot"),
+                ),
+            )
+        ],
+    )
+    with patch(_TARGET, return_value=False):
+        pairs = suite_param_warnings(suite)
+    assert len(pairs) == 1
+    name, warning = pairs[0]
+    assert name == "exp-a"
+    assert warning.startswith("generation: ")
+    assert "anthropic" in warning

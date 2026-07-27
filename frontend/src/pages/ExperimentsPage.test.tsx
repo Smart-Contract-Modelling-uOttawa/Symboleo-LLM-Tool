@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { vi } from 'vitest'
 import { server } from '@/test/server'
-import { TEST_RUN_ID } from '@/test/handlers'
+import { MOCK_OPTIONS, TEST_RUN_ID } from '@/test/handlers'
 import ExperimentsPage from './ExperimentsPage'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
@@ -260,6 +260,9 @@ describe('ExperimentsPage', () => {
 
     const concurrency = screen.getByLabelText('Concurrency') as HTMLInputElement
     expect(concurrency.value).toBe('2') // DEFAULTS fallback (mock options have no params)
+    // No server constraints either, so the input carries the local bound fallbacks.
+    expect(concurrency).toHaveAttribute('min', '1')
+    expect(concurrency).toHaveAttribute('max', '8')
     fireEvent.change(concurrency, { target: { value: '4' } })
 
     await uploadContract(container, 'My contract')
@@ -271,5 +274,20 @@ describe('ExperimentsPage', () => {
     await waitFor(() => {
       expect((capturedBody as { max_concurrency: number }).max_concurrency).toBe(4)
     })
+  })
+
+  it('applies server-supplied concurrency bounds to the input', async () => {
+    server.use(
+      http.get('/api/options', () =>
+        HttpResponse.json({
+          ...MOCK_OPTIONS,
+          parameters: { max_concurrency: { min: 1, max: 4 } },
+        })
+      )
+    )
+    renderExperimentsPage()
+    await screen.findByText('Experiment Suite')
+
+    expect(screen.getByLabelText('Concurrency')).toHaveAttribute('max', '4')
   })
 })
