@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from symboleo_llm_tool.config.models import LLMConfig
-from symboleo_llm_tool.llm.litellm_adapter import LiteLLMAdapter
+from symboleo_llm_tool.llm.litellm_adapter import _REQUEST_TIMEOUT_SECONDS, LiteLLMAdapter
 
 
 def _adapter() -> LiteLLMAdapter:
@@ -86,6 +86,23 @@ def test_temperature_sent_when_configured() -> None:
         adapter.generate("prompt")
 
     assert mock_completion.call_args.kwargs["temperature"] == 0.2
+
+
+def test_request_timeout_is_always_sent() -> None:
+    # Two asserts, two different properties: the equality pins that the module
+    # constant is what actually reaches the provider, and the range pins that
+    # the constant is a real bound — without it, retuning to LiteLLM's
+    # effectively-unbounded 6000 default would still pass. Retuning to another
+    # sane value is deliberately allowed, so neither assert hardcodes 120.
+    with (
+        patch("litellm.completion", return_value=_response()) as mock_completion,
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        _adapter().generate("prompt")
+
+    timeout = mock_completion.call_args.kwargs["timeout"]
+    assert timeout == _REQUEST_TIMEOUT_SECONDS
+    assert 0 < timeout < 600
 
 
 def test_missing_usage_yields_zeros() -> None:
