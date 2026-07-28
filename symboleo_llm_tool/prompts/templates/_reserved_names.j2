@@ -1,0 +1,12 @@
+
+## Reserved Names
+
+The words listed below are keywords in the SymboleoAC grammar. They are part of the language, so keep writing them wherever the syntax calls for them — `Domain`, `endDomain`, `Contract`, `isA`, `Happens` and the rest are required, not forbidden.
+
+The rule is about names you **invent**. Every identifier you choose — a domain type, a declaration, a parameter, an attribute, an obligation or power name — must be a word that does not appear in this list. A name that collides cannot be parsed, and the parser reports it as a confusing structural complaint (for example `mismatched input 'Asset' expecting 'endDomain'`) rather than saying the name is the problem, so it is very hard to recover from.
+
+When the natural name for something is reserved, qualify it: `SoldAsset` instead of `Asset`, `SuspensionPeriod` instead of `Suspension`, `ContractRole` instead of `Role`, `DeliveryEvent` instead of `Event`.
+{% if current_code %}
+If a listed error points at an identifier that is reserved, renaming that identifier and every reference to it is a required fix, not an unlisted edit.
+{% endif %}
+Reserved words: `{{ reserved_names() | join('`, `') }}`

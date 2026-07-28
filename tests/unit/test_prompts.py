@@ -58,6 +58,59 @@ def test_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
     assert "Grammar Reference" not in any_strategy.build_generation_prompt(ctx)
 
 
+def test_generation_includes_reserved_names(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
+    prompt = any_strategy.build_generation_prompt(ctx)
+    assert "## Reserved Names" in prompt
+    # The two tokens real models actually collided on, one per grammar category.
+    assert "`Asset`" in prompt
+    assert "`Suspension`" in prompt
+
+
+def test_correction_includes_reserved_names(any_strategy: PromptStrategy) -> None:
+    ctx = PromptContext(
+        current_code="some symboleo code",
+        errors=[make_issue(message="bad token")],
+        grammar_context="grammar rules here",
+    )
+    prompt = any_strategy.build_correction_prompt(ctx)
+    assert "## Reserved Names" in prompt
+    assert "`Asset`" in prompt
+
+
+def test_reserved_names_survive_grammar_omission(any_strategy: PromptStrategy) -> None:
+    # Reserved names are a property of the language, not of whether the grammar
+    # text is injected — and with the grammar omitted the model knows less, so
+    # the collision is likelier. This fails the moment someone folds the module
+    # into _grammar_section.j2, which is gated on grammar_context.
+    gen_ctx = PromptContext(contract_text="contract text", grammar_context=None)
+    corr_ctx = PromptContext(
+        current_code="some symboleo code",
+        errors=[make_issue(message="bad token")],
+        grammar_context=None,
+    )
+    for prompt in (
+        any_strategy.build_generation_prompt(gen_ctx),
+        any_strategy.build_correction_prompt(corr_ctx),
+    ):
+        assert "Grammar Reference" not in prompt
+        assert "## Reserved Names" in prompt
+
+
+def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrategy) -> None:
+    # Correction's first constraint forbids editing lines with no listed error;
+    # a rename cascades across exactly such lines, so the permission must be
+    # explicit there — and must not leak into generation, which has no code to
+    # preserve.
+    corr_ctx = PromptContext(
+        current_code="some symboleo code",
+        errors=[make_issue(message="bad token")],
+    )
+    gen_ctx = PromptContext(contract_text="contract text")
+    assert "required fix, not an unlisted edit" in any_strategy.build_correction_prompt(corr_ctx)
+    assert "required fix, not an unlisted edit" not in any_strategy.build_generation_prompt(gen_ctx)
+
+
 def test_generation_includes_contract_text(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="Seller shall deliver goods.", grammar_context=None)
     assert "Seller shall deliver goods." in any_strategy.build_generation_prompt(ctx)
