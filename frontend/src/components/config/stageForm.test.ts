@@ -138,9 +138,11 @@ describe('getParamConstraint', () => {
 })
 
 describe('makeDefaultStage', () => {
+  // Two providers on purpose: with one, Object.keys()[0] is degenerate and the
+  // seed assertion cannot tell "first provider" from "only provider".
   const OPTIONS: OptionsResponse = {
     strategies: ['zero_shot', 'cot'],
-    models: { openai: ['gpt-4o-mini', 'gpt-4o'] },
+    models: { openai: ['gpt-4o-mini', 'gpt-4o'], anthropic: ['claude-opus-4-8'] },
     parameters: {},
     examples: [],
   }

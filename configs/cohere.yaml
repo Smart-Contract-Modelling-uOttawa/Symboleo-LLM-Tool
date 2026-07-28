@@ -1,0 +1,37 @@
+pipeline:
+  num_candidates: 1
+  max_iterations: 3
+  stop_on_first_convergence: false
+
+generation:
+  llm:
+    provider: cohere
+    model: command-a-03-2025
+    temperature: 0.2
+    max_tokens: 4096
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+correction:
+  llm:
+    provider: cohere
+    model: command-a-03-2025
+    temperature: 0.2
+    max_tokens: 4096
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+symboleo:
+  jar_path: ./lib/symboleo-cli.jar
+  java_executable: java
+
+output:
+  directory: ./output
+  save_intermediates: true
+
+observability:
+  langsmith:
+    enabled: true
+    project: symboleo-research

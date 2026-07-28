@@ -7,6 +7,11 @@ from symboleo_llm_tool.config.models import LLMConfig
 from symboleo_llm_tool.llm.base import GenerationResult, LLMAdapter
 from symboleo_llm_tool.output.models import TokenUsage
 
+# LiteLLM's default `request_timeout` is 6000s (100 min) — effectively no bound.
+# 120 leaves headroom over measured 6-12s calls and ~50s provider slowdowns.
+# `num_retries` is unset, so this is the total wall-clock bound, not per-attempt.
+_REQUEST_TIMEOUT_SECONDS = 120
+
 
 class LiteLLMAdapter(LLMAdapter):
     def __init__(self, config: LLMConfig, tracing_enabled: bool = False) -> None:
@@ -28,6 +33,7 @@ class LiteLLMAdapter(LLMAdapter):
             "model": self._config.litellm_model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": self._config.max_tokens,
+            "timeout": _REQUEST_TIMEOUT_SECONDS,
             # Safety net: drop provider-unsupported sampling params instead of
             # erroring. This is the OpenAI-reasoning backstop; it is a no-op for
             # Anthropic reasoning models (BerriAI/litellm#26444). The primary

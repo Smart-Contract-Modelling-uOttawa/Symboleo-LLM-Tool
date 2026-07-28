@@ -5,6 +5,9 @@ on:
     paths:
       - 'symboleo_llm_tool/**'
       - 'tests/**'
+      # Shipped configs are fenced by tests that read the real files, so a
+      # config-only change must still run them.
+      - 'configs/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/python.yml'
