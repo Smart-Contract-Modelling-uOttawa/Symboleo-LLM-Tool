@@ -94,6 +94,8 @@ class ProgressEvent(BaseModel):
     experiment_index: int | None = None
     candidate_id: int
     iteration: int
+    # ERROR-severity issues only — the count that gates convergence. Warnings
+    # are surfaced in the final result (final_warning_count), not live.
     error_count: int
 
 

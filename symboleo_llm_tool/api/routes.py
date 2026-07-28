@@ -109,7 +109,7 @@ async def _run_pipeline(
         event = ProgressEvent(
             candidate_id=candidate_id,
             iteration=iteration,
-            error_count=len(errors),
+            error_count=sum(1 for e in errors if e.is_error),
         )
         loop.call_soon_threadsafe(job.queue.put_nowait, event)
 
@@ -165,7 +165,7 @@ async def _run_suite(
             experiment_index=experiment_index,
             candidate_id=candidate_id,
             iteration=iteration,
-            error_count=len(errors),
+            error_count=sum(1 for e in errors if e.is_error),
         )
         loop.call_soon_threadsafe(job.queue.put_nowait, event)
 

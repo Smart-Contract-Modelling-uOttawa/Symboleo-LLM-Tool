@@ -88,6 +88,21 @@ def test_correction_converged():
     assert "converged" in msg
 
 
+def test_correction_with_errors_and_warnings():
+    # "remaining" belongs to the error count — the loop never targets warnings.
+    issues = [make_issue(message="e"), make_issue(severity="WARNING", message="w")]
+    msg = _format_progress(0, 1, issues, num_candidates=1, max_iterations=3)
+    assert "1 error(s) remaining, 1 warning(s)" in msg
+
+
+def test_correction_converged_with_warnings():
+    # Warnings alone don't block, but the label must not pretend the output is
+    # spotless.
+    issues = [make_issue(severity="WARNING"), make_issue(severity="WARNING")]
+    msg = _format_progress(0, 1, issues, num_candidates=1, max_iterations=3)
+    assert "converged (2 warning(s))" in msg
+
+
 def test_multi_candidate_shows_prefix():
     msg = _format_progress(1, 0, [], num_candidates=3, max_iterations=3)
     assert "Candidate 2/3" in msg

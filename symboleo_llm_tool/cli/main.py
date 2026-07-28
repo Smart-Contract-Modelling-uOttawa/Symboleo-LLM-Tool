@@ -60,13 +60,20 @@ def _format_progress(
     prefix = (
         f"[bold]Candidate {candidate_id + 1}/{num_candidates}[/bold] " if num_candidates > 1 else ""
     )
-    if iteration == 0 and errors:
-        return f"{prefix}Generated — {len(errors)} error(s)"
-    if iteration == 0:
-        return f"{prefix}Generated — converged"
-    if errors:
-        return f"{prefix}Correction {iteration}/{max_iterations} — {len(errors)} error(s) remaining"
-    return f"{prefix}Correction {iteration}/{max_iterations} — converged"
+    stage = "Generated" if iteration == 0 else f"Correction {iteration}/{max_iterations}"
+    error_count = sum(1 for e in errors if e.is_error)
+    warning_count = len(errors) - error_count
+    if error_count:
+        # "remaining" attaches to the error count alone — the loop works errors
+        # down; warnings are reported, never targeted.
+        body = f"{error_count} error(s)" + (" remaining" if iteration else "")
+        if warning_count:
+            body += f", {warning_count} warning(s)"
+    elif warning_count:
+        body = f"converged ({warning_count} warning(s))"
+    else:
+        body = "converged"
+    return f"{prefix}{stage} — {body}"
 
 
 @app.command()

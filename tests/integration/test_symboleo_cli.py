@@ -25,7 +25,7 @@ def test_valid_contract_returns_no_errors(wrapper: SymboleoWrapper) -> None:
     # A valid AC contract yields no ERROR-severity issues. The validator may
     # still emit stylistic WARNINGs (e.g. unused declarations), which do not
     # make the contract invalid.
-    errors = [issue for issue in issues if issue.severity == "ERROR"]
+    errors = [issue for issue in issues if issue.is_error]
     assert errors == []
 
 
