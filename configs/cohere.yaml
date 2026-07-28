@@ -6,7 +6,7 @@ pipeline:
 generation:
   llm:
     provider: cohere
-    model: command-r-08-2024
+    model: command-a-03-2025
     temperature: 0.2
     max_tokens: 4096
   strategy: zero_shot
@@ -16,7 +16,7 @@ generation:
 correction:
   llm:
     provider: cohere
-    model: command-r-08-2024
+    model: command-a-03-2025
     temperature: 0.2
     max_tokens: 4096
   strategy: zero_shot
