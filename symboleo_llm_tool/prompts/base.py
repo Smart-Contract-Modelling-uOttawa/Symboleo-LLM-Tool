@@ -5,6 +5,7 @@ from typing import Any
 from jinja2 import DictLoader, Environment
 
 from symboleo_llm_tool.prompts.context import PromptContext
+from symboleo_llm_tool.prompts.grammar import reserved_names
 
 
 def build_jinja_env(*template_names: str) -> Environment:
@@ -24,7 +25,15 @@ def build_jinja_env(*template_names: str) -> Environment:
         if r.name.startswith("_") and r.name.endswith(".j2")
     }
     specific = {n: pkg.joinpath(n).read_text(encoding="utf-8") for n in template_names}
-    return Environment(loader=DictLoader(partials | specific))
+    env = Environment(loader=DictLoader(partials | specific))
+    # The function, not its result: this runs at strategy-module import, so
+    # baking the value would turn an unreadable grammar resource into an import
+    # error (breaking `--help` and API startup) instead of the friendly
+    # RuntimeError raised at render time. Installing it here rather than passing
+    # it through PromptContext means a strategy cannot forget to wire it, the
+    # same reason partials are auto-loaded above.
+    env.globals["reserved_names"] = reserved_names
+    return env
 
 
 class PromptStrategy(ABC):

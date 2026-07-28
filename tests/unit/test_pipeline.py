@@ -34,7 +34,7 @@ def mock_deps():
         patch("symboleo_llm_tool.pipeline.pipeline.SymboleoWrapper") as mock_wrapper_cls,
         patch("symboleo_llm_tool.pipeline.pipeline.create_adapter") as mock_llm_cls,
         patch("symboleo_llm_tool.pipeline.pipeline.get_strategy") as mock_get_strategy,
-        patch("symboleo_llm_tool.pipeline.pipeline._load_grammar", return_value=""),
+        patch("symboleo_llm_tool.pipeline.pipeline.load_grammar", return_value=""),
     ):
         mock_wrapper = MagicMock()
         mock_wrapper_cls.return_value = mock_wrapper
@@ -160,7 +160,7 @@ def test_usage_recorded_on_each_iteration(mock_deps):
 
 def test_grammar_load_failure_propagates(mock_deps):
     with patch(
-        "symboleo_llm_tool.pipeline.pipeline._load_grammar",
+        "symboleo_llm_tool.pipeline.pipeline.load_grammar",
         side_effect=RuntimeError("Failed to load Symboleo grammar resource"),
     ):
         with pytest.raises(RuntimeError, match="Failed to load Symboleo grammar resource"):

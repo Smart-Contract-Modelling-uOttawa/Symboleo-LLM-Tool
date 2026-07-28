@@ -2,7 +2,6 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
-from importlib import resources
 
 from symboleo_llm_tool.concurrency import CancellationToken, RunCoordinator
 from symboleo_llm_tool.config.models import PipelineConfig
@@ -15,6 +14,7 @@ from symboleo_llm_tool.output.models import (
 )
 from symboleo_llm_tool.prompts.base import PromptStrategy
 from symboleo_llm_tool.prompts.context import PromptContext
+from symboleo_llm_tool.prompts.grammar import load_grammar
 from symboleo_llm_tool.prompts.strategies import get_strategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
@@ -34,10 +34,6 @@ def _blocking(issues: list[SymboleoIssue]) -> list[SymboleoIssue]:
     Semantics", for the census evidence).
     """
     return [i for i in issues if i.is_error]
-
-
-_GRAMMAR_PACKAGE = "symboleo_llm_tool.resources"
-_GRAMMAR_FILE = "Symboleo.xtext"
 
 
 @dataclass(frozen=True)
@@ -89,7 +85,7 @@ def run(
         gen_strategy=get_strategy(config.generation.strategy, config.generation.strategy_params),
         corr_strategy=get_strategy(config.correction.strategy, config.correction.strategy_params),
         grammar_context=(
-            _load_grammar()
+            load_grammar()
             if (config.generation.include_grammar or config.correction.include_grammar)
             else None
         ),
@@ -222,14 +218,3 @@ def _clean_response(response: str) -> str:
             lines = lines[:-1]
         response = "\n".join(lines)
     return response.strip()
-
-
-def _load_grammar() -> str:
-    try:
-        grammar_file = resources.files(_GRAMMAR_PACKAGE).joinpath(_GRAMMAR_FILE)
-        return grammar_file.read_text(encoding="utf-8")
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to load Symboleo grammar resource: {e}. "
-            f"Ensure {_GRAMMAR_FILE} is present in symboleo_llm_tool/resources/."
-        ) from e
