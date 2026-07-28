@@ -19,7 +19,22 @@ from symboleo_llm_tool.prompts.strategies import get_strategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
 
+# Args: (candidate_id, iteration, errors, total_candidates, total_iterations).
+# `errors` carries ALL validator issues — blocking errors and warnings alike —
+# so callers can surface both; the convergence gate filters separately.
 ProgressCallback = Callable[[int, int, list[SymboleoIssue], int, int], None]
+
+
+def _blocking(issues: list[SymboleoIssue]) -> list[SymboleoIssue]:
+    """The issues that gate convergence and feed the correction prompt.
+
+    WARNINGs are surfaced but never block: an ERROR-free contract that warns is
+    converged, and feeding warnings to the LLM measurably invites the
+    over-editing that loses near-converged runs (see CLAUDE.md, "Convergence
+    Semantics", for the census evidence).
+    """
+    return [i for i in issues if i.is_error]
+
 
 _GRAMMAR_PACKAGE = "symboleo_llm_tool.resources"
 _GRAMMAR_FILE = "Symboleo.xtext"
@@ -161,18 +176,19 @@ def _run_candidate(
     code = _clean_response(gen_result.generated_text)
 
     errors = ctx.wrapper.validate(code)
+    blocking = _blocking(errors)
     error_history = [IterationRecord(iteration=0, code=code, errors=errors, usage=gen_result.usage)]
     if ctx.on_progress:
         ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
 
     for iteration in range(1, ctx.max_iterations + 1):
-        if not errors:
+        if not blocking:
             break
         if ctx.cancel.cancelled:  # cooperative checkpoint between iterations
             break
         corr_context = PromptContext(
             current_code=code,
-            errors=errors,
+            errors=blocking,
             grammar_context=ctx.grammar_context if ctx.corr_include_grammar else None,
             history=error_history,
         )
@@ -180,6 +196,7 @@ def _run_candidate(
         corr_result = ctx.corr_llm.generate(corr_prompt)
         code = _clean_response(corr_result.generated_text)
         errors = ctx.wrapper.validate(code)
+        blocking = _blocking(errors)
         error_history.append(
             IterationRecord(iteration=iteration, code=code, errors=errors, usage=corr_result.usage)
         )
@@ -189,7 +206,7 @@ def _run_candidate(
     return CandidateResult(
         candidate_id=candidate_id,
         final_code=code,
-        converged=not errors,
+        converged=not blocking,
         iterations_used=len(error_history) - 1,
         error_history=error_history,
     )

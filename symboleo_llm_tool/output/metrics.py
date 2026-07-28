@@ -1,10 +1,9 @@
-"""Derivation of comparison rollups from the result models.
+"""Derivation of the computed metrics on the result models.
 
-These compute the token/cost totals and iterations-to-convergence that the
-``@computed_field``s on the result models expose (the models declare the fields
-and delegate here). Keeping the derivation in its own module leaves
-``models.py`` as data-shape declarations and gives the logic a named, reusable
-home — any consumer (CLI, report tooling) can call these directly.
+The ``@computed_field``s on the result models declare the fields and delegate
+here. Keeping the derivation in its own module leaves ``models.py`` as
+data-shape declarations and gives the logic a named, reusable home — any
+consumer (CLI, report tooling) can call these directly.
 
 Model types are imported only under ``TYPE_CHECKING``; the function bodies use
 plain attribute access, so there is no runtime import cycle with ``models.py``
@@ -53,6 +52,17 @@ def candidate_total_tokens(candidate: CandidateResult) -> int:
 
 def candidate_total_cost_usd(candidate: CandidateResult) -> float | None:
     return _sum_optional_costs(u.cost_usd for u in _candidate_usages(candidate))
+
+
+def candidate_final_warning_count(candidate: CandidateResult) -> int:
+    """Non-ERROR issues in the candidate's final iteration (0 for empty history).
+
+    Counts non-ERROR rather than ``== "WARNING"`` so error and warning counts
+    stay a true partition if the validator ever emits another severity (INFO).
+    """
+    if not candidate.error_history:
+        return 0
+    return sum(1 for issue in candidate.error_history[-1].errors if not issue.is_error)
 
 
 def pipeline_total_tokens(result: PipelineResult) -> int:

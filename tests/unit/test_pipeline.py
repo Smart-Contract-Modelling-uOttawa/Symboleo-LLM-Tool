@@ -329,3 +329,59 @@ def test_cancel_token_skips_sequential_candidates(mock_deps):
 
     assert result.candidates == []
     assert result.success is False
+
+
+# --- Severity gating (ERROR blocks, WARNING does not) -------------------------
+
+
+def test_warnings_only_do_not_block_convergence(mock_deps):
+    # Warning-only is the discriminating fixture — a zero-issue one converges
+    # under any severity rule.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("valid symboleo")
+    mock_wrapper.validate.return_value = [make_issue(severity="WARNING")]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    assert result.success is True
+    assert result.candidates[0].converged is True
+    assert result.candidates[0].iterations_used == 0
+    assert mock_llm.generate.call_count == 1  # generation only — no correction
+    history = result.candidates[0].error_history
+    assert len(history) == 1
+    assert history[0].errors[0].severity == "WARNING"
+
+
+def test_correction_prompt_receives_only_blocking_errors(mock_deps):
+    mock_wrapper, mock_llm, mock_strategy = mock_deps
+    err = make_issue(severity="ERROR", message="bad token")
+    warn = make_issue(severity="WARNING", message="unused declaration")
+    mock_llm.generate.return_value = make_generation("code")
+    mock_wrapper.validate.side_effect = [[err, warn], []]
+    progress = MagicMock()
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
+
+    corr_context = mock_strategy.build_correction_prompt.call_args.args[0]
+    assert corr_context.errors == [err]  # warnings never reach the prompt
+    assert result.candidates[0].error_history[0].errors == [err, warn]
+    assert progress.call_args_list[0] == call(0, 0, [err, warn], 1, 3)  # callback gets ALL issues
+
+
+def test_convergence_with_residual_warnings_records_them(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    err = make_issue(severity="ERROR")
+    warn = make_issue(severity="WARNING")
+    mock_llm.generate.return_value = make_generation("code")
+    mock_wrapper.validate.side_effect = [[err], [warn]]
+    progress = MagicMock()
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
+
+    candidate = result.candidates[0]
+    assert candidate.converged is True
+    assert candidate.iterations_used == 1
+    assert candidate.error_history[1].errors == [warn]
+    # The correction-stage callback carries warnings too — filtering here would
+    # silently drop them from the CLI and suite progress lines.
+    assert progress.call_args_list[1] == call(0, 1, [warn], 1, 3)

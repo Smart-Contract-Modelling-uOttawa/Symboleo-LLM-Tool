@@ -1,4 +1,4 @@
-"""Computed-field rollups on the result models (token/cost totals + iterations).
+"""Computed fields on the result models.
 
 These are derived, never stored: ``@computed_field`` so they serialize into
 report.json, the API, and the generated schema from a single definition.
@@ -16,7 +16,7 @@ from symboleo_llm_tool.output.models import (
     SuiteResult,
     TokenUsage,
 )
-from tests.helpers import make_usage
+from tests.helpers import make_issue, make_usage
 
 
 def _record(usage: TokenUsage | None) -> IterationRecord:
@@ -76,6 +76,42 @@ class TestCandidateRollups:
         )
         assert candidate.total_tokens == 500
         assert candidate.total_cost_usd == pytest.approx(0.001)
+
+    def test_final_warning_count_counts_non_errors_in_last_iteration(self) -> None:
+        # An earlier record's warnings must not count — only the LAST record's,
+        # and only its non-ERROR issues.
+        history = [
+            IterationRecord(
+                iteration=0,
+                code="",
+                errors=[make_issue(severity="WARNING")] * 3,
+                usage=None,
+            ),
+            IterationRecord(
+                iteration=1,
+                code="",
+                errors=[
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="WARNING"),
+                    make_issue(severity="WARNING"),
+                    # INFO is real (the parser emits it) and counts as non-ERROR
+                    # — this separates the non-ERROR partition from == "WARNING".
+                    make_issue(severity="INFO"),
+                ],
+                usage=None,
+            ),
+        ]
+        candidate = CandidateResult(
+            candidate_id=0,
+            final_code="",
+            converged=False,
+            iterations_used=1,
+            error_history=history,
+        )
+        assert candidate.final_warning_count == 3
+
+    def test_final_warning_count_zero_when_history_empty(self) -> None:
+        assert _candidate([]).final_warning_count == 0
 
 
 class TestPipelineRollups:
@@ -141,3 +177,4 @@ def test_computed_rollups_serialize_into_the_dump() -> None:
     assert dumped["total_cost_usd"] == pytest.approx(0.001)
     assert dumped["iterations_to_convergence"] == 3
     assert dumped["candidates"][0]["total_tokens"] == 700
+    assert dumped["candidates"][0]["final_warning_count"] == 0

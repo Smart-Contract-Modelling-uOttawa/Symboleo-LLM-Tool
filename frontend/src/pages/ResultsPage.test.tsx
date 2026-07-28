@@ -40,6 +40,7 @@ const MOCK_RESULT: PipelineResult = {
       error_history: [],
       total_tokens: 1500,
       total_cost_usd: 0.003,
+      final_warning_count: 3,
     },
     {
       candidate_id: 1,
@@ -49,6 +50,7 @@ const MOCK_RESULT: PipelineResult = {
       error_history: [],
       total_tokens: 800,
       total_cost_usd: null,
+      final_warning_count: 0,
     },
   ],
 }
@@ -158,6 +160,32 @@ describe('ResultsPage', () => {
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('Converged')).toBeInTheDocument()
     expect(within(row(/^Candidate 2/)).getByText('Failed to converge')).toBeInTheDocument()
+  })
+
+  it('shows a warnings chip only when warnings linger', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(within(row(/^Candidate 1/)).getByText('3 warnings')).toBeInTheDocument()
+    expect(within(row(/^Candidate 2/)).queryByText(/warning/)).toBeNull()
+  })
+
+  it('renders the warnings chip in the singular for exactly one warning', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: {
+        ...MOCK_RESULT,
+        candidates: [{ ...MOCK_RESULT.candidates[0], final_warning_count: 1 }],
+      },
+      errorMessage: null,
+    })
+    renderResultsPage()
+    expect(within(row(/^Candidate 1/)).getByText('1 warning')).toBeInTheDocument()
   })
 
   it('shows "no candidates converged" when success is false', () => {

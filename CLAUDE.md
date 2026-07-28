@@ -61,7 +61,8 @@ Input .txt
     ↓
 [Correction loop] per candidate:
     symboleo/ wrapper → structured errors
-    if no errors or max_iterations reached → done
+    if no ERROR-severity issues or max_iterations reached → done
+      (WARNINGs are recorded and surfaced, never fed to correction)
     else → LLM + PromptStrategy → corrected code → repeat
     ↓
 [Output] timestamped directory: report.json, config.yaml, final .symboleo, optional intermediates
@@ -151,8 +152,15 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - Input file is a CLI argument, not a config concern
 - CLI override support (`--set key=value`) for quick experiments — deferred (see Known Issues)
 
+### Convergence Semantics (ERROR-gated; warnings surface but never block)
+`converged` means the final code has zero **ERROR-severity** issues. WARNINGs (e.g. the AC validator's liberal W13 unused-declaration class) are recorded unchanged in `report.json`/`error_history` and surfaced to the user, but **never fed to the correction prompt**. `_blocking()` in `pipeline.py` filters at the pipeline — not in `wrapper.validate()`, so no research data is lost — and `SymboleoIssue.is_error` is the single home for the severity predicate.
+
+**Surfacing:** the CLI progress line prints both counts and the `run` summary table has a Warnings column (the `suite` table does not — warnings are per-candidate); `CandidateResult.final_warning_count` (a `@computed_field` delegating to `metrics.py`, counting non-ERROR issues in the final iteration) backs the frontend's warnings chip; `ProgressEvent.error_count` counts blocking errors only.
+
+**Evidence:** settled empirically by an archive census of 82 candidates (2026-07). At matched difficulty, warning-laden correction prompts eliminated remaining errors at 16% vs 62% for error-only prompts, and blew up (error count increased) 37% vs 0%. Warnings were fixed incidentally alongside errors 85% of the time, so not prompting on them does not produce warning-swamped output.
+
 ### Multi-Candidate Behavior
-- Success = any candidate converges (one correct output is sufficient)
+- Success = any candidate converges (one correct output is sufficient — see Convergence Semantics above)
 - Candidates run sequentially on the standalone path (CLI, single-run API); within a suite with `max_concurrency > 1` they run concurrently on the shared pool, with sibling cancellation on first convergence
 - `stop_on_first_convergence: false` by default to preserve full research data
 
@@ -217,7 +225,7 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - **`tests/helpers.py`** — shared `make_issue()` / `make_usage()` / `make_generation()` factories with keyword-only defaults. All unit test files import from here; no per-file `_make_error()` helpers.
 - **API layer tests** — `tests/unit/api/` contains `conftest.py` (fixtures), `test_routes.py` (single-run endpoints, the `_stream_job` attach/detach stamping, and the `_run_pipeline` cancel-token bridge), `test_suites.py` (suite endpoints + the `_run_suite` async bridge), `test_export.py` (the suite-file export, round-tripped through `load_suite_config` rather than against a golden file), `test_jobs.py` (`cleanup_expired()` and `cancel_abandoned()`), and `test_config_builder.py`. Uses `fastapi.testclient.TestClient` (sync) with a bare `FastAPI` app including `routes.router` directly (bypassing the lifespan). `conftest.py` `autouse` fixture calls `init_router(test_ui_config)` and `reset_store()` to isolate shared global state between tests. Happy-path POST tests patch `_run_pipeline` with `AsyncMock` to avoid real pipeline execution — which is exactly why the request→`PipelineConfig` translation is tested directly in `test_config_builder.py` rather than through the endpoints, where it is invisible behind a 200.
 - **`tests/unit/test_writer.py`** — covers `write_results()` (timestamped directory naming, `report.json`/`config.yaml` content, single vs. multi-candidate filename suffixes, `save_intermediates` layout) and `write_suite_results()` (suite dir layout, per-experiment subdirs, reloadable `suite.yaml`, summary-CSV columns).
-- **`tests/unit/test_result_metrics.py`** — covers the `@computed_field` rollups on the result models (token/cost totals at candidate/pipeline/suite level, the `None`-cost-vs-`$0.00` distinction, `iterations_to_convergence`, and that they serialize into the dump).
+- **`tests/unit/test_result_metrics.py`** — covers the `@computed_field` rollups on the result models (token/cost totals at candidate/pipeline/suite level, the `None`-cost-vs-`$0.00` distinction, `iterations_to_convergence`, `final_warning_count`, and that they serialize into the dump).
 - **Coverage:** run with `uv run pytest --cov=symboleo_llm_tool --cov-report=term-missing`. Suite layer: `tests/unit/test_suite_runner.py` covers `run_suite()` against a mocked `pipeline.run`; `tests/unit/test_concurrency.py` covers the `CancellationToken`/`RunCoordinator` primitives. Intentionally untested: `app.py` lifespan (integration-level) and `litellm_adapter.py` live LLM calls — `test_litellm_usage.py` covers the rest of that adapter against a fake response (token/cost extraction, the omit-temperature-when-unset guard, and the empty-response error).
 - **Frontend tests (Vitest + RTL + MSW):** Vitest is configured in `frontend/vite.config.ts` (`test` block with `environment: happy-dom`) — shares the Vite config and alias resolution. React Testing Library for component rendering/interaction. MSW v2 (`msw/node`) stubs the API endpoints at the network level; default handlers in `frontend/src/test/handlers.ts`, server instance in `frontend/src/test/server.ts`, global setup (jest-dom matchers + MSW lifecycle) in `frontend/src/test/setup.ts`. Test files are co-located with source files (`*.test.tsx` / `*.test.ts`). Run with `npm run test` or `npm run test:coverage` from `frontend/`. Test files: `App.test.tsx`, `ConfigPage.test.tsx`, `ResultsPage.test.tsx`, `ExperimentsPage.test.tsx`, `SuiteResultsPage.test.tsx`, `hooks/useEventStream.test.ts`, `hooks/useStream.test.ts`, `hooks/useRunCancel.test.ts`, `hooks/useOptions.test.ts`, `lib/progress.test.ts`, `lib/tokens.test.ts`, `components/config/axisExpand.test.ts`, `components/config/stageForm.test.ts`, `components/results/download.test.ts`. `SuiteResultsPage` mocks `useSuiteStream` the same way `ResultsPage` mocks `useStream`.
 - **Frontend test fixtures:** `frontend/src/test/handlers.ts` exports `TEST_RUN_ID` and `MOCK_OPTIONS` as named constants — shared test plumbing values used across multiple test files. Concrete assertion values (UI strings, strategy names) are intentionally repeated as literals in each test file, not imported from shared constants, so that a typo or rename in production code causes a test failure rather than silently passing.
@@ -235,14 +243,8 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 
 ## Known Issues / Future Flags
 
-### Convergence counts WARNINGs as blocking (regression exposed by the AC JAR refresh)
-`pipeline.py` decides convergence with `converged = not errors`, where `errors = wrapper.validate(code)` returns **every** issue regardless of severity. So convergence requires **zero issues — WARNINGs included**, and the correction loop feeds warnings back to the LLM as if they were errors.
-
-This was harmless until the AC JAR refresh (`lib/symboleo-cli.jar` → the July validator): the new validator emits `W13` unused-declaration **WARNINGs** liberally (unused params/types/declarations), whereas the old jar emitted none for these fixtures. Now any contract that is **ERROR-free but warns** — e.g. the canonical `MeatSale` (0 errors, 4 warnings) — **never converges**: it spins through all `max_iterations` and reports "failed to converge." It affects **single runs and suites** (the whole tool), and depresses the apparent success rate on realistic contracts. The bare `converged` smoke tests that still pass do so only because those minimal contracts happen to have 0 warnings.
-
-This is a gap the JAR refresh left: that change updated the *integration test* to accept warnings (`test_valid_contract_returns_no_errors` asserts **no ERROR-severity** issues), but the **pipeline** never got the same update — the two now disagree.
-
-**Planned fix (deferred; own PR):** gate convergence on ERROR severity — `converged = not any(e.severity == "ERROR" for e in errors)` — and feed only ERROR-severity issues to the correction prompt so the LLM doesn't churn on stylistic warnings. Filter **at the pipeline, not in `wrapper.validate()`**, so `report.json` still records warnings (no research-data loss). One product decision to settle when picking it up: ignore warnings entirely for the loop, vs. still surface them (output/progress) while not blocking — leaning surface-but-don't-block.
+### Run records predating the ERROR-gated convergence fix are not comparable
+`report.json` carries no schema version, and runs recorded before convergence became ERROR-gated (see Convergence Semantics) used all-issues convergence — a pre-change `converged=false` may be a warnings-only, ERROR-free contract. Do not compare convergence rates across that boundary.
 
 ### `jar_path`/`output.directory` serialize with Windows backslashes (run records not cross-platform)
 `SymboleoConfig.jar_path` and `OutputConfig.directory` in `config/models.py` are plain `Path` fields with no custom serializer, so `model_dump(mode="json")` renders them via `str()` — on Windows that yields `lib\symboleo-cli.jar`. A backslash path in YAML is **not portable**: it reloads as a literal one-segment filename on POSIX. It reloads fine on Windows, which is why the bug stays latent.
@@ -330,7 +332,7 @@ The key constraint that keeps this cheap: `pipeline.run()` accepts a `str` and r
 - `GET /options` — returns everything the frontend needs at page load (see below)
 
 **SSE event schema:**
-- `ProgressEvent` — fired after each generation/correction iteration; contains `candidate_id`, `iteration`, `error_count`, and `experiment_index` (null for a single run; set within a suite so the client demultiplexes one stream into per-experiment state)
+- `ProgressEvent` — fired after each generation/correction iteration; contains `candidate_id`, `iteration`, `error_count` (ERROR-severity issues only — the count that gates convergence), and `experiment_index` (null for a single run; set within a suite so the client demultiplexes one stream into per-experiment state)
 - `CompleteEvent` — final event for a single run; embeds the full `PipelineResult`
 - `SuiteCompleteEvent` — final event for a suite; embeds the full `SuiteResult`
 - `ErrorEvent` — fatal pipeline error; contains `message`
@@ -384,7 +386,7 @@ examples: list[str]            # names of .yaml files in examples/ (without exte
 
 **Page 2 — Results (`/runs/:id`):**
 - While running: single spinner + "Candidate X — Iteration Y" counter updated from `ProgressEvent` stream; candidate accordion not rendered until `CompleteEvent` arrives
-- On complete: accordion of candidates, each with: convergence badge (Converged / Failed to converge), plain-text Symboleo code block, Download `.symboleo` button, Download `report.json` button (contains full error history per iteration)
+- On complete: accordion of candidates, each with: convergence badge (Converged / Failed to converge) plus a muted warnings chip when `final_warning_count > 0`, plain-text Symboleo code block, Download `.symboleo` button, Download `report.json` button (contains full error history per iteration)
 - On fatal error: red error card displaying `ErrorEvent.message`
 - "New Run" button → `/` with form reset to defaults
 
