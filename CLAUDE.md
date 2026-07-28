@@ -280,7 +280,7 @@ The damage is not the mistake but the **irrecoverability**: it surfaces as `mism
 
 **The contrast that identifies the fix:** the AC validator's own `@Check` for reserved-word collisions produces an actionable message (`Domain type name 'Party' collides with a JavaScript/Java reserved word…`), and `command-a` fixed *that* in a single iteration by renaming. Same class of error, different message quality, opposite outcome — so this is a message/prompting gap, not a model-capability limit.
 
-**Planned fix (deferred; own PR):** inject the reserved-name list into the prompt, **derived from `Symboleo.xtext` rather than hand-listed** — the quoted literals are already parseable out of the grammar we inject, so the list cannot drift as the language evolves. This is the same grammar-derived, zero-drift escalation the leaf-construct policy above names (though this is an identifier-naming failure, not a leaf construct rendered in the wrong *form*, so it is a sibling of that policy rather than an increment of its counter).
+**Planned fix (deferred; own PR):** inject the reserved-name list into the prompt, **derived from `Symboleo.xtext` rather than hand-listed** — the quoted literals are already parseable out of the grammar we inject, so the list cannot drift as the language evolves. This is the same grammar-derived, zero-drift escalation the leaf-construct policy above names.
 
 Two complementary directions, either of which may be the better root fix:
 - **Upstream message enrichment** in SymboleoAC-IDE (an `ISyntaxErrorMessageProvider` naming *which* identifier is reserved) — helps every consumer of the JAR, not just this tool.
