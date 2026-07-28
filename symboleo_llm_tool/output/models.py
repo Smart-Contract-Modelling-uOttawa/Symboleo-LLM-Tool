@@ -48,6 +48,12 @@ class CandidateResult(BaseModel):
     def total_cost_usd(self) -> float | None:
         return metrics.candidate_total_cost_usd(self)
 
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def final_warning_count(self) -> int:
+        """Warnings lingering in the final output — surfaced, never blocking."""
+        return metrics.candidate_final_warning_count(self)
+
 
 class PipelineResult(BaseModel):
     success: bool

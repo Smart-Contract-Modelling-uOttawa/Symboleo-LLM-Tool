@@ -164,6 +164,11 @@ export interface components {
             readonly total_tokens: number;
             /** Total Cost Usd */
             readonly total_cost_usd: number | null;
+            /**
+             * Final Warning Count
+             * @description Warnings lingering in the final output — surfaced, never blocking.
+             */
+            readonly final_warning_count: number;
         };
         /** CompleteEvent */
         CompleteEvent: {

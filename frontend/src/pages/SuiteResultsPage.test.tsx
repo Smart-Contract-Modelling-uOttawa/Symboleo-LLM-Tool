@@ -58,6 +58,7 @@ function pipelineResult(
       error_history: [],
       total_tokens: split.tokens,
       total_cost_usd: split.cost,
+      final_warning_count: 0,
     })),
   }
 }

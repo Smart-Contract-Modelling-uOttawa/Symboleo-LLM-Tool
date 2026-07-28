@@ -131,12 +131,14 @@ def run(
     table.add_column("Candidate")
     table.add_column("Converged")
     table.add_column("Iterations Used")
+    table.add_column("Warnings")
 
     for c in result.candidates:
         table.add_row(
             str(c.candidate_id + 1),
             "[green]Yes[/green]" if c.converged else "[red]No[/red]",
             str(c.iterations_used),
+            str(c.final_warning_count),
         )
 
     console.print(table)
