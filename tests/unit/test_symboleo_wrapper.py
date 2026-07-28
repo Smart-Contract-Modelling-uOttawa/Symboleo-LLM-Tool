@@ -96,6 +96,9 @@ def test_validate_parses_every_issue_preserving_order_and_severity(
     assert [i.severity for i in issues] == ["ERROR", "WARNING", "INFO"]
     assert [i.line for i in issues] == [87, 41, 78]
     assert issues[0].code == "org.eclipse.xtext.Syntax"
+    # is_error is the convergence gate's predicate. INFO must group with
+    # WARNING, not with ERROR — the non-blocking side is everything non-ERROR.
+    assert [i.is_error for i in issues] == [True, False, False]
 
 
 def test_validate_raises_when_the_cli_times_out(wrapper: SymboleoWrapper) -> None:

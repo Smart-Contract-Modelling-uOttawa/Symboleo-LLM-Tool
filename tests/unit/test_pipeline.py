@@ -374,10 +374,14 @@ def test_convergence_with_residual_warnings_records_them(mock_deps):
     warn = make_issue(severity="WARNING")
     mock_llm.generate.return_value = make_generation("code")
     mock_wrapper.validate.side_effect = [[err], [warn]]
+    progress = MagicMock()
 
-    result = pipeline.run("contract text", _make_config(max_iterations=3))
+    result = pipeline.run("contract text", _make_config(max_iterations=3), on_progress=progress)
 
     candidate = result.candidates[0]
     assert candidate.converged is True
     assert candidate.iterations_used == 1
     assert candidate.error_history[1].errors == [warn]
+    # The correction-stage callback carries warnings too — filtering here would
+    # silently drop them from the CLI and suite progress lines.
+    assert progress.call_args_list[1] == call(0, 1, [warn], 1, 3)

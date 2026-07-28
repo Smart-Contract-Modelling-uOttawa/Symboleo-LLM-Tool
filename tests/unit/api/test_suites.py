@@ -22,6 +22,7 @@ from symboleo_llm_tool.output.models import (
     PipelineResult,
     SuiteResult,
 )
+from tests.helpers import make_issue
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -292,3 +293,42 @@ def test_run_suite_puts_error_event_on_exception() -> None:
     event = job.queue.get_nowait()
     assert isinstance(event, ErrorEvent)
     assert event.message == "suite boom"
+
+
+def test_run_suite_progress_event_error_count_excludes_warnings() -> None:
+    # The suite bridge carries its own copy of the ERROR filter; the single-run
+    # test cannot cover it. Asymmetric counts (2 errors, 1 warning) separate
+    # "counts errors" from "counts warnings" and from len().
+    job = create_suite_job("suite-progress")
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with patch(
+            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
+        ) as mock_tp:
+            mock_tp.return_value = _suite_result()
+            await _run_suite(job, _suite_config(), loop)
+            on_progress = mock_tp.call_args.kwargs["on_progress"]
+            on_progress(
+                1,
+                0,
+                2,
+                [
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="WARNING"),
+                ],
+                1,
+                3,
+            )
+            await asyncio.sleep(0)  # let call_soon_threadsafe deliver the event
+
+    asyncio.run(run())
+
+    events = []
+    while not job.queue.empty():
+        events.append(job.queue.get_nowait())
+    progress = [e for e in events if isinstance(e, ProgressEvent)]
+    assert len(progress) == 1
+    assert progress[0].error_count == 2
+    assert progress[0].experiment_index == 1

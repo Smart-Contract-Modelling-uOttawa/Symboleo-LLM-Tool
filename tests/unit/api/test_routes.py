@@ -446,10 +446,16 @@ def test_run_pipeline_progress_event_error_count_excludes_warnings() -> None:
             mock_tp.return_value = _make_pipeline_result()
             await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
             on_progress = mock_tp.call_args.kwargs["on_progress"]
+            # Asymmetric counts on purpose: 2 errors vs 1 warning separates
+            # "counts errors" from "counts warnings", from len(), and from 0.
             on_progress(
                 0,
                 1,
-                [make_issue(severity="ERROR"), make_issue(severity="WARNING")],
+                [
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="WARNING"),
+                ],
                 1,
                 3,
             )
@@ -462,4 +468,4 @@ def test_run_pipeline_progress_event_error_count_excludes_warnings() -> None:
         events.append(job.queue.get_nowait())
     progress = [e for e in events if isinstance(e, ProgressEvent)]
     assert len(progress) == 1
-    assert progress[0].error_count == 1
+    assert progress[0].error_count == 2

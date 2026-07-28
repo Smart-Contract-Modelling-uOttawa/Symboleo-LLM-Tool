@@ -94,6 +94,9 @@ class TestCandidateRollups:
                     make_issue(severity="ERROR"),
                     make_issue(severity="WARNING"),
                     make_issue(severity="WARNING"),
+                    # INFO is real (the parser emits it) and counts as non-ERROR
+                    # — this separates the non-ERROR partition from == "WARNING".
+                    make_issue(severity="INFO"),
                 ],
                 usage=None,
             ),
@@ -105,7 +108,7 @@ class TestCandidateRollups:
             iterations_used=1,
             error_history=history,
         )
-        assert candidate.final_warning_count == 2
+        assert candidate.final_warning_count == 3
 
     def test_final_warning_count_zero_when_history_empty(self) -> None:
         assert _candidate([]).final_warning_count == 0
