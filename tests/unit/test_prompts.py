@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from symboleo_llm_tool.prompts.base import PromptStrategy
+from symboleo_llm_tool.prompts import grammar
+from symboleo_llm_tool.prompts.base import PromptStrategy, build_jinja_env
 from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.strategies.cot import CoTStrategy
 from symboleo_llm_tool.prompts.strategies.few_shot import FewShotStrategy
@@ -58,13 +59,20 @@ def test_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
     assert "Grammar Reference" not in any_strategy.build_generation_prompt(ctx)
 
 
+# Names that reach the prompt ONLY through `reserved_names()`. `Asset` and
+# `Suspension` — the tokens models actually collided on — are unusable here:
+# both appear as static prose in _reserved_names.j2 (and `Asset` in
+# _output_format.j2), so asserting them passes even when the derived list is
+# empty, leaving the whole feature unfenced.
+_DERIVED_ONLY = ("`DataTransfer`", "`thirdParty`", "`UnsuccessfulTermination`")
+
+
 def test_generation_includes_reserved_names(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
     prompt = any_strategy.build_generation_prompt(ctx)
     assert "## Reserved Names" in prompt
-    # The two tokens real models actually collided on, one per grammar category.
-    assert "`Asset`" in prompt
-    assert "`Suspension`" in prompt
+    for name in _DERIVED_ONLY:
+        assert name in prompt
 
 
 def test_correction_includes_reserved_names(any_strategy: PromptStrategy) -> None:
@@ -75,7 +83,41 @@ def test_correction_includes_reserved_names(any_strategy: PromptStrategy) -> Non
     )
     prompt = any_strategy.build_correction_prompt(ctx)
     assert "## Reserved Names" in prompt
-    assert "`Asset`" in prompt
+    for name in _DERIVED_ONLY:
+        assert name in prompt
+
+
+def test_reserved_names_rule_targets_invented_names_only(any_strategy: PromptStrategy) -> None:
+    # The list contains words the model MUST still emit (Domain, endDomain, isA,
+    # Contract, Happens), so a blanket "never use these" would instruct it to
+    # write an unparseable contract — a worse failure than the collision this
+    # module exists to prevent. Both stages carry the wording.
+    gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
+    corr = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])
+    )
+    for prompt in (gen, corr):
+        assert "required, not forbidden" in prompt
+        assert "names you **invent**" in prompt
+
+
+def test_grammar_failure_defers_to_render_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    # build_jinja_env runs at strategy-module import, so registering the
+    # reserved_names function rather than its value keeps an unreadable grammar
+    # resource out of import: it must not break `--help` or API startup, and
+    # must surface as the friendly RuntimeError when a prompt is actually built.
+    def unreadable() -> str:
+        raise RuntimeError("Failed to load Symboleo grammar resource")
+
+    monkeypatch.setattr(grammar, "load_grammar", unreadable)
+    grammar.reserved_names.cache_clear()  # both are lru_cached and warm by now
+    try:
+        env = build_jinja_env("zero_shot_generation.j2")
+        template = env.get_template("zero_shot_generation.j2")
+        with pytest.raises(RuntimeError, match="Failed to load Symboleo grammar resource"):
+            template.render(contract_text="contract text", grammar_context=None)
+    finally:
+        grammar.reserved_names.cache_clear()  # drop the poisoned state for later tests
 
 
 def test_reserved_names_survive_grammar_omission(any_strategy: PromptStrategy) -> None:

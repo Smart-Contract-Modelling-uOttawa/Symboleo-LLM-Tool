@@ -8,13 +8,31 @@ unrecoverable 1-ERROR plateau, see CLAUDE.md).
 
 import re
 
-from symboleo_llm_tool.prompts.grammar import reserved_names
+from symboleo_llm_tool.prompts.grammar import load_grammar, reserved_names
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
+def test_load_grammar_returns_the_grammar_text() -> None:
+    assert load_grammar().startswith("grammar ca.uottawa.csmlab.symboleo.Symboleo")
+
+
+def test_load_grammar_is_cached() -> None:
+    # The module docstring promises both functions are cached; only asserting it
+    # for reserved_names would leave the 13 KB re-read unfenced.
+    assert load_grammar() is load_grammar()
+
+
 def test_reserved_names_includes_ontology_types() -> None:
     assert {"Asset", "Event", "Role", "Contract", "DataTransfer"} <= set(reserved_names())
+
+
+def test_reserved_names_includes_words_the_model_must_still_emit() -> None:
+    # The premise that forces the prompt wording to be about invented names
+    # rather than forbidden words: these are reserved AND mandatory syntax, so a
+    # blanket prohibition would make the contract unparseable. If extraction ever
+    # stops picking them up, that wording becomes stylistic instead of load-bearing.
+    assert {"Domain", "endDomain", "isA", "Contract", "Happens"} <= set(reserved_names())
 
 
 def test_reserved_names_includes_state_literals() -> None:
