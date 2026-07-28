@@ -104,6 +104,7 @@ Standard module order for **generation** templates:
 ## Constraints
 ## Workflow        ← CoT only; omitted in zero_shot and few_shot
 ## Output Format   ← {% include '_output_format.j2' %}; the SymboleoAC contract structure + structural rules
+## Reserved Names  ← {% include '_reserved_names.j2' %}; grammar-derived, always emitted
 ## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
 ## Examples        ← few_shot only
 ## Input
@@ -122,6 +123,7 @@ Standard module order for **correction** templates:
 ## Constraints
 ## Workflow        ← CoT only; omitted in zero_shot and few_shot
 ## Output Format   ← {% include '_output_format.j2' %}; same structural grounding as generation
+## Reserved Names  ← {% include '_reserved_names.j2' %}; adds the rename-is-a-required-fix clause
 ## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
 ## Current Contract
 {{ current_code }}
@@ -129,7 +131,7 @@ Standard module order for **correction** templates:
 {{ errors }}
 ```
 
-Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), `_output_format.j2` provides the `## Output Format` section (with its own heading) in both generation and correction templates, and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — consistent with the progression above (the `## Workflow` LangGPT module precedes the custom reference modules), even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
+Shared partials are `{% include %}`d at the appropriate position within this structure: `_system_header.j2` provides the `# Role` line, `_grammar_section.j2` provides the `## SymboleoAC Grammar Reference` block (with its own heading), `_output_format.j2` provides the `## Output Format` section (with its own heading) in both generation and correction templates, `_reserved_names.j2` provides the `## Reserved Names` section (with its own heading, also in both), and `_placeholder_guidance.j2` provides the placeholder constraint bullet within `## Constraints`. The `## Workflow` section is intentionally placed before `## Grammar` — consistent with the progression above (the `## Workflow` LangGPT module precedes the custom reference modules), even though it means zero_shot and CoT correction templates have different static prefixes before the grammar (relevant only if prompt caching is added; see Known Issues).
 
 **Partial loading — the `_`-prefix is load-bearing:** `build_jinja_env(*template_names)` in `prompts/base.py` automatically loads *every* `_`-prefixed `.j2` file in `templates/` into the env, then adds the strategy-specific templates named in the call. A strategy file therefore lists only its own templates (e.g. `build_jinja_env("zero_shot_generation.j2", "zero_shot_correction.j2")`) and never re-lists partials. Adding a new shared partial is a single file drop in `templates/` — no strategy file changes. Which partials a strategy *uses* is controlled solely by the `{% include %}` directives in its own templates; a partial that is loaded but not included renders nothing, so per-strategy partial selection lives in the templates, not in the env. Partials are shared, strategy-invariant content by design — anything that varies by strategy (CoT's `## Workflow`, few_shot's `## Examples`) belongs in the strategy template, not a partial.
 
@@ -147,7 +149,7 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - Generation and correction each have their own `StageConfig` (independent LLM + strategy per stage)
 - **Config input is closed.** Every config model inherits `_StrictModel` (`extra="forbid"`) in `config/models.py`, so an unknown or misspelled key fails the load at whatever level it appears rather than falling back to the default. This is a research data-integrity rule, not a UX nit: `report.json` records the config *as loaded*, so a silently-ignored `temprature` would leave no trace in the durable artifact either. Stated on the shared base so a new config model cannot opt out by omission. **Scoped to config files** — the API request models (`api/models.py`) stay `extra="ignore"` deliberately, because there a strict model turns frontend/backend version skew into a 422, a different risk profile from a hand-edited research config.
 - `strategy_params: {}` dict on each stage — `dict[str, Any]`, so `extra="forbid"` cannot see inside it. Each `PromptStrategy` therefore declares `_allowed_params` and `PromptStrategy.__init__` rejects unknown keys; a strategy's own semantic checks (e.g. `few_shot`'s list/emptiness rules) stay in that strategy
-- `include_grammar` is a per-stage research flag (not a strategy characteristic)
+- `include_grammar` is a per-stage research flag (not a strategy characteristic). It gates the grammar **text**, not grammar-*derived* guidance: `## Output Format` and `## Reserved Names` both ship regardless, because with the grammar omitted the model knows less about the language and needs that grounding more, not less
 - `output.save_intermediates` saves each iteration's `.symboleo` output — off by default
 - `stop_on_first_convergence` flag — default `false` (full research data), flip to `true` to save tokens
 - Input file is a CLI argument, not a config concern
@@ -260,6 +262,8 @@ In a CLI suite, an invalid strategy name or `strategy_params` key in experiment 
 ### Grammar Context Size
 The full Xtext grammar may push against LLM context window limits or significantly increase token costs across many iterations. Starting point is full grammar injection; selective/relevant excerpt injection is a future optimization.
 
+`## Reserved Names` adds a further **~300 tokens to every call**, both stages, unconditionally (measured: a zero-shot generation prompt goes ~4,600 → ~4,900 tokens with the grammar on, ~1,000 → ~1,300 with it off). That is a modest surcharge on a grammar-on prompt but ~30% on a grammar-off one, which is the arm to watch if the `include_grammar: false` comparison starts looking token-bound.
+
 ### Xtext Meta-Notation Leakage
 We inject the raw `Symboleo.xtext` grammar verbatim ([_grammar_section.j2](symboleo_llm_tool/prompts/templates/_grammar_section.j2) renders it). Xtext is a parser-**generator** notation, and the model cannot reliably separate its meta-notation from the object-level SymboleoAC it should produce — so the notation *leaks into the output* (e.g. `'days'` instead of bare `days`, `Obligation('O')` reproduced from the `('O' | 'Obligation')` alternation, grammar rule names used as surface constructs). This is distinct from **Grammar Context Size** above (a token-budget concern); this is *format confusion*.
 
@@ -280,11 +284,11 @@ The damage is not the mistake but the **irrecoverability**: it surfaces as `mism
 
 **The contrast that identifies the fix:** the AC validator's own `@Check` for reserved-word collisions produces an actionable message (`Domain type name 'Party' collides with a JavaScript/Java reserved word…`), and `command-a` fixed *that* in a single iteration by renaming. Same class of error, different message quality, opposite outcome — so this is a message/prompting gap, not a model-capability limit.
 
-**Planned fix (deferred; own PR):** inject the reserved-name list into the prompt, **derived from `Symboleo.xtext` rather than hand-listed** — the quoted literals are already parseable out of the grammar we inject, so the list cannot drift as the language evolves. This is the same grammar-derived, zero-drift escalation the leaf-construct policy above names.
+**Prevention (implemented):** the `## Reserved Names` module (`_reserved_names.j2`) states the prohibition — a name you *invent* may not be a reserved word — and lists them. `prompts/grammar.py::reserved_names()` derives the list from `Symboleo.xtext` (every identifier-shaped quoted literal, **both quote styles** — `Asset` is double-quoted, `Suspension` single-quoted, so a single-style scan silently drops the whole base-type category) rather than hand-listing it, which is the grammar-derived, zero-drift escalation the leaf-construct policy above names. It ships in generation *and* correction, and is deliberately **not** gated on `include_grammar` (see Config Schema).
 
-Two complementary directions, either of which may be the better root fix:
-- **Upstream message enrichment** in SymboleoAC-IDE (an `ISyntaxErrorMessageProvider` naming *which* identifier is reserved) — helps every consumer of the JAR, not just this tool.
-- **A negative naming rule** in `## Output Format` — the only option that prevents the collision at source. Note the *positive* forms already ship: `_output_format.j2` gives the Power consequent as `Suspended(obligations.<name>)`, and `Suspension(obligations.<name>)` is the corresponding state predicate (`ObligationState`). What is missing is the prohibition — a reserved state name is never a domain type. `gpt-4o-mini` avoided the collision by writing the consequent form instead of declaring a `Suspension` type.
+Two things the wording has to get right, both fenced by tests: the list contains words the model *must* still emit (`Domain`, `endDomain`, `isA`, `Contract`, `Happens`), so the rule is about invented names rather than forbidden words; and correction's "do not edit lines with no listed error" constraint would otherwise forbid the very rename that fixes this, so the correction rendering adds an explicit permission clause.
+
+**Still open — recovery, as opposed to prevention:** upstream message enrichment in SymboleoAC-IDE (an `ISyntaxErrorMessageProvider` naming *which* identifier is reserved). That would help every consumer of the JAR and would repair contracts that arrive with a collision already in them, which prompting cannot.
 
 ### Reasoning-Model Parameter & Cost Compatibility
 Adding thinking-capable models beyond `gpt-4o-mini` (Claude Opus 4.8/4.7, Fable 5; OpenAI o-series/GPT-5) raises three concerns. The first (sampling-param rejection) is **handled**; the other two are still latent.
