@@ -316,7 +316,7 @@ promptly.
 | Amdahl (sequential correction loop) | Accepted; concurrency helps across *many similar-cost* units, not one dominant chain. |
 | Dropped SSE + auto-reconnect | Explicit cancel (Stop / beacon) is immediate; detached-with-grace (10 s, 5 s sweep) is the fallback so a blip doesn't kill a run (§5.4). |
 | No cost reduction | Documented; concurrency cuts wall-clock only, not tokens/cost. |
-| Reproducibility | Results content-deterministic; default `max_concurrency=1` keeps runs identical unless opted in. |
+| Reproducibility | Results content-deterministic, but the default `K = 2` means the default suite path is *concurrent*; set `max_concurrency: 1` for replay-identical runs. |
 | `stop_on_first_convergence` saves less under concurrency | Up to `K` candidates may already be in flight when one converges; they run to their next checkpoint before the cancel lands, so >1 may converge. Harmless (`success = any converged`), but the token-cancel saving is partial, not the clean sequential `break`. |
 | Frontend live counter assumes one active unit | The single "Experiment N — Candidate M — Iteration I" label (`lib/progress.ts`) flickers between concurrently-running experiments. Cosmetic only; follow-up = a per-experiment progress list or an "N running" summary. Not a blocker (progress events already carry `experiment_index`). |
 

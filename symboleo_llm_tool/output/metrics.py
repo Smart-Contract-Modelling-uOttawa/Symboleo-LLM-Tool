@@ -1,11 +1,9 @@
 """Derivation of the computed metrics on the result models.
 
-These compute the token/cost totals, iterations-to-convergence, and the
-final-iteration warning count that the ``@computed_field``s on the result models
-expose (the models declare the fields and delegate here). Keeping the derivation
-in its own module leaves
-``models.py`` as data-shape declarations and gives the logic a named, reusable
-home — any consumer (CLI, report tooling) can call these directly.
+The ``@computed_field``s on the result models declare the fields and delegate
+here. Keeping the derivation in its own module leaves ``models.py`` as
+data-shape declarations and gives the logic a named, reusable home — any
+consumer (CLI, report tooling) can call these directly.
 
 Model types are imported only under ``TYPE_CHECKING``; the function bodies use
 plain attribute access, so there is no runtime import cycle with ``models.py``

@@ -1,4 +1,4 @@
-"""Computed fields on the result models (token/cost totals, iterations, warnings).
+"""Computed fields on the result models.
 
 These are derived, never stored: ``@computed_field`` so they serialize into
 report.json, the API, and the generated schema from a single definition.

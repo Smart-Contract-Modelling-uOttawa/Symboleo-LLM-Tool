@@ -31,9 +31,9 @@ const TEST_SUITE_ID = 'test-suite-id'
 
 type Totals = { tokens: number; cost: number | null }
 
-// Token/cost totals and iterations_to_convergence are computed_fields on the
-// backend models, so they arrive as authoritative values — the page reads them
-// directly rather than re-deriving from error_history. `splits` gives each
+// The backend exposes its rollups as computed_fields, so they arrive as
+// authoritative values — the page reads them directly rather than re-deriving
+// from error_history. `splits` gives each
 // experiment two candidates whose totals sum to the experiment's without
 // matching it, so a page reading candidate-level rollups instead of the
 // experiment's own field fails.
