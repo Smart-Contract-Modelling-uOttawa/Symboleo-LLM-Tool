@@ -184,6 +184,32 @@ def test_range_table_stays_within_the_hard_envelope() -> None:
         LLMConfig(provider=provider, model="any", temperature=high)
 
 
+def test_shipped_ui_config_models_block_maps_providers_to_name_lists() -> None:
+    # routes.py builds model->provider with `for model in models`, so a scalar
+    # instead of a list iterates the string's characters and silently yields a
+    # corrupted map rather than failing. Nothing else parses this block.
+    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    assert data["models"]
+    for provider, names in data["models"].items():
+        assert isinstance(names, list) and names, f"{provider} must map to a non-empty list"
+        assert all(isinstance(n, str) for n in names)
+
+
+def test_shipped_ui_config_lists_openai_first() -> None:
+    # The frontend seeds its default model from the first model of the first
+    # provider, so provider order is behaviour, not formatting.
+    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    assert next(iter(data["models"])) == "openai"
+
+
+def test_cohere_is_deliberately_absent_from_the_range_table() -> None:
+    # Cohere documents no temperature cap, so it has no row on purpose. A
+    # guessed row would warn on every Cohere run; this pins the omission.
+    assert "cohere" not in _TEMPERATURE_RANGES
+    cfg = LLMConfig(provider="cohere", model="command-a-03-2025", temperature=1.5)
+    assert temperature_range_warnings(cfg) == []
+
+
 def test_shipped_ui_config_temperature_bounds_fit_the_hard_envelope() -> None:
     # The shipped deployment file advertises the UI's temperature bounds; a
     # bound outside the validator's envelope would let the form submit a value

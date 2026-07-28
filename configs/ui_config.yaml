@@ -1,5 +1,7 @@
 # Frontend UI configuration — served by GET /options, consumed by the frontend.
 # Update this file to add/remove models or adjust parameter constraints.
+# Order matters: the first model of the first provider seeds the UI form's
+# default, so append new providers rather than prepending them.
 # Defaults are derived from Pydantic model definitions — do not add defaults here.
 # No code change or frontend deploy required.
 
@@ -11,6 +13,11 @@ models:
     - claude-opus-4-8
     - claude-sonnet-4-6
     - claude-haiku-4-5-20251001
+  # Dated names only: Cohere retired the undated aliases (command-r, -r-plus)
+  # on 2025-09-15, and the pinned LiteLLM map still lists them.
+  cohere:
+    - command-a-03-2025
+    - command-r-08-2024
 
 parameters:
   num_candidates:

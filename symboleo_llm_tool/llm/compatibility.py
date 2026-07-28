@@ -62,7 +62,9 @@ def reasoning_param_warnings(config: LLMConfig) -> list[str]:
 
 # Temperature ranges each provider's API accepts. The LLMConfig validator
 # enforces only the cross-provider envelope (0–2), so an in-envelope value can
-# still exceed the selected provider's cap.
+# still exceed the selected provider's cap. A provider is listed only when its
+# API documents a hard cap; an absent provider (e.g. Cohere, whose Chat API
+# documents no upper bound) is deliberate, not an oversight.
 _TEMPERATURE_RANGES: dict[str, tuple[float, float]] = {
     "openai": (0.0, 2.0),
     "anthropic": (0.0, 1.0),
