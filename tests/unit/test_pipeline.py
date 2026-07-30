@@ -187,6 +187,60 @@ def test_clean_response_strips_plain_fences(mock_deps):
     assert result.candidates[0].final_code == "Contract Test() {}"
 
 
+# --- _clean_response: prose/fence extraction (direct function tests) -----------
+
+_CONTRACT = (
+    "Domain D\n  Seller isA Role with name: String;\nendDomain\n\n"
+    "Contract C (a: Seller, b: Seller)\nObligations\n  o1: O(a, b, true, true);\nendContract"
+)
+
+
+def test_clean_response_extracts_contract_behind_prose_preamble():
+    # The observed run_20260729_130405 failure shape: prose, then a fence. The
+    # old fence-stripping only fired when the fence was the FIRST line, so the
+    # parser died on English at line 1 and masked every real error below it.
+    response = (
+        "Here is the corrected SymboleoAC contract based on the provided "
+        f"instructions and errors:\n\n```symboleo\n{_CONTRACT}\n```"
+    )
+    assert pipeline._clean_response(response) == _CONTRACT
+
+
+def test_clean_response_drops_trailing_prose_after_fence():
+    response = f"```symboleo\n{_CONTRACT}\n```\n\nLet me know if you need further corrections."
+    assert pipeline._clean_response(response) == _CONTRACT
+
+
+def test_clean_response_extracts_span_without_any_fences():
+    response = f"Sure! The corrected contract:\n\n{_CONTRACT}\n\nAll errors are now fixed."
+    assert pipeline._clean_response(response) == _CONTRACT
+
+
+def test_clean_response_handles_unclosed_fence():
+    response = f"Here is the contract:\n```symboleo\n{_CONTRACT}"
+    assert pipeline._clean_response(response) == _CONTRACT
+
+
+def test_clean_response_keeps_truncated_contract_to_end():
+    # No endContract (max_tokens truncation): keep from Domain to the end so
+    # the validator reports the truncation, rather than dropping everything.
+    truncated = "Domain D\n  Seller isA Role;\nendDomain\nContract C (a: Seller, b: Seller)"
+    response = f"Here is the contract:\n{truncated}"
+    assert pipeline._clean_response(response) == truncated
+
+
+def test_clean_response_passes_through_unrecognizable_content():
+    # No Domain line anywhere: return it (fence-stripped) for the validator to
+    # report as-is - inventing a span here would hide the malformation.
+    assert pipeline._clean_response("I cannot produce a contract for this input.") == (
+        "I cannot produce a contract for this input."
+    )
+
+
+def test_clean_response_leaves_clean_output_untouched():
+    assert pipeline._clean_response(_CONTRACT) == _CONTRACT
+
+
 # --- Concurrent candidate execution (coordinator supplied) ---------------------
 
 

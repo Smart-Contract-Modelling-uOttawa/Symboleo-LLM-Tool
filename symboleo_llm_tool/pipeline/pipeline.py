@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -208,13 +209,31 @@ def _run_candidate(
     )
 
 
+# Every valid file spans `Domain` .. `endContract` (the grammar's Model rule);
+# the anchors below are that grammar fact, so they change only with the grammar.
+_DOMAIN_LINE = re.compile(r"^\s*Domain\b")
+_END_CONTRACT = re.compile(r"\bendContract\b")
+
+
 def _clean_response(response: str) -> str:
-    """Strip markdown code fences that LLMs sometimes wrap output in."""
-    response = response.strip()
-    if response.startswith("```"):
-        lines = response.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        response = "\n".join(lines)
-    return response.strip()
+    """Extract the SymboleoAC source from an LLM response.
+
+    Models wrap output in markdown fences and sometimes add conversational
+    prose around them ("Here is the corrected contract: ..."). Prose ahead of
+    the code is worse than cosmetic: the parser fails on line 1 and everything
+    below it goes unvalidated, so the run records a masked, meaningless error
+    state. Fence lines are dropped wherever they appear (a fence is never valid
+    Symboleo), then the response is trimmed to the `Domain` .. `endContract`
+    span. A response with no recognizable span is returned fence-stripped, so
+    the validator reports the malformed content rather than this function
+    guessing at it.
+    """
+    lines = [ln for ln in response.strip().splitlines() if not ln.lstrip().startswith("```")]
+
+    starts = [i for i, ln in enumerate(lines) if _DOMAIN_LINE.match(ln)]
+    if not starts:
+        return "\n".join(lines).strip()
+    start = starts[0]
+    ends = [i for i, ln in enumerate(lines) if _END_CONTRACT.search(ln)]
+    end = ends[-1] if ends and ends[-1] >= start else len(lines) - 1
+    return "\n".join(lines[start : end + 1]).strip()
