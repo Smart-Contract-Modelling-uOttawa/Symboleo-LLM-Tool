@@ -313,7 +313,7 @@ Adding thinking-capable models beyond `gpt-4o-mini` (Claude Opus 4.8/4.7, Fable 
 - **Caching interaction (benign).** Toggling thinking on/off invalidates only the *messages* cache tier, not tools/system — so a planned grammar-prefix cache survives a thinking on/off change.
 
 ### Malformed LLM Responses
-The LLM may return markdown code blocks, explanations, or partial output instead of valid Symboleo. `_clean_response()` in `pipeline.py` handles markdown code fences, but more exotic malformed output (partial contracts, explanatory prose, mixed content) is not yet handled. A more robust pre-validation step may be needed as strategies are developed.
+`_clean_response()` in `pipeline.py` extracts the `Domain`..`endContract` span from an LLM response: fence lines are dropped wherever they appear, surrounding prose is trimmed away, and a truncated contract (no `endContract`) is kept through to the end so the validator reports the truncation. This matters beyond cosmetics — prose ahead of the code makes the parser fail at line 1, so every real error below goes unvalidated and the run records a masked, meaningless error state (observed 2026-07-29: a Cohere correction beginning "Here is the corrected…" recorded 2E when the contract underneath had 4E). A response with no recognizable span passes through fence-stripped for the validator to report — the cleaner never invents a span. Still unhandled: multiple contracts in one response, and prose interleaved *inside* the span.
 
 ### CLI `--set` Override
 Handling nested key paths (`correction.llm.model=gpt-4o`) with type coercion and YAML merging is non-trivial. **Deferred — low priority given the API provides a more ergonomic interface for per-run config.**
