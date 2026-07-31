@@ -8,6 +8,10 @@ on:
       # Shipped configs are fenced by tests that read the real files, so a
       # config-only change must still run them.
       - 'configs/**'
+      # The JAR is what tests/integration/ probes. A validator-only refresh
+      # touches no other path, and that is exactly the change those tests
+      # exist to catch.
+      - 'lib/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/python.yml'
