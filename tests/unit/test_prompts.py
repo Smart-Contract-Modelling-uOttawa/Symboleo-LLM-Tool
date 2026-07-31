@@ -1,3 +1,4 @@
+from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,108 @@ def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrat
     gen_ctx = PromptContext(contract_text="contract text")
     assert "required fix, not an unlisted edit" in any_strategy.build_correction_prompt(corr_ctx)
     assert "required fix, not an unlisted edit" not in any_strategy.build_generation_prompt(gen_ctx)
+
+
+# --- Placement rules (## Output Format) ---------------------------------------
+
+# One phrase per JAR-pinned placement rule in _output_format.j2, so dropping a
+# pinned rule reds this test instead of passing on the others. The older
+# structural bullets (O-vs-Obligation, inline propositions, the trigger prefix)
+# carry no phrase by design — see the Jinja comment in that template.
+#
+# Each phrase must be unique in the RENDERED prompt, not merely in the template:
+# `## Reserved Names` lists every grammar keyword, so a bare construct name is
+# already present there and would fence nothing. Same trap as _DERIVED_ONLY
+# above, in mirror image; test_placement_rule_phrases_are_unique_in_the_prompt
+# enforces it.
+_PLACEMENT_RULES = (
+    "may only appear in this order",  # fixed section sequence
+    "header with nothing under it",  # Obligations header mandatory
+    "at least two parameters",  # contract needs >= 2 params
+    "The article is fixed",  # isAn Enumeration / isA <base type>
+    "qualifying it with its type",  # Quality(PRIME), not bare PRIME
+    "there are no standalone values",  # no `x: Date := ...` / `x := ...`
+    "only date-arithmetic construct",  # Date.add form + no infix `d + N days`
+    "expects a time point",  # where Date.add IS allowed
+    "may NOT appear in a comparison",  # where it is not
+    "the time is required",  # Date("yyyy/MM/dd HH:mm:ss")
+    "never wraps a value you already have",  # Date(effDate) is not a wrapper
+    "required literal prefix",  # Suspended(obligations.x), not Suspended(x)
+    "belong to powers alone",  # Suspended/Resumed/... not in O
+    "wraps the assignment",  # Assign(...) / HappensAssign(...) in an O
+)
+
+
+def test_output_format_rule_count_is_capped() -> None:
+    # `## Output Format` ships on every call in both stages regardless of
+    # include_grammar, so it is the section that can quietly re-inject grammar
+    # knowledge into the `include_grammar: false` arm until the two arms stop
+    # differing. The ceiling is a bullet count rather than a token budget
+    # because the section's size is stable but its share of a prompt is not —
+    # that varies with strategy, grammar, and contract length. Reaching the cap
+    # means the next fix is few-shot or upstream message enrichment, not
+    # another bullet (CLAUDE.md, "Leaf-construct policy").
+    template = (
+        resources.files("symboleo_llm_tool.prompts.templates")
+        .joinpath("_output_format.j2")
+        .read_text(encoding="utf-8")
+    )
+    bullets = [ln for ln in template.splitlines() if ln.startswith("- ")]
+    assert len(bullets) <= 15, f"## Output Format has {len(bullets)} bullets; cap is 15"
+
+
+def test_placement_rule_phrases_are_unique_in_the_prompt(
+    any_strategy: PromptStrategy,
+) -> None:
+    # The fence above only works if each phrase appears exactly once: a phrase
+    # occurring elsewhere in the prompt stays satisfied after its rule is
+    # deleted, fencing nothing.
+    prompt = any_strategy.build_generation_prompt(
+        PromptContext(contract_text="contract text", grammar_context="grammar rules here")
+    )
+    for rule in _PLACEMENT_RULES:
+        assert prompt.count(rule) == 1, f"{rule!r} is not unique in the rendered prompt"
+
+
+def test_placement_rules_reach_both_stages(any_strategy: PromptStrategy) -> None:
+    # Both stages emit contract code, so a rule shipping in only one of them
+    # would leave half the loop unguided.
+    gen_ctx = PromptContext(contract_text="contract text", grammar_context="grammar rules here")
+    corr_ctx = PromptContext(
+        current_code="some symboleo code",
+        errors=[make_issue(message="bad token")],
+        grammar_context="grammar rules here",
+    )
+    for prompt in (
+        any_strategy.build_generation_prompt(gen_ctx),
+        any_strategy.build_correction_prompt(corr_ctx),
+    ):
+        for rule in _PLACEMENT_RULES:
+            assert rule in prompt
+
+
+def test_placement_rules_survive_grammar_omission(any_strategy: PromptStrategy) -> None:
+    # These substitute for grammar knowledge, so the arm that omits the grammar
+    # text needs them most. Fails if someone gates the module on grammar_context
+    # to reclaim the tokens (see CLAUDE.md, "Grammar Context Size").
+    prompt = any_strategy.build_generation_prompt(
+        PromptContext(contract_text="contract text", grammar_context=None)
+    )
+    assert "Grammar Reference" not in prompt
+    for rule in _PLACEMENT_RULES:
+        assert rule in prompt
+
+
+def test_date_invention_guidance_is_generation_only(any_strategy: PromptStrategy) -> None:
+    # Not inventing values is placeholder-mapping guidance, not a placement
+    # rule: the JAR cannot tell an invented date from a stated one, so it lives
+    # with the other constraints rather than in the probe-pinned section.
+    gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
+    corr = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])
+    )
+    assert "never write a calendar date" in gen
+    assert "never write a calendar date" not in corr
 
 
 def test_generation_includes_contract_text(any_strategy: PromptStrategy) -> None:
