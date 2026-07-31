@@ -5,7 +5,7 @@
 A Python CLI and FastAPI web service that:
 1. Takes a `.txt` legal contract in English
 2. Uses an LLM to generate one or more SymboleoAC contract(s)
-3. Runs the SymboleoAC headless CLI to extract syntax **and validation** errors (Xtext parser + `@Check` rules, including the access-control layer — e.g. roles must declare `name/org/dept`, events a Role-typed `performer`)
+3. Runs the SymboleoAC headless CLI to extract syntax **and validation** errors (Xtext parser + `@Check` rules — e.g. roles must declare the access-control triple `name/org/dept`, and events a Role-typed `performer`; note `performer` is a *base-language* requirement for event authenticity, not an AC addition — see [docs/symboleo-language-reference.md](docs/symboleo-language-reference.md))
 4. Feeds errors back to an LLM for correction (bounded loop)
 5. Outputs the final corrected Symboleo file(s) and a run report
 
