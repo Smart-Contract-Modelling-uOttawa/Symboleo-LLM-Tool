@@ -70,7 +70,7 @@ def sub(code: str, old: str, new: str) -> str:
     nothing. The asymmetry matters: the illegal halves would still fail loudly,
     so drift would land exactly on the half that keeps the prompt honest.
     """
-    assert old in code, f"BASE no longer contains {old!r}"
+    assert old in code, f"code no longer contains {old!r}"
     return code.replace(old, new, 1)
 
 
@@ -186,9 +186,42 @@ def with_enum(comparison: str) -> str:
     )
 
 
-def test_enum_value_must_be_qualified(wrapper: SymboleoWrapper) -> None:
+def test_enum_value_must_be_qualified_at_use_sites(wrapper: SymboleoWrapper) -> None:
     assert errors(wrapper, with_enum("delivered.q == PRIME"))
     assert errors(wrapper, with_enum("delivered.q == Quality(PRIME)")) == []
+
+
+def test_enum_members_must_be_bare_in_the_declaration(wrapper: SymboleoWrapper) -> None:
+    # The mirror of the rule above, and the reason the prompt states both: a
+    # rule that says only "qualify enum values" gets applied to the declaration,
+    # where qualifying is a parse error.
+    #
+    # The enum is declared but never used, so the declaration is the only thing
+    # that can fail. Qualifying members in a *used* enum also breaks its use
+    # sites, and those collateral errors would keep this green if the JAR ever
+    # accepted the dot form here.
+    dotted = "  Quality isAn Enumeration(Quality.PRIME, Quality.AAA);\nendDomain"
+    assert errors(wrapper, sub(contract(), "endDomain", dotted))
+
+    bare = sub(contract(), "endDomain", "  Quality isAn Enumeration(PRIME, AAA);\nendDomain")
+    assert errors(wrapper, bare) == []
+
+
+def test_bare_enum_value_rejected_in_a_binding(wrapper: SymboleoWrapper) -> None:
+    # `with_enum` binds `q := Quality(PRIME)`, so the legal binding form is
+    # covered by the passing case above; this pins the bare form as illegal.
+    bare_binding = sub(
+        with_enum("delivered.q == Quality(PRIME)"),
+        "q := Quality(PRIME)",
+        "q := PRIME",
+    )
+    assert errors(wrapper, bare_binding)
+
+
+def test_enum_dot_form_rejected_at_a_use_site(wrapper: SymboleoWrapper) -> None:
+    # The prompt says the dot form is never legal in any position; the
+    # declaration case is above, this is the use case.
+    assert errors(wrapper, with_enum("delivered.q == Quality.PRIME"))
 
 
 # --- Dates --------------------------------------------------------------------
@@ -297,12 +330,72 @@ def test_bare_assignment_rejected_as_obligation_consequent(wrapper: SymboleoWrap
 
 @pytest.mark.parametrize(
     "consequent",
-    ["Assign(goods.owner := buyer)", "HappensAssign(delivered, goods.qty := 2)"],
+    [
+        "Assign(goods.owner := buyer)",
+        "HappensAssign(delivered, goods.qty := 2)",
+        "Assign(goods.owner := buyer; goods.qty := 2)",  # several updates: semicolons
+    ],
 )
 def test_wrapped_assignment_accepted_as_obligation_consequent(
     wrapper: SymboleoWrapper, consequent: str
 ) -> None:
     assert errors(wrapper, contract(consequent=consequent)) == []
+
+
+def test_multiple_assignments_rejected_with_commas(wrapper: SymboleoWrapper) -> None:
+    # Showing only the single-assignment form left the separator to guesswork,
+    # and a comma is the natural guess.
+    assert errors(wrapper, contract(consequent="Assign(goods.owner := buyer, goods.qty := 2)"))
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        # domain type attributes
+        (
+            "Goods isAn Asset with qty: Number, owner: Seller;",
+            "Goods isAn Asset with qty: Number; owner: Seller;",
+        ),
+        # contract parameters
+        (
+            "Contract C (sellerP: Seller, buyerP: Buyer, effDate: Date, delDays: Number)",
+            "Contract C (sellerP: Seller; buyerP: Buyer; effDate: Date; delDays: Number)",
+        ),
+    ],
+)
+def test_other_lists_reject_semicolons(wrapper: SymboleoWrapper, old: str, new: str) -> None:
+    # The prompt widened the rule to name every comma-separated site, so each
+    # one needs a probe; otherwise the widened half is asserted and unchecked.
+    assert errors(wrapper, sub(contract(), old, new))
+
+
+def test_enum_members_reject_semicolons(wrapper: SymboleoWrapper) -> None:
+    semis = sub(contract(), "endDomain", "  Quality isAn Enumeration(PRIME; AAA);\nendDomain")
+    assert errors(wrapper, semis)
+
+
+def test_happens_assign_multiple_updates_use_semicolons(wrapper: SymboleoWrapper) -> None:
+    # The prompt names HappensAssign alongside Assign for the semicolon rule,
+    # but the existing case is single-update only.
+    legal = "HappensAssign(delivered, goods.qty := 2; goods.owner := buyer)"
+    illegal = "HappensAssign(delivered, goods.qty := 2, goods.owner := buyer)"
+    assert errors(wrapper, contract(consequent=legal)) == []
+    assert errors(wrapper, contract(consequent=illegal))
+
+
+def test_declaration_with_list_is_comma_separated(wrapper: SymboleoWrapper) -> None:
+    # The other half of the separator rule. Stating `Assign`'s semicolon on its
+    # own got it carried into declaration `with` lists, where the grammar wants
+    # commas — so both sites are pinned together, as the prompt states them.
+    semicolons = sub(
+        contract(),
+        "goods: Goods with qty := 1, owner := seller;",
+        "goods: Goods with qty := 1; owner := seller;",
+    )
+    assert errors(wrapper, semicolons)
+    # Redundant with test_base_contract_is_valid — BASE already uses the comma
+    # form — but kept so the contrast is readable in place.
+    assert errors(wrapper, contract()) == []
 
 
 def test_happens_of_obligation_state_is_legal(wrapper: SymboleoWrapper) -> None:
