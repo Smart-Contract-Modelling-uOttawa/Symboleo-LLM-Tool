@@ -2,7 +2,31 @@ from pathlib import Path
 
 import pytest
 
-from symboleo_llm_tool.config.loader import load_suite_config
+from symboleo_llm_tool.config.loader import load_config, load_suite_config
+
+# Every shipped config is load-checked below. `ui_config.yaml` is the only
+# exclusion: it is the frontend's model/parameter list, not a pipeline config.
+_UI_CONFIG = "ui_config.yaml"
+_SUITE_CONFIG = "suite_example.yaml"
+_SHIPPED_PIPELINE_CONFIGS = sorted(
+    p for p in Path("configs").glob("*.yaml") if p.name not in {_UI_CONFIG, _SUITE_CONFIG}
+)
+
+
+@pytest.mark.parametrize("path", _SHIPPED_PIPELINE_CONFIGS, ids=lambda p: p.name)
+def test_shipped_config_loads(path: Path) -> None:
+    # Config models are `extra="forbid"`, so a typo in a shipped config is a
+    # hard load failure — and without this it surfaces when a user runs the
+    # file rather than in CI.
+    load_config(path)
+
+
+def test_shipped_suite_config_loads() -> None:
+    # Same guarantee for the one shipped SuiteConfig, which `load_config`
+    # cannot parse. The other suite tests below use an inline fixture, so
+    # nothing else reads this file.
+    load_suite_config(Path("configs") / _SUITE_CONFIG, "Seller shall deliver the goods.")
+
 
 _SUITE_YAML = """
 max_concurrency: 4
