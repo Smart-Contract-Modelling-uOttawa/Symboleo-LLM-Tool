@@ -158,8 +158,9 @@ def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrat
 
 # One phrase per JAR-pinned placement rule in _output_format.j2, so dropping a
 # pinned rule reds this test instead of passing on the others. The older
-# structural bullets (O-vs-Obligation, inline propositions, the trigger prefix)
-# carry no phrase by design — see the Jinja comment in that template.
+# structural bullets (the top-level-structure skeleton, O-vs-Obligation, inline
+# propositions, the trigger prefix) carry no phrase by design — see the Jinja
+# comment in that template.
 #
 # Each phrase must be unique in the RENDERED prompt, not merely in the template:
 # `## Reserved Names` lists every grammar keyword, so a bare construct name is
@@ -171,7 +172,9 @@ _PLACEMENT_RULES = (
     "header with nothing under it",  # Obligations header mandatory
     "at least two parameters",  # contract needs >= 2 params
     "The article is fixed",  # isAn Enumeration / isA <base type>
-    "qualifying it with its type",  # Quality(PRIME), not bare PRIME
+    "there does not parse",  # enum members are bare AT the declaration
+    "qualifies it with the type name",  # Quality(PRIME) at every use site
+    "never legal in any position",  # the Type.MEMBER dot form, anywhere
     "there are no standalone values",  # no `x: Date := ...` / `x := ...`
     "only date-arithmetic construct",  # Date.add form + no infix `d + N days`
     "expects a time point",  # where Date.add IS allowed
@@ -181,6 +184,8 @@ _PLACEMENT_RULES = (
     "required literal prefix",  # Suspended(obligations.x), not Suspended(x)
     "belong to powers alone",  # Suspended/Resumed/... not in O
     "wraps the assignment",  # Assign(...) / HappensAssign(...) in an O
+    "exactly two places in the whole language",  # where semicolons ARE used
+    "Every other list is comma-separated",  # and where they are not
 )
 
 
