@@ -191,11 +191,26 @@ def _run_candidate(
         )
         corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
         corr_result = ctx.corr_llm.generate(corr_prompt)
-        code = _clean_response(corr_result.generated_text)
-        errors = ctx.wrapper.validate(code)
-        blocking = _blocking(errors)
+        cleaned = _clean_response(corr_result.generated_text)
+        rejected: str | None = None
+        if _has_contract_span(cleaned):
+            code = cleaned
+            errors = ctx.wrapper.validate(code)
+            blocking = _blocking(errors)
+        else:
+            # Keep the previous iteration's code and its errors — unchanged by
+            # definition, so no second JAR run — and record the raw response we
+            # refused. `blocking` is non-empty here (the loop would have broken
+            # otherwise), so the next iteration retries.
+            rejected = corr_result.generated_text
         error_history.append(
-            IterationRecord(iteration=iteration, code=code, errors=errors, usage=corr_result.usage)
+            IterationRecord(
+                iteration=iteration,
+                code=code,
+                errors=errors,
+                usage=corr_result.usage,
+                rejected_response=rejected,
+            )
         )
         if ctx.on_progress:
             ctx.on_progress(candidate_id, iteration, errors, ctx.num_candidates, ctx.max_iterations)
@@ -213,6 +228,19 @@ def _run_candidate(
 # the anchors below are that grammar fact, so they change only with the grammar.
 _DOMAIN_LINE = re.compile(r"^\s*Domain\b")
 _END_CONTRACT = re.compile(r"\bendContract\b")
+
+
+def _has_contract_span(code: str) -> bool:
+    """Whether ``code`` carries a contract the correction loop may adopt.
+
+    Anchored on the `Domain` line alone, never on `endContract`: a truncated
+    contract is deliberately kept adoptable so the validator reports the
+    truncation (see ``_clean_response``). Re-scanning the extracted text, rather
+    than having ``_clean_response`` report what it found, means a slicing bug
+    there cannot pass a span-less result through — but both match on
+    ``_DOMAIN_LINE``, so the anchor itself stays a single point of failure.
+    """
+    return any(_DOMAIN_LINE.match(line) for line in code.splitlines())
 
 
 def _clean_response(response: str) -> str:

@@ -12,6 +12,9 @@ on:
       # touches no other path, and that is exactly the change those tests
       # exist to catch.
       - 'lib/**'
+      # Not run by CI, but `ruff check .` covers it repo-wide — without this a
+      # scripts-only PR is unlinted and its violation reds the next unrelated PR.
+      - 'scripts/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/python.yml'

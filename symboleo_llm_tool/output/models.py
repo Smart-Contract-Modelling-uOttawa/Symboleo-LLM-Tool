@@ -25,10 +25,19 @@ class TokenUsage(BaseModel):
 
 
 class IterationRecord(BaseModel):
+    """One generation or correction pass: the code it produced and its issues.
+
+    ``rejected_response`` holds the raw text of a correction that carried no
+    contract and was therefore not adopted. On such a record ``code`` and
+    ``errors`` repeat the previous record's, while ``usage`` is the refused
+    call's own.
+    """
+
     iteration: int
     code: str
     errors: list[SymboleoIssue]
     usage: TokenUsage | None = None
+    rejected_response: str | None = None
 
 
 class CandidateResult(BaseModel):

@@ -14,6 +14,12 @@ from symboleo_llm_tool.config.models import (
 from symboleo_llm_tool.pipeline import pipeline
 from tests.helpers import make_generation, make_issue, make_usage
 
+# A stand-in for "the model returned a contract". Corrections are adopted only
+# when the response carries a `Domain`..`endContract` span, so a bare marker
+# string means "the model returned no contract at all" — a different scenario,
+# exercised deliberately by the rejection tests at the end of this file.
+_CODE = "Domain D\nendDomain\nContract C ()\nendContract"
+
 
 def _make_config(**pipeline_kwargs: Any) -> PipelineConfig:
     stage = StageConfig(
@@ -65,7 +71,7 @@ def test_converges_immediately_when_no_errors(mock_deps):
 
 def test_stops_at_max_iterations_when_always_errors(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = make_generation("invalid")
+    mock_llm.generate.return_value = make_generation(_CODE)
     mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=3))
@@ -77,7 +83,7 @@ def test_stops_at_max_iterations_when_always_errors(mock_deps):
 
 def test_error_history_length_matches_iterations(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = make_generation("invalid")
+    mock_llm.generate.return_value = make_generation(_CODE)
     mock_wrapper.validate.return_value = [make_issue()]
 
     result = pipeline.run("contract text", _make_config(max_iterations=2))
@@ -126,7 +132,7 @@ def test_on_progress_called_after_generation(mock_deps):
 
 def test_on_progress_called_after_each_correction(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = make_generation("invalid")
+    mock_llm.generate.return_value = make_generation(_CODE)
     error = make_issue()
     mock_wrapper.validate.side_effect = [[error], [error], []]
 
@@ -143,7 +149,7 @@ def test_on_progress_called_after_each_correction(mock_deps):
 def test_usage_recorded_on_each_iteration(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     mock_llm.generate.return_value = make_generation(
-        "invalid", usage=make_usage(prompt_tokens=30, completion_tokens=12, cost_usd=0.005)
+        _CODE, usage=make_usage(prompt_tokens=30, completion_tokens=12, cost_usd=0.005)
     )
     mock_wrapper.validate.side_effect = [[make_issue()], []]
 
@@ -241,6 +247,38 @@ def test_clean_response_leaves_clean_output_untouched():
     assert pipeline._clean_response(_CONTRACT) == _CONTRACT
 
 
+# --- _has_contract_span: the correction-adoption gate --------------------------
+
+
+def test_has_contract_span_accepts_a_truncated_contract():
+    # No endContract (max_tokens truncation). Adoptable on purpose: the anchor is
+    # the Domain line alone, so the validator gets to report the truncation
+    # rather than the loop silently discarding a real contract.
+    assert pipeline._has_contract_span("Domain D\n  Seller isA Role;") is True
+
+
+def test_has_contract_span_rejects_prose():
+    assert pipeline._has_contract_span("I cannot produce a contract for this input.") is False
+
+
+@pytest.mark.parametrize(
+    ("response", "has_span"),
+    [
+        (f"Here is the corrected contract:\n\n```symboleo\n{_CONTRACT}\n```", True),
+        (f"```symboleo\n{_CONTRACT}\n```\n\nLet me know if you need more.", True),
+        (f"Sure! The corrected contract:\n\n{_CONTRACT}\n\nAll errors are now fixed.", True),
+        ("Domain D\n  Seller isA Role;\nendDomain", True),
+        ("I cannot produce a contract for this input.", False),
+        ("", False),
+    ],
+)
+def test_has_contract_span_agrees_with_clean_response_extraction(response, has_span):
+    # The gate reads _clean_response's OUTPUT rather than taking a flag from it,
+    # so the two could in principle disagree. They must not: a span found during
+    # extraction is a span present in the result, and vice versa.
+    assert pipeline._has_contract_span(pipeline._clean_response(response)) is has_span
+
+
 # --- Concurrent candidate execution (coordinator supplied) ---------------------
 
 
@@ -324,7 +362,7 @@ def test_cancel_mid_run_stops_the_correction_loop(mock_deps):
     # which is what a Stop or disconnect actually hits during a long correction
     # loop. Tripping the token from the progress callback is deterministic.
     mock_wrapper, mock_llm, _ = mock_deps
-    mock_llm.generate.return_value = make_generation("invalid")
+    mock_llm.generate.return_value = make_generation(_CODE)
     mock_wrapper.validate.return_value = [make_issue()]
 
     cancel = CancellationToken()
@@ -410,7 +448,7 @@ def test_correction_prompt_receives_only_blocking_errors(mock_deps):
     mock_wrapper, mock_llm, mock_strategy = mock_deps
     err = make_issue(severity="ERROR", message="bad token")
     warn = make_issue(severity="WARNING", message="unused declaration")
-    mock_llm.generate.return_value = make_generation("code")
+    mock_llm.generate.return_value = make_generation(_CODE)
     mock_wrapper.validate.side_effect = [[err, warn], []]
     progress = MagicMock()
 
@@ -426,7 +464,7 @@ def test_convergence_with_residual_warnings_records_them(mock_deps):
     mock_wrapper, mock_llm, _ = mock_deps
     err = make_issue(severity="ERROR")
     warn = make_issue(severity="WARNING")
-    mock_llm.generate.return_value = make_generation("code")
+    mock_llm.generate.return_value = make_generation(_CODE)
     mock_wrapper.validate.side_effect = [[err], [warn]]
     progress = MagicMock()
 
@@ -439,3 +477,107 @@ def test_convergence_with_residual_warnings_records_them(mock_deps):
     # The correction-stage callback carries warnings too — filtering here would
     # silently drop them from the CLI and suite progress lines.
     assert progress.call_args_list[1] == call(0, 1, [warn], 1, 3)
+
+
+# --- Contract-less correction responses are refused, not adopted ---------------
+
+
+def test_rejects_correction_without_a_contract_and_keeps_previous_code(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE),
+        make_generation("I cannot fix this."),
+    ]
+    mock_wrapper.validate.side_effect = [[make_issue()]]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=1))
+
+    candidate = result.candidates[0]
+    assert candidate.final_code == _CODE  # not the refusal
+    assert candidate.converged is False
+    # The retained code is byte-identical, so a second JAR run would be pure waste.
+    assert mock_wrapper.validate.call_count == 1
+
+
+def test_rejected_iteration_is_recorded_with_its_response_and_usage(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    refusal = "```\nI cannot fix this.\n```"
+    mock_llm.generate.side_effect = [make_generation(_CODE), make_generation(refusal)]
+    mock_wrapper.validate.side_effect = [[make_issue()]]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=1))
+
+    history = result.candidates[0].error_history
+    # The RAW response, fences intact — the field is forensic, and storing the
+    # cleaned text would hide a _clean_response bug at the one point it matters.
+    assert history[1].rejected_response == refusal
+    assert history[1].code == history[0].code
+    assert history[1].errors == history[0].errors
+    assert history[1].usage is not None
+    assert history[0].rejected_response is None
+
+
+def test_rejected_iteration_counts_toward_iterations_used_and_tokens(mock_deps):
+    # The refused call was still made and still billed; dropping its record would
+    # delete those tokens from every rollup that walks error_history.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE, usage=make_usage(prompt_tokens=30, completion_tokens=12)),
+        make_generation("nope", usage=make_usage(prompt_tokens=40, completion_tokens=3)),
+    ]
+    mock_wrapper.validate.side_effect = [[make_issue()]]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=1))
+
+    candidate = result.candidates[0]
+    assert candidate.iterations_used == 1
+    assert candidate.total_tokens == 42 + 43
+
+
+def test_rejected_final_iteration_keeps_the_retained_warning_count(mock_deps):
+    # final_warning_count reads error_history[-1].errors, so recording an empty
+    # list on a rejection would understate the retained code's warnings — and
+    # make the record read as converged to anything inspecting it directly.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [make_generation(_CODE), make_generation("nope")]
+    mock_wrapper.validate.side_effect = [[make_issue(), make_issue(severity="WARNING")]]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=1))
+
+    assert result.candidates[0].final_warning_count == 1
+
+
+def test_retries_after_a_rejection_from_the_retained_code(mock_deps):
+    mock_wrapper, mock_llm, mock_strategy = mock_deps
+    fixed = _CODE.replace("Contract C ()", "Contract C (a: Seller)")
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE),
+        make_generation("nope"),
+        make_generation(fixed),
+    ]
+    mock_wrapper.validate.side_effect = [[make_issue()], []]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=2))
+
+    # The retry is built from the retained code, never from the refused response.
+    assert mock_strategy.build_correction_prompt.call_args_list[1].args[0].current_code == _CODE
+    candidate = result.candidates[0]
+    assert candidate.converged is True
+    assert candidate.final_code == fixed
+
+
+def test_generation_without_a_contract_is_adopted_and_reported(mock_deps):
+    # Negative control: the gate is correction-only. At iteration 0 there is no
+    # previous code to protect, so garbage is adopted and reported as a failure.
+    # Gating here would instead require an empty-candidate state that nothing
+    # downstream handles.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation("I cannot produce a contract.")
+    mock_wrapper.validate.return_value = [make_issue()]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=0))
+
+    candidate = result.candidates[0]
+    assert candidate.final_code == "I cannot produce a contract."
+    assert candidate.converged is False
+    assert candidate.error_history[0].rejected_response is None
