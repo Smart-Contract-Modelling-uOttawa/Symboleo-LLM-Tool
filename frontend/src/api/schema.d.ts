@@ -237,7 +237,15 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** IterationRecord */
+        /**
+         * IterationRecord
+         * @description One generation or correction pass: the code it produced and its issues.
+         *
+         *     ``rejected_response`` holds the raw text of a correction that carried no
+         *     contract and was therefore not adopted. On such a record ``code`` and
+         *     ``errors`` repeat the previous record's, while ``usage`` is the refused
+         *     call's own.
+         */
         IterationRecord: {
             /** Iteration */
             iteration: number;
@@ -246,6 +254,8 @@ export interface components {
             /** Errors */
             errors: components["schemas"]["SymboleoIssue"][];
             usage?: components["schemas"]["TokenUsage"] | null;
+            /** Rejected Response */
+            rejected_response?: string | null;
         };
         /** OptionsResponse */
         OptionsResponse: {

@@ -37,6 +37,15 @@ def _write_run(result: PipelineResult, config: PipelineConfig, dest_dir: Path) -
                 (inter_dir / f"iteration_{record.iteration}.symboleo").write_text(
                     record.code, encoding="utf-8"
                 )
+                if record.rejected_response is not None:
+                    # The .symboleo above duplicates the previous iteration —
+                    # true, but on its own indistinguishable from a correction
+                    # that changed nothing. `.txt`, not `.symboleo`: the content
+                    # is by definition not a contract and must not be picked up
+                    # by a downstream *.symboleo glob.
+                    (inter_dir / f"iteration_{record.iteration}_rejected.txt").write_text(
+                        record.rejected_response, encoding="utf-8"
+                    )
 
 
 def write_results(result: PipelineResult, config: PipelineConfig) -> Path:

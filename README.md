@@ -134,7 +134,9 @@ output/run_20260601_143022/
 ├── contract_final.symboleo  # final generated contract
 ├── report.json              # full run details: iterations, errors, convergence
 ├── config.yaml              # copy of the config used (for reproducibility)
-└── intermediates/           # per-iteration .symboleo files (if save_intermediates: true)
+└── intermediates/           # per-iteration .symboleo files (if save_intermediates: true),
+                             # plus iteration_N_rejected.txt when a correction
+                             # returned no contract and was not adopted
 ```
 
 ## API (Web Service)
@@ -210,6 +212,9 @@ uv run ruff check .
 
 # Type check (mypy is run live, not pinned in the lock — see CLAUDE.md)
 uv run --with mypy mypy symboleo_llm_tool
+
+# End-to-end smoke test — not in CI, run before a release (needs Java 17)
+uv run python scripts/smoke_rejection.py
 ```
 
 **Frontend:**

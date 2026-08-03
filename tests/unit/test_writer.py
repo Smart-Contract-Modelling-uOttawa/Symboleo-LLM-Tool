@@ -109,6 +109,49 @@ def test_write_results_saves_intermediates_when_enabled(tmp_path: Path) -> None:
     assert (inter_dir / "iteration_1.symboleo").read_text(encoding="utf-8") == "Contract Fixed() {}"
 
 
+def test_write_results_saves_a_rejected_response_beside_the_duplicate_iteration(
+    tmp_path: Path,
+) -> None:
+    # A refused correction retains the previous code, so its .symboleo duplicates
+    # its predecessor. Without the companion file, diffing the intermediates
+    # directory — the entire point of save_intermediates — cannot tell a refusal
+    # from a correction that changed nothing.
+    error = make_issue(message="err")
+    result = PipelineResult(
+        success=False,
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="test.txt",
+        candidates=[
+            CandidateResult(
+                candidate_id=0,
+                final_code="bad code",
+                converged=False,
+                iterations_used=1,
+                error_history=[
+                    IterationRecord(iteration=0, code="bad code", errors=[error]),
+                    IterationRecord(
+                        iteration=1,
+                        code="bad code",
+                        errors=[error],
+                        rejected_response="I cannot fix this.",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    run_dir = write_results(result, _config(tmp_path, save_intermediates=True))
+
+    inter_dir = run_dir / "intermediates"
+    assert (inter_dir / "iteration_1.symboleo").read_text(encoding="utf-8") == "bad code"
+    assert (inter_dir / "iteration_1_rejected.txt").read_text(encoding="utf-8") == (
+        "I cannot fix this."
+    )
+    # `.txt`, so a downstream *.symboleo glob never picks up a non-contract.
+    assert not (inter_dir / "iteration_1_rejected.symboleo").exists()
+    assert not (inter_dir / "iteration_0_rejected.txt").exists()
+
+
 def _suite(tmp_path: Path) -> SuiteConfig:
     return SuiteConfig(
         contract_text="Seller shall deliver the goods.",
