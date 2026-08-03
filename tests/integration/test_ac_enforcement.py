@@ -13,9 +13,7 @@ clean, `invalid.symboleo` still fails on its `endContrct` typo, and the
 placement rules still hold. The suite gets greener, not redder. The jar built
 2026-05-20 shipped the AC grammar (`ACPolicy`, `Grant`/`Revoke` all parsed) with
 only one AC `@Check` behind it, so it silently accepted events declaring no
-`performer` and roles missing the `name`/`org`/`dept` triple. That went
-unnoticed until the 2026-07-08 refresh, and was rediscovered by hand rather than
-by CI.
+`performer` and roles missing the `name`/`org`/`dept` triple.
 
 So the load-bearing direction here is `assert errors(...)` — it catches "this
 became legal again". Legal counterparts are pinned with `== []` where BASE does
@@ -33,8 +31,10 @@ JAR_PATH = Path("./lib/symboleo-cli.jar")
 
 # Mirrors `test_placement_rules.BASE` plus the ACPolicy section that file omits.
 # `seller` owns `goods`, so the rule's granting role has evident authority over
-# the resource and `checkPermissionGiver` stays quiet — an INFO-severity note
-# would not fail `errors()`, but it would make every diff here noisier to read.
+# the resource and `checkPermissionGiver` stays quiet. That note is INFO
+# severity and `errors()` keeps only ERRORs, so it could not change an outcome
+# either way; BASE models an uncontested grant because that is the shape the
+# prompt teaches, not to keep the assertions clean.
 BASE = """Domain D
   Seller isA Role with name: String, org: String, dept: String;
   Buyer isA Role with name: String, org: String, dept: String;
@@ -154,7 +154,8 @@ def role_type(attributes: str) -> str:
 )
 def test_role_missing_any_ac_attribute_rejected(wrapper: SymboleoWrapper, attributes: str) -> None:
     # One case per omission: the generated `authenticate()` matches on all three,
-    # so a check that only looked for, say, `org` would pass three of these.
+    # so a check that only looked for, say, `name` would wave three of these
+    # through.
     assert errors(wrapper, role_type(attributes))
 
 
@@ -171,9 +172,8 @@ def event_type(body: str) -> str:
 
 
 def test_event_type_without_a_performer_rejected(wrapper: SymboleoWrapper) -> None:
-    # The 2026-05-20 jar accepted exactly this. `performer` is a base-language
-    # requirement for event authenticity, not an AC addition, but it is enforced
-    # by the same validator generation and regressed alongside the AC checks.
+    # `performer` is a base-language requirement for event authenticity, not an
+    # AC addition, but it is enforced by the same validator.
     assert errors(wrapper, event_type(""))
 
 

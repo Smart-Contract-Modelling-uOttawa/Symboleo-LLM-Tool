@@ -4,9 +4,7 @@
 what it must *accept*. Both directions are needed, because they fail on
 opposite kinds of jar swap: an older jar that lost a check goes undetected by
 every `== []` assertion in the suite, and an older jar that never gained a
-feature goes undetected by every `assert errors(...)` one. Replacing
-`lib/symboleo-cli.jar` with the 2026-07-08 build passed all 66 integration
-tests before this file existed.
+feature goes undetected by every `assert errors(...)` one.
 
 Scope is narrow by necessity. Of the three upstream commits the 2026-08-03
 refresh picked up, only one is observable here:
@@ -15,11 +13,14 @@ refresh picked up, only one is observable here:
            -- not observable; we invoke the validator, never Symboleo2SC.
   50b8234  L4: Date.add(eventVar, n, units) resolves to the event's
            occurrence time -- observable, and the single case below.
-  82e94f6  fix NPE on specs with no ACPolicy section -- not observable;
-           an ACPolicy-stripped contract validates clean on the jars either
-           side of the fix, so the crash lives on the codegen half.
+  82e94f6  fix NPE on specs with no ACPolicy section -- not observable here.
+           The unguarded dereference sits in the validator's
+           checkControllerType, but Xtext swallows exceptions raised inside a
+           @Check, so it never reaches the CLI's issue list: an
+           ACPolicy-stripped contract validates clean on the jars either side
+           of the fix.
 
-So one case is the correct size today, not an oversight. Add to this file when
+So the narrow scope is deliberate, not an oversight. Add to this file when
 a jar refresh lands a validator change that widens what parses or validates;
 a rejection belongs in `test_ac_enforcement.py` instead.
 """
@@ -36,9 +37,9 @@ JAR_PATH = Path("./lib/symboleo-cli.jar")
 # is load-bearing: the first-argument type check is position-sensitive. The same
 # `Date.add(delivered, ...)` written inside `WhappensBefore(paid, ...)` is
 # accepted by every jar back to 2026-05-20, so a case built there passes
-# everywhere and fences nothing. Verified by running this file against all three
-# builds -- see the docstring. Keep new cases in a position where the old jar
-# actually errors, and confirm it rather than assuming.
+# everywhere and fences nothing. In this position the 2026-05-20 and 2026-07-08
+# builds both error and the current one does not. Keep new cases in a position
+# where the old jar actually errors, and confirm it rather than assuming.
 BASE = """Domain D
   Seller isA Role with name: String, org: String, dept: String;
   Buyer isA Role with name: String, org: String, dept: String;
