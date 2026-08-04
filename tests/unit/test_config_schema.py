@@ -84,6 +84,24 @@ def test_schema_carries_the_numeric_bounds() -> None:
     assert suite["properties"]["experiments"]["minItems"] == 1
 
 
+@pytest.mark.parametrize("filename", _SCHEMA_FILES)
+def test_path_defaults_are_stripped(filename: str) -> None:
+    """No path-format property may carry a ``default`` in a committed schema.
+
+    Pydantic renders Path defaults platform-dependently — omitted on Windows,
+    emitted on POSIX — so an unstripped default makes the committed artifact
+    disagree with regeneration on the *other* OS: green locally, red in CI.
+    The renderer strips them; this pins that for every current and future
+    Path-typed field.
+    """
+    schema = json.loads((_SCHEMAS_DIR / filename).read_text(encoding="utf-8"))
+
+    for def_name, definition in schema.get("$defs", {}).items():
+        for prop_name, prop in definition.get("properties", {}).items():
+            if prop.get("format") == "path":
+                assert "default" not in prop, f"{filename}: {def_name}.{prop_name}"
+
+
 def test_suite_schema_omits_contract_text_entirely() -> None:
     """A suite *file* must not carry ``contract_text`` — the loader rejects it.
 

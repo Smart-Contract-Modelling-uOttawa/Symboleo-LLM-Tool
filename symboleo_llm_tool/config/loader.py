@@ -72,13 +72,21 @@ def render_config_schemas() -> dict[str, dict[str, Any]]:
     (fails CI whenever the committed files no longer match this output).
     """
     with warnings.catch_warnings():
-        # The two PortablePath defaults are Path objects the schema renderer
-        # cannot express as JSON defaults; it omits them (harmless — both
-        # fields are optional) with a warning that would otherwise read as a
-        # failure.
+        # Path-typed defaults render platform-dependently: on Windows the
+        # schema renderer cannot serialize them (it warns — silenced here —
+        # and omits the default); on POSIX it serializes and emits them. The
+        # strip below removes them uniformly, since a committed artifact must
+        # not depend on the OS that rendered it — this is what made the same
+        # commit green on Windows and red in Linux CI.
         warnings.simplefilter("ignore", PydanticJsonSchemaWarning)
         pipeline_schema = PipelineConfig.model_json_schema()
         suite_schema = SuiteConfig.model_json_schema()
+
+    for schema in (pipeline_schema, suite_schema):
+        for definition in schema.get("$defs", {}).values():
+            for prop in definition.get("properties", {}).values():
+                if prop.get("format") == "path":
+                    prop.pop("default", None)
 
     suite_schema["properties"].pop("contract_text")
     suite_schema["required"].remove("contract_text")
