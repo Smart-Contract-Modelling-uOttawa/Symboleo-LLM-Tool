@@ -1,0 +1,17 @@
+This agreement is entered into effect as of <effDate>, between <party1> as Seller with address
+<retAdd>, and <party2> as Buyer with address <delAdd>.
+1. Payment and Delivery
+1.1 Seller shall sell an amount of <qnt> meat with <qlt> quality (“goods”) to the Buyer.
+1.2 Title in the Goods shall not pass on to the Buyer until payment of the amount owed has
+been made in full.
+1.3 The Seller shall deliver the Order in one delivery within <delDueDateDays> days to the
+Buyer at its warehouse.
+1.4 The Buyer shall pay <amt> (“amount”) in <curr> (“currency”) to the Seller before <payDueDate>.
+1.5 In the event of late payment of the amount owed, the Buyer shall pay a late fee equal to
+<interestRate> owed, and the Seller may suspend performance of all of its obligations under the
+agreement until payment of amounts owed has been received in full.
+2. Assignment
+2.1 The rights and obligations are not assignable by the Buyer.
+3. Termination
+3.1 Any delay in delivery of the goods will not entitle the Buyer to terminate the Contract unless
+such delay exceeds 10 Days.

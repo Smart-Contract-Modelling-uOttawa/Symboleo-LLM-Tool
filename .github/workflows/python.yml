@@ -6,8 +6,10 @@ on:
       - 'symboleo_llm_tool/**'
       - 'tests/**'
       # Shipped configs are fenced by tests that read the real files, so a
-      # config-only change must still run them.
+      # config-only change must still run them. Same for the few-shot corpus,
+      # which test_example_corpus.py validates against the JAR.
       - 'configs/**'
+      - 'examples/**'
       # The JAR is what tests/integration/ probes. A validator-only refresh
       # touches no other path, and that is exactly the change those tests
       # exist to catch.

@@ -1,0 +1,57 @@
+"contract_text": |-
+  This agreement is dated <effDate> and is entered into, by and between <party1> as Distributed Energy Resource
+  Provider (“DERP”) and California Independent System Operator Corporation (“CAISO”).
+  1. This Agreement shall be effective as of the later of the date it is executed by the Parties and shall remain in
+  full force and effect until terminated pursuant to section 2 of this Agreement.
+  2. Payment and Delivery
+  (a) Payments for each Trading Day shall be made four (4) Business Days after issuance of the Invoice.
+  (b) As soon as a Bid comes into effect, the DERP shall supply and deliver energy according to the terms in
+  the Bid and also in the Dispatch Instruction.
+  (c) If the DERP fails to comply with its energy supply commitment, the CAISO shall be entitled to impose
+  penalties on the DERP.
+  3. Termination
+  (a) The CAISO may terminate this Agreement by giving written notice of termination in the event that the
+  DERP fails to pay an invoice by the due date or to provide energy according to the Dispatch Instruction.
+  In case of failure in payment, the DERP should pay the invoice in 30 days after the CAISO gives the
+  written notice in order for the termination to get revoked, otherwise the termination comes true.
+  (b) In the event that the DERP no longer wishes to submit Bids it may terminate this Agreement, on giving
+  the CAISO not less than ninety (90) days written notice
+"symboleo_code": "Domain transactiveEnergyAgreementDomain\n  ISO isA Role with name:\
+  \ String, org: String, dept: String;\n  DERP isA Role with name: String, org: String,\
+  \ dept: String;\n  DispatchInstruction isAn Asset with maxVoltage: Number, minVoltage:\
+  \ Number;\n  Bid isAn Asset with\n    bidId: String,\n    dispatchStartTime: Date,\n\
+  \    dispatchEndTime: Date,\n    energy: Number,\n    price: Number,\n    instruction:\
+  \ DispatchInstruction;\n  BidAccepted isAn Event with Env bid: Bid, performer: ISO;\n\
+  \  EnergySupplied isAn Event with\n    Env energy: Number,\n    Env dispatchStartTime:\
+  \ Date,\n    Env dispatchEndTime: Date,\n    Env voltage: Number,\n    Env ampere:\
+  \ Number,\n    performer: DERP;\n  Invoice isAn Asset with invoiceId: String, date:\
+  \ Date, amount: Number;\n  CreditInvoiceIssued isAn Event with Env invoice: Invoice,\
+  \ performer: DERP;\n  PenaltyInvoiceIssued isAn Event with Env invoice: Invoice,\
+  \ performer: ISO;\n  IsoNoticeIssued isAn Event with performer: ISO;\n  DerpNoticeIssued\
+  \ isAn Event with performer: DERP;\n  Paid isAn Event with Env invoiceId: String,\
+  \ from: ISO, to: DERP, performer: ISO;\n  PaidPenalty isAn Event with Env invoiceId:\
+  \ String, from: DERP, to: ISO, performer: DERP;\nendDomain\n\nContract TransactiveEnergyAgreement\
+  \ (caiso: ISO, derp: DERP)\n\nDeclarations \n  bidAccepted: BidAccepted with performer\
+  \ := caiso;\n  energySupplied: EnergySupplied with performer := derp;\n  caisoTerminationNoticeIssued:\
+  \ IsoNoticeIssued with performer := caiso;\n  terminationNoticeThirtyDays: IsoNoticeIssued\
+  \ with performer := caiso;\n  derpTerminationNoticeIssued: DerpNoticeIssued with\
+  \ performer := derp;\n  terminationNoticeNinetyDays: DerpNoticeIssued with performer\
+  \ := derp;\n  creditInvoiceIssued: CreditInvoiceIssued with performer := derp;\n\
+  \  isoPaid: Paid with from := caiso, to:= derp, performer := caiso;\n  penaltyInvoiceIssued:\
+  \ PenaltyInvoiceIssued with performer := caiso;\n  paidPenalty: PaidPenalty with\
+  \ from := derp, to:= caiso, performer := derp;\n\nObligations\n  paybyISO: Happens(Fulfilled(obligations.supplyEnergy))\
+  \ ->\n    O(caiso, derp, true,\n      Happens(creditInvoiceIssued) and HappensWithin(isoPaid,\
+  \ Interval(creditInvoiceIssued._timestamp, Date.add(creditInvoiceIssued._timestamp,\
+  \ 4, days)))\n    );\n  supplyEnergy: Happens(bidAccepted) -> \n    O(derp, caiso,\
+  \ true,\n      Happens(energySupplied) and\n      energySupplied.dispatchStartTime\
+  \ <= bidAccepted.bid.dispatchStartTime and \n      energySupplied.dispatchEndTime\
+  \ <= bidAccepted.bid.dispatchEndTime and\n      energySupplied.voltage >= bidAccepted.bid.instruction.minVoltage\
+  \ and\n      energySupplied.voltage <= bidAccepted.bid.instruction.maxVoltage\n\
+  \    );\n  payPenalty: Happens(Exerted(powers.imposePenalty)) -> \n    O(derp, caiso,\
+  \ true, Happens(penaltyInvoiceIssued) and ShappensBefore(paidPenalty, Date.add(penaltyInvoiceIssued._timestamp,\
+  \ 4, days))); \n\nPowers\n  terminateAgreement: Happens(Violated(obligations.payPenalty))\
+  \ -> P(caiso, derp, Happens(caisoTerminationNoticeIssued) and Happens(terminationNoticeThirtyDays),\
+  \ Terminated(self));\n  terminateAgreementBySupplier: P(derp, caiso, Happens(derpTerminationNoticeIssued)\
+  \ and Happens(terminationNoticeNinetyDays), Terminated(self));\n  imposePenalty:\
+  \ Happens(Violated(obligations.supplyEnergy)) -> P(caiso, derp, true, Triggered(obligations.payPenalty));\n\
+  \nConstraints\n  not(IsEqual(caiso, derp));\n\nendContract\n"

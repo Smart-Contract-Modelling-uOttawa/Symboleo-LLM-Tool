@@ -1,0 +1,66 @@
+# Unlike the other four examples, this pair is fidelity-checked as well as
+# validator-clean -- every clause below maps to exactly one construct, and no
+# construct exists without a clause. That matters because a few-shot example
+# teaches whatever it demonstrates, and a 2026-07 blind audit failed all four of
+# the others against their source texts (CLAUDE.md, "Convergence != fidelity").
+# Prefer this one when the point is the text->Symboleo mapping rather than idiom.
+#
+# The same text ships as contracts/equipment_loan.txt. If you use that file as
+# a run input, exclude this example (leave-one-out), the way
+# configs/cohere_fewshot.yaml excludes meat_sale for the MeatSale text.
+
+contract_text: |
+  EQUIPMENT LOAN AGREEMENT
+
+  This Agreement is made between Northwind Tooling Ltd. ("the Lender") and Cedar
+  Fabrication Inc. ("the Borrower"), and takes effect on the Start Date.
+
+  1. Loan of Equipment. The Lender shall hand over to the Borrower one calibration
+     kit, bearing the serial number recorded in this Agreement. The kit remains the
+     property of the Lender for the duration of the loan.
+
+  2. Return. The Borrower shall return the kit to the Lender on or before the
+     Return Date, being the Start Date plus the number of loan days specified in
+     this Agreement.
+
+  3. Late Fee. If the Borrower fails to return the kit by the Return Date, the
+     Borrower shall pay the Lender the late fee specified in this Agreement.
+
+  4. Termination. If the Borrower fails to pay the late fee, the Lender may
+     terminate this Agreement.
+
+  5. Depot Access. The Lender grants the operator of the storage depot permission
+     to read the serial number of the kit and the status of the Borrower's return
+     obligation, for the purpose of verifying custody.
+
+symboleo_code: |
+  Domain equipmentLoanDomain
+    Lender isA Role with name: String, org: String, dept: String;
+    Borrower isA Role with name: String, org: String, dept: String;
+    Depot isA Role with name: String, org: String, dept: String;
+    Kit isAn Asset with serial: String, owner: Lender;
+    Handover isAn Event with performer: Lender;
+    Handback isAn Event with dueBy: Date, performer: Borrower;
+    FeePaid isAn Event with amount: Number, performer: Borrower;
+  endDomain
+
+  Contract EquipmentLoan (lenderP: Lender, borrowerP: Borrower, depotP: Depot,
+    startDate: Date, loanDays: Number, feeAmount: Number)
+  Declarations
+    lender: Lender with name := lenderP.name, org := lenderP.org, dept := lenderP.dept;
+    borrower: Borrower with name := borrowerP.name, org := borrowerP.org, dept := borrowerP.dept;
+    depot: Depot with name := depotP.name, org := depotP.org, dept := depotP.dept;
+    kit: Kit with serial := "KIT-0417", owner := lender;
+    handover: Handover with performer := lender;
+    handback: Handback with dueBy := Date.add(startDate, loanDays, days), performer := borrower;
+    feePaid: FeePaid with amount := feeAmount, performer := borrower;
+  Obligations
+    release: O(lender, borrower, true, Happens(handover));
+    returnKit: O(borrower, lender, true, WhappensBefore(handback, handback.dueBy));
+    payLateFee: Happens(Violated(obligations.returnKit)) -> O(borrower, lender, true, Happens(feePaid));
+  Powers
+    endLoan: Happens(Violated(obligations.payLateFee)) -> P(lender, borrower, true, Terminated(self));
+  ACPolicy with Controller lender
+    Rule1: Grant read To depot On kit.serial by lender;
+    Rule2: Grant read To depot On obligations.returnKit by lender;
+  endContract

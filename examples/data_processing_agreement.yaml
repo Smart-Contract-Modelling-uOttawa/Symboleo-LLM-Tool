@@ -1,0 +1,122 @@
+"contract_text": |-
+  ATA PROCESSING ADDENDUM
+  This Data Protection Addendum ("Addendum") forms part of the ————— ("Agreement") between:
+  ————- ("Client") and —————-("Atos").
+  This Addendum describes the parties’ obligations regarding the processing of personal data on behalf of the
+  Client, by Atos for the purposes of performing the Services.
+  Definitions
+  • Controller: the natural or legal person, public authority, agency, or any other body which alone or
+  jointly with others determines the purposes and means of the processing of Personal Data.
+  • Processor: a natural or legal person, public authority, agency, or any other body which processes
+  Personal Data on behalf of and under the strict instructions of the Controller.
+  • Personal Data: any information relating to an identified or identifiable natural person (‘data
+  subject’); an identifiable person is one who can be identified, directly or indirectly, in particular by
+  reference to an identification number or to one or more factors specific to his physical, physiological,
+  mental, economic, cultural or social identity.
+  1. Client’s obligations
+  (a) The Parties expressly agree that (i) Client is the Data Controller for the Personal Data processed
+  for the purpose of the provision of the Services under this Agreement, and (ii) Atos is the
+  Processor in the event it processes (including to store) Personal Data on behalf of Client when
+  performing the Services.
+  (b) The client shall pay Atos for providing Data Processing services.
+  (c) Any Client Personal Data is processed on the basis of an adequate legal ground as permitted
+  under Applicable Data Protection Law:
+  (i) any Personal Data is processed based on the main region(s) [European Union or Other]
+  and categories of the data subject(s) whose data will be processed under Applicable Data
+  Protection Law.
+  (ii) any Personal Data is processed based on the main categories of processing activities
+  [MB1] which are conducted by Atos on personal data processed under Applicable Data
+  Protection Law.
+  (iii) any Personal Data is processed based on the origin of the data collected.
+  (d) As Data Controller, Client shall provide Atos with documented instructions regarding the
+  processing of Client Personal Data.
+  (e) Client shall adapt its Instructions in case of an infringement notice from Atos.
+  2. Service Provider’s obligations
+  (a) Atos shall process Personal Data on behalf of Client exclusively and only in accordance with
+  the Instruction received from Client.
+  (b) Atos has an obligation to deliver Data Processing Services to the Client.
+  (c) If Atos becomes aware of the fact that all or part of the Instruction it receives from Client may
+  constitute an infringement of Applicable Data Protection Law or any relevant applicable law,
+  it shall inform Client of such potential infringement. Atos shall suspend processing data service
+  if the client has failed to adapt its instructions. Client shall request resuming the service of
+  processing data after adapting the instructions.
+  (d) Atos shall maintain a record of processing activities.
+  (e) Client shall be entitled to request communication of a copy of the said record. Atos shall
+  communicate such copy.
+  3. Termination
+  (a) The contract shall be terminated if both parties agree to the termination and payments due are
+  paid by the Client.
+"symboleo_code": "Domain DataProcessingAgreementDomain\n  Processor isA Role with\
+  \ name: String, org: String, dept: String;\n  DataController isA Role with name:\
+  \ String, org: String, dept: String; //client\n  \n  Origin isAn Enumeration(DataSubject,\
+  \ Customer, ExectingProcessing, DataBroker, OnlinePlatform, ExternalSource, ThirdParty,\
+  \ Other);\n  Region isAn Enumeration(EU, APAC, BTN, MEA, MAD, SAM);\n  CategorySubjects\
+  \ isAn Enumeration(Employees, Customers, Providers, EndUsers, Members, Visitors,\
+  \ Other);\n  ProcessingActitvity isAn Enumeration(Collection, Recording, Organization,\
+  \ Structuring, Storage, Adaption, Retrieval, RemoteAccess, Consultation,\n  \t \
+  \                            Use, Disclosure, Others);\n  \t                   \
+  \          \n  // processing instruction provided by the client.\n  Instruction\
+  \ isAn Asset with origin: Origin, region : Region, categorySubjects: CategorySubjects,\n\
+  \                               processingActitvity: ProcessingActitvity, isPersonal:\
+  \ Boolean;\n  // data to be processed by the service provider.\n  // content must\
+  \ not contain the real data. It can be metadata, a hash, etc.\n  Data isAn Asset\
+  \ with dataId: String, content: String;\n  \n  // event to emit when client transfers\
+  \ a data point to be processed.\n  RequestDataProcessing isAn Event with Env dataPoint:\
+  \ Data, performer: DataController;\n  // event to emit when data is processed by\
+  \ the provider.\n  ProcessData isAn Event with Env dataId: String, Env instruction:\
+  \ Instruction, performer: Processor;\n\n  // event to emit when the instruction\
+  \ is updated.\n  ModifyInstruction isAn Event with Env instruction: Instruction,\
+  \ performer: DataController;\n\n  // client can request records of the processing\
+  \ done on a data point.\n  RequestRecordOfProcessing isAn Event with Env dataId:\
+  \ String, performer: DataController;\n  DeliverRecordOfProcessing isAn Event with\
+  \ Env dataId: String, Env processingInstruction: Instruction, performer: Processor;\n\
+  \n  ProviderNotice isAn Event with performer: Processor;\n  ClientNotice isAn Event\
+  \ with performer: DataController;\n  Pay isAn Event with Env amount: Number, performer:\
+  \ DataController;\n  RequestPayment isAn Event with Env amount: Number, performer:\
+  \ Processor;\nendDomain\n\nContract DataProcessingAgreement (serviceProvider: Processor,\
+  \ client: DataController, instruction: Instruction)\n\nDeclarations\n  requestedDataProcessing:\
+  \ RequestDataProcessing with performer := client;\n  processedData: ProcessData\
+  \ with performer := serviceProvider;\n  requestedRecordOfProcessing: RequestRecordOfProcessing\
+  \ with performer := client;\n  deliveredRecordOfProcessing: DeliverRecordOfProcessing\
+  \ with performer := serviceProvider;\n  adaptedInstruction: ModifyInstruction with\
+  \ performer := client;\n  infringementNotified: ProviderNotice with performer :=\
+  \ serviceProvider;\n  suspensionNotified: ProviderNotice with performer := serviceProvider;\n\
+  \  clientAgreedTermination: ClientNotice with performer := client;\n  providerAgreedTermination:\
+  \ ProviderNotice with performer := serviceProvider;\n  paidServiceProvider: Pay\
+  \ with performer := client;\n  requestedPayment: RequestPayment with performer :=\
+  \ serviceProvider;\n\nObligations\n  // the serviceProvider is obliged to provide\
+  \ data processing services to the client. \n  // the contract is ongoing and it\
+  \ is terminated when the client pays the amount due and both parties agree to terminate\
+  \ the contract. \n  provideDataProcessingService: O(serviceProvider, client, true,\
+  \ Happens(clientAgreedTermination) and Happens(providerAgreedTermination));\n  payment:\
+  \ Happens(requestedPayment) -> O(client, serviceProvider, true, Happens(paidServiceProvider)\
+  \ and requestedPayment.amount == paidServiceProvider.amount);\n  \n  // the serviceProvider\
+  \ must process data according to the initial instructions or the modified instructions\
+  \ provided by the client.\n  processData: Happens(requestedDataProcessing) -> \n\
+  \    O(serviceProvider, client, true, Happens(processedData) and \n      ((Happens(adaptedInstruction)\
+  \ and\n        processedData.instruction.origin == adaptedInstruction.instruction.origin\
+  \ and \n        processedData.instruction.region == adaptedInstruction.instruction.region\
+  \ and \n        processedData.instruction.categorySubjects == adaptedInstruction.instruction.categorySubjects\
+  \ and             \n        processedData.instruction.processingActitvity == adaptedInstruction.instruction.processingActitvity\
+  \ and\n        processedData.dataId == requestedDataProcessing.dataPoint.dataId\n\
+  \      ) or (\n        processedData.instruction.origin == instruction.origin and\
+  \ \n  \t    processedData.instruction.region == instruction.region and \n  \t  \
+  \  processedData.instruction.categorySubjects == instruction.categorySubjects and\
+  \             \n  \t    processedData.instruction.processingActitvity == instruction.processingActitvity\
+  \ and\n  \t    processedData.dataId == requestedDataProcessing.dataPoint.dataId\
+  \ \n  \t  ))\n    );\n  \n  // the client must update the instructions if the serviceProvider\
+  \ founds any infringement of the Applicable Data Protection Law.\n  adaptInstruction:\
+  \ Happens(infringementNotified) -> O(client, serviceProvider, true, Happens(adaptedInstruction));\n\
+  \  \n  // the serviceProvider must deliver records of processing of a data point\
+  \ when requested by the client.\n  deliverProcessingRecord: Happens(requestedRecordOfProcessing)\
+  \ -> \n    O(serviceProvider, client, true, Happens(deliveredRecordOfProcessing)\
+  \ and (requestedRecordOfProcessing.dataId == deliveredRecordOfProcessing.dataId));\n\
+  \nPowers\n  // the service provider can suspend its services when the adaptInstruciton\
+  \ obligation is violated.\n  suspendService: Happens(Violated(obligations.adaptInstruction))\
+  \ -> P(serviceProvider, client, Happens(suspensionNotified), Suspended(obligations.provideDataProcessingService));\n\
+  \  suspendActiveRequest: Happens(Violated(obligations.adaptInstruction)) -> P(serviceProvider,\
+  \ client, Happens(suspensionNotified), Terminated(obligations.processData));\n \
+  \ // the client can resume the provideDataProcessingService obligation if the instruction\
+  \ is adapted.\n  resumeService: Happens(adaptedInstruction) -> P(client, serviceProvider,\
+  \ true, Resumed(obligations.provideDataProcessingService));\n\nConstraints\n\tnot(serviceProvider\
+  \ == client);\nendContract\n"

@@ -1,0 +1,12 @@
+This agreement is entered into effect as of <effDate>, between <party1> as Seller and <party2> as Buyer.
+
+1. Payment and Delivery
+1.1 The Seller shall sell <qnt> of <qlt> quality meat ("Goods") to the Buyer.
+1.2 Title in the Goods shall not pass to the Buyer until payment in full has been made.
+1.3 The Seller shall deliver the Goods to the Buyer at its warehouse within <delDueDateDays> days of the effective date.
+1.4 The Buyer shall pay <amt> in <curr> to the Seller within <payDueDateDays> days of delivery.
+1.5 In the event of late payment, the Buyer shall pay a late fee of <interestRate> of the amount owed. The Seller may suspend performance of all of its delivery obligations until payment of all amounts owed has been received in full.
+1.6 Should the Buyer pay all outstanding amounts while the Seller's obligations are suspended, the Buyer shall be entitled to request resumption of delivery.
+
+2. Termination
+2.1 The Buyer may terminate this agreement in the event that the Seller fails to deliver the Goods.

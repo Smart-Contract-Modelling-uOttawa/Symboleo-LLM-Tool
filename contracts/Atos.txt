@@ -1,0 +1,47 @@
+DATA PROCESSING ADDENDUM
+This Data Protection Addendum ("Addendum") forms part of the ————— ("Agreement") between:
+————- ("Client") and —————-("Atos").
+This Addendum describes the parties’ obligations regarding the processing of personal data on behalf of the
+Client, by Atos for the purposes of performing the Services.
+Definitions
+• Controller: the natural or legal person, public authority, agency, or any other body which alone or
+jointly with others determines the purposes and means of the processing of Personal Data.
+• Processor: a natural or legal person, public authority, agency, or any other body which processes
+Personal Data on behalf of and under the strict instructions of the Controller.
+• Personal Data: any information relating to an identified or identifiable natural person (‘data
+subject’); an identifiable person is one who can be identified, directly or indirectly, in particular by
+reference to an identification number or to one or more factors specific to his physical, physiological,
+mental, economic, cultural or social identity.
+1. Client’s obligations
+(a) The Parties expressly agree that (i) Client is the Data Controller for the Personal Data processed
+for the purpose of the provision of the Services under this Agreement, and (ii) Atos is the
+Processor in the event it processes (including to store) Personal Data on behalf of Client when
+performing the Services.
+(b) The client shall pay Atos for providing Data Processing services.
+(c) Any Client Personal Data is processed on the basis of an adequate legal ground as permitted
+under Applicable Data Protection Law:
+(i) any Personal Data is processed based on the main region(s) [European Union or Other]
+and categories of the data subject(s) whose data will be processed under Applicable Data
+Protection Law.
+(ii) any Personal Data is processed based on the main categories of processing activities
+which are conducted by Atos on personal data processed under Applicable Data
+Protection Law.
+(iii) any Personal Data is processed based on the origin of the data collected.
+(d) As Data Controller, Client shall provide Atos with documented instructions regarding the
+processing of Client Personal Data.
+(e) Client shall adapt its Instructions in case of an infringement notice from Atos.
+2. Service Provider’s obligations
+(a) Atos shall process Personal Data on behalf of Client exclusively and only in accordance with
+the Instruction received from Client.
+(b) Atos has an obligation to deliver Data Processing Services to the Client.
+(c) If Atos becomes aware of the fact that all or part of the Instruction it receives from Client may
+constitute an infringement of Applicable Data Protection Law or any relevant applicable law,
+it shall inform Client of such potential infringement. Atos shall suspend processing data service
+if the client has failed to adapt its instructions. Client shall request resuming the service of
+processing data after adapting the instructions.
+(d) Atos shall maintain a record of processing activities.
+(e) Client shall be entitled to request communication of a copy of the said record. Atos shall
+communicate such copy.
+3. Termination
+(a) The contract shall be terminated if both parties agree to the termination and payments due are
+paid by the Client.

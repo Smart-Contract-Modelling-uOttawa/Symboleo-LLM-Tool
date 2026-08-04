@@ -1,7 +1,16 @@
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+
+# A config path that reloads on an OS other than the one that wrote it.
+# ``str(Path)`` uses the host separator, so a Windows-written run record carries
+# ``lib\symboleo-cli.jar``, which POSIX reads as one opaque filename. ``json``
+# mode only: the defect is in the persisted artifact, so in-memory dumps keep
+# returning a real ``Path``. Relative paths only — an absolute ``C:\...`` becomes
+# ``C:/...``, which POSIX takes as a *relative* path with a literal ``C:``
+# segment, and no serializer can fix that.
+PortablePath = Annotated[Path, PlainSerializer(Path.as_posix, return_type=str, when_used="json")]
 
 
 class _StrictModel(BaseModel):
@@ -82,12 +91,12 @@ class RunConfig(_StrictModel):
 
 
 class SymboleoConfig(_StrictModel):
-    jar_path: Path = Path("./lib/symboleo-cli.jar")
+    jar_path: PortablePath = Path("./lib/symboleo-cli.jar")
     java_executable: str = "java"
 
 
 class OutputConfig(_StrictModel):
-    directory: Path = Path("./output")
+    directory: PortablePath = Path("./output")
     save_intermediates: bool = False
 
 
