@@ -12,6 +12,4 @@ frontend/coverage/
 dist/
 *.egg-info/
 /output/
-contracts/
-examples/
 .claude/

@@ -1,0 +1,33 @@
+This contract is entered into effective as of <effDate>, between Medical CBRN (Chemical, Biological, Radiological and
+Nuclear) Defense Consortium Transport (MCDC) as <Government> and Pfizer as <Manufacturer>.
+1. Manufacturing & Delivery
+1.1 The Government may request that Pfizer produces and delivers vaccine doses. Any order will provide for a minimum
+of <minQuantity> doses while an aggregate number of doses ordered shall not exceed <maxQuantity>.
+1.2 Upon any request, Manufacturer shall inform the Government of appropriate lead times, and Manufacturer
+and the Government shall mutually agree on an appropriate estimated delivery schedule.
+1.3 Pfizer anticipates providing the vaccine, subject to U.S. Food and Drug Administration (FDA) approval or
+authorization, as <temperature>°C frozen product that needs to be maintained at or below that temperature
+prior to dosing. The Government acknowledges that Manufacturer’s responsibility for cold chain will cease
+upon delivery.
+1.4 Manufacturer will notify the Government of the date by which doses will become available for delivery. The
+Government will confirm dosage orders by ship-to location <deliveryAdd> in advance of those dates.
+1.5 Even if a vaccine is successfully developed and obtains FDA regulatory approval or authorization, Pfizer shall
+have no liability for any failure to deliver doses in accordance with the estimated delivery dates to the extent
+any such change in delivery dates is based on emerging data, regulatory guidance, manufacturing and technical
+developments, or other risks outside Pfizer’s control.
+2. Payment
+2.1 Due to variances in fill/finish yield, Manufacturer shall invoice for and the Government shall pay for actual
+quantities delivered, at a rate of $ <unitPrice> per dose.
+2.2 Upon release, Manufacturer will ship the doses to the Government. Manufacturer expects to invoice the
+Government every month for released doses that have been shipped during each such monthly period. The
+Government will pay all such invoices within thirty (30) days of receipt thereof.
+2.3 The Government will have no right to withhold payment in respect of any delivered doses unless the FDA has
+withdrawn approval or authorization of the vaccine.
+3. Termination
+3.1 Except as required by applicable law or regulation or judicial or administrative order, the Government shall
+not have the authority to issue a Stop-Work Order to halt the work contemplated under this Statement of
+Work.
+3.2 In the event of termination of this Agreement, or expiration of this Agreement at the end of the period of
+performance, any Party hereto shall not be released of any liability, including any outstanding payments of
+the Government for doses previously delivered hereunder, which at the time of termination or expiration had
+already accrued to the other party in respect to any act or omission prior thereto.

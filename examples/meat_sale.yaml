@@ -1,0 +1,107 @@
+"contract_text": |-
+  this is the text of meatsale: This agreement is entered into effect as of <effDate>, between <party1> as Seller with address
+  <retAdd>, and <party2> as Buyer with address <delAdd>.
+  1. Payment and Delivery
+  1.1 Seller shall sell an amount of <qnt> meat with <qlt> quality (“goods”) to the Buyer.
+  1.2 Title in the Goods shall not pass on to the Buyer until payment of the amount owed has
+  been made in full.
+  1.3 The Seller shall deliver the Order in one delivery within <delDueDateDays> days to the
+  Buyer at its warehouse.
+  1.4 The Buyer shall pay <amt> (“amount”) in <curr> (“currency”) to the Seller before <pay-
+  DueDate>.
+  1.5 In the event of late payment of the amount owed, the Buyer shall pay a late fee equal to
+  <interestRate> owed, and the Seller may suspend performance of all of its obligations under the
+  agreement until payment of amounts owed has been received in full.
+  2. Assignment
+  2.1 The rights and obligations are not assignable by the Buyer.
+  3. Termination
+  3.1 Any delay in delivery of the goods will not entitle the Buyer to terminate the Contract unless
+  such delay exceeds 10 Days.
+"symboleo_code": "Domain meatSaleDomain \n  //controller by default is the role itself\n\
+  \  Seller isA Role with returnAddress: String, name: String, org: String, dept:\
+  \ String;\n  Buyer isA Role with name: String, warehouse: String, org: String, dept:\
+  \ String; \n  //thirdParty is added to differentiate thirdParty role from contracting\
+  \ parties\n  TransportCo isA Role thirdParty with name:String, org: String, dept:\
+  \ String;\n  Assessor isA Role thirdParty with name: String, org: String, dept:\
+  \ String;\n  Regulator isA Role thirdParty with name: String, org: String, dept:\
+  \ String;\n  Storage isA Role thirdParty with name: String, address: String, org:\
+  \ String, dept: String;\n  Shipper isA Role thirdParty with name: String, org: String,\
+  \ dept: String;\n  Admin isA Role thirdParty with name: String, org: String, dept:\
+  \ String;\n  //Regulator isA Role thirdParty with name: String;\n  Currency isAn\
+  \ Enumeration(CAD, USD, EUR);\n  MeatQuality isAn Enumeration(PRIME, AAA, AA, A);\n\
+  \  //by default controller of an asset is its owner \n  PerishableGood isAn Asset\
+  \ with quantity: Number, quality: MeatQuality, barcode:String, owner: Seller; \n\
+  \  Meat isA PerishableGood;\n  //TransportCo assigns as the performer (instead of\
+  \ the default value) \n  Delivered isAn Event with deliveryAddress: String, delDueDate:\
+  \ Date, performer: TransportCo, controller: Seller; \n  Paid isAn Event with amount:\
+  \ Number, currency: Currency, from: Buyer, to: Seller, payDueDate: Date, performer:\
+  \ Buyer; \n  PaidLate isAn Event with amount: Number, currency: Currency, from:\
+  \ Buyer, to: Seller, performer: Buyer; \n  InspectedQuality isAn Event with Env\
+  \ quantityFound: Number, Env qualityFound:MeatQuality, Env barFound: String,  performer:Assessor;\
+  \ \n  Alert isA DataTransfer with Env value: Number, Env sensorTimestamp:String,\
+  \ condition: String, window: String, count: String, controller:Seller, performer:Regulator;\n\
+  \  //TempLoCTime isA DataTransfer with Env temp:Number, Env locLatitude: String,\
+  \ Env locLongitude: String, Env dataTime:String;\n  //Container isA Resource with\
+  \ Env pin:String, Env loadResource: Meat, Env unLoadRresource: Boolean; \n  PasswordNotification\
+  \ isAn Event with Env pin:String, performer:TransportCo;\n  UnLoaded isAn Event\
+  \ with performer:Assessor;\nendDomain\n                           \n    //regulatorP\
+  \ : Regulator,\nContract MeatSale (buyerP : Buyer, sellerP : Seller, transportCoP\
+  \ : TransportCo, assessorP : Assessor, regulatorP: Regulator, storageP: Storage,\
+  \ shipperP: Shipper, adminP: Admin, barcodeP : String, qnt : Number, qlt : MeatQuality,\
+  \ amt : Number, curr : Currency, payDueDate: Date, \n\tdelAdd : String, effDate\
+  \ : Date, delDueDateDays : Number, interestRate: Number\n)  \n           \nDeclarations\n\
+  \  seller: Seller with name:= sellerP.name, returnAddress := sellerP.returnAddress,\
+  \ org:= sellerP.org, dept:= sellerP.dept;\n  buyer: Buyer with name:=buyerP.name,\
+  \ warehouse:= buyerP.warehouse, org:= buyerP.org, dept:= buyerP.dept;\n  transportCo:\
+  \ TransportCo with name:= transportCoP.name, org:= transportCoP.org, dept:= transportCoP.dept;\n\
+  \  assessor: Assessor with name:= assessorP.name, org:= assessorP.org, dept:= assessorP.dept;\n\
+  \  regulator: Regulator with name:= regulatorP.name, org:= regulatorP.org, dept:=\
+  \ regulatorP.dept;\n  storage: Storage with name:= storageP.name, address:= storageP.address,\
+  \ org:= storageP.org, dept:= storageP.dept;\n  shipper: Shipper with name:= shipperP.name,\
+  \ org:= shipperP.org, dept:= shipperP.dept;\n  admin: Admin with name:= adminP.name,\
+  \ org:= adminP.org, dept:= adminP.dept;\n  goods: Meat with quantity := qnt, quality\
+  \ := qlt, barcode:=barcodeP, owner:= seller;\n  delivered: Delivered with deliveryAddress\
+  \ := delAdd, delDueDate := Date.add(effDate, delDueDateDays, days), performer:=\
+  \ transportCo, controller:= seller;//item := goods, \n  paidLate: PaidLate with\
+  \ amount := (1 + interestRate / 100) * amt, currency := curr, from := buyer, to\
+  \ := seller, performer:= buyer;\n  paid: Paid with amount := amt, currency := curr,\
+  \ from := buyer, to := seller, payDueDate := payDueDate, performer:= buyer;// controller:=transportCo;\n\
+  \  temperature: Alert with condition:= \"value > 2\", window:=\"10\", count:=\"\
+  1\", controller:=seller, performer:=regulator; // frozen value > - 18 according\
+  \ to canadian food insepctin agency \n  humidity: Alert with condition:= \"value\
+  \ < 85 OR value > 90\", window:=\"10\", count:=\"1\", controller:=seller, performer:=regulator;\
+  \ //dried meat\n  passwordNotification: PasswordNotification  with performer:=transportCo;\n\
+  \  inspectedQuality:InspectedQuality with performer:=assessor; \n  unLoaded:UnLoaded\
+  \ with performer:=assessor;\n  //container:Container;\n          \nObligations \n\
+  \  // controller by default is the debtor (seller) of obligation delivery //Happens(temploctime)\
+  \ and //Happens(temploctime) and temploctime.temp <= 18 and\n  delivery: Obligation(seller,\
+  \ buyer, true, WhappensBefore(delivered, delivered.delDueDate) and  delivered.deliveryAddress\
+  \ == buyer.warehouse and not Happens(temperature) and not Happens(humidity) ); \n\
+  \  //delivery with new assignment test\n  //delivery: Obligation(seller, buyer,\
+  \ true, WhappensBefore(delivered, delivered.delDueDate) and HappensAssign(delivered,\
+  \ goods.quantity:=goods.quantity-10; paid.amount:=0; amt:=20) );\n  \n  inspectMeat:\
+  \ Happens(delivered) -> Obligation(assessor, buyer, Happens(passwordNotification),\
+  \ Happens(inspectedQuality) and inspectedQuality.barFound == goods.barcode and inspectedQuality.qualityFound\
+  \ == goods.quality  and inspectedQuality.quantityFound == goods.quantity);\n  //unLoad:\
+  \ Happens(unLoaded) -> Obligation(assessor,seller, true,unLoaded.UnLoadRresource\
+  \ :=1);\n  payment: O(buyer, seller , Happens(unLoaded), WhappensBefore(paid, paid.payDueDate));\
+  \  \n  latePayment: Happens(Violated(obligations.payment)) -> O(buyer, seller, true,\
+  \ Happens(paidLate));\n        \nPowers\n  // controller by default is the creditor\
+  \ of power suspendDelivery i.e,seller\n  suspendDelivery : Happens(Violated(obligations.payment))\
+  \ -> Power(seller, buyer, true, Suspended(obligations.delivery)) with Controller\
+  \ seller;\n  resumeDelivery: HappensWithin(paidLate, Suspension(obligations.delivery))\
+  \ -> P(buyer, seller, true, Resumed(obligations.delivery));\n  terminateContract:\
+  \ Happens(Violated(obligations.delivery)) -> P(buyer, seller, true, Terminated(self));\
+  \  \n \n//access policy that contain list of rules to Grant/Revoke permission  \
+  \ \nACPolicy with Controller seller //controller of policy are the regulator who\
+  \ can override rule and pre-authrization rule\n Rule1: Grant read To buyer On goods.quantity\
+  \ by seller; //access to specific asset attribute\n Rule2: Grant read To assessor\
+  \  On obligations.delivery by seller; //access to obligation\n Rule3: Grant read\
+  \ To transportCo On inspectedQuality by assessor;\n Rule4: Grant read To seller\
+  \ On inspectedQuality by assessor;\n Rule5: Grant write To assessor On inspectedQuality\
+  \ by seller;\n Rule6: Grant write To transportCo On powers.suspendDelivery by seller;\
+  \ \n Rule7: Grant write To transportCo On powers.resumeDelivery by seller;  \n Rule8:\
+  \ Revoke read To buyer On goods.quality by seller; //***for validation check if\
+  \ he the controller of the resource\n Rule9: Grant read To buyer On temperature.value\
+  \ by seller;\n \n Constraints\n  not(IsEqual(buyer, seller));\n \nendContract \n\
+  \n\n"

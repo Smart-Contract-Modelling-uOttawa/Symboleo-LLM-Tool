@@ -1,0 +1,17 @@
+This agreement is dated <effDate> and is entered into, by and between <party1> as Distributed Energy Resource
+Provider (“DERP”) and California Independent System Operator Corporation (“CAISO”).
+1. This Agreement shall be effective as of the later of the date it is executed by the Parties and shall remain in
+full force and effect until terminated pursuant to section 2 of this Agreement.
+2. Payment and Delivery
+(a) Payments for each Trading Day shall be made four (4) Business Days after issuance of the Invoice.
+(b) As soon as a Bid comes into effect, the DERP shall supply and deliver energy according to the terms in
+the Bid and also in the Dispatch Instruction.
+(c) If the DERP fails to comply with its energy supply commitment, the CAISO shall be entitled to impose
+penalties on the DERP.
+3. Termination
+(a) The CAISO may terminate this Agreement by giving written notice of termination in the event that the
+DERP fails to pay an invoice by the due date or to provide energy according to the Dispatch Instruction.
+In case of failure in payment, the DERP should pay the invoice in 30 days after the CAISO gives the
+written notice in order for the termination to get revoked, otherwise the termination comes true.
+(b) In the event that the DERP no longer wishes to submit Bids it may terminate this Agreement, on giving
+the CAISO not less than ninety (90) days written notice
