@@ -2,6 +2,10 @@
 
 A Python CLI and FastAPI web service that converts plain-English legal contracts into valid [SymboleoAC](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE) contracts using an LLM, with an automatic correction loop backed by the SymboleoAC headless CLI validator (Xtext parser + `@Check` rules, including the access-control layer).
 
+This file is the quickstart. How the pieces fit — the pipeline, configs field by
+field, what a run's artifacts mean — is in
+[docs/architecture.md](docs/architecture.md).
+
 ## How It Works
 
 1. Takes a `.txt` legal contract as input
@@ -90,12 +94,10 @@ uv run symboleo-tool run contracts/equipment_loan.txt --config configs/openai.ya
 uv run symboleo-tool suite contracts/equipment_loan.txt --config configs/suite_example.yaml
 ```
 
-A **suite** file lists named `experiments`, each holding a full pipeline `config`
-(same shape as a single-run config); the contract is the CLI argument, not part of
-the file. See `configs/suite_example.yaml`. Results are written to a timestamped
-`output/suite_*/` directory: a `suite_report.json`, a `summary.csv` comparison, a
-reloadable `suite.yaml`, and one subdirectory per experiment in the single-run
-layout.
+A **suite** file lists named `experiments`, each holding a full pipeline `config`;
+the contract is the CLI argument, not part of the file. See
+`configs/suite_example.yaml`, and [docs/architecture.md](docs/architecture.md)
+for what suites are for and what they write.
 
 ## Configuration
 
@@ -112,31 +114,15 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 | `mock.yaml` | No API key — a canned response, for checking plumbing only |
 | `ui_config.yaml` | Not a run config: the model/parameter lists the web UI offers |
 
-Key config options:
+`example.yaml` annotates every field in place, and editors with a YAML language
+server (VS Code: the Red Hat "YAML" extension) validate configs as you type,
+against the schemas in `configs/schemas/`.
+The field-by-field walkthrough is in
+[docs/architecture.md](docs/architecture.md).
 
-```yaml
-pipeline:
-  num_candidates: 1       # number of independent contracts to generate
-  max_iterations: 3       # max correction attempts per candidate
-
-generation:
-  llm:
-    provider: openai
-    model: gpt-4o-mini
-    temperature: 0.2      # low on purpose — see the note below
-  strategy: zero_shot     # zero_shot | few_shot | cot
-  include_grammar: true   # inject SymboleoAC grammar into the prompt
-
-output:
-  save_intermediates: true  # save each iteration's .symboleo file
-```
-
-API keys are read from `.env` — never put them in config files.
-
-**On temperature.** Keep it low (0.2) when comparing configurations — at 0.7,
-two runs of the *same* config differed more than two different configs did, so
-the comparison measured sampling noise. Omitting `temperature` entirely is also
-valid, and is required for reasoning models, which reject the parameter.
+API keys are read from `.env` — never put them in config files. Keep
+`temperature` low (0.2) when comparing configurations, and omit it entirely for
+reasoning models — they reject the parameter.
 
 ### Prompting strategies
 
@@ -148,14 +134,13 @@ valid, and is required for reasoning models, which reject the parameter.
 
 **Few-shot setup.** The corpus ships in `examples/`, one `.yaml` per example, so
 `few_shot` works on a fresh clone. Each example has a matching input contract in
-`contracts/` — so if you run one as input, exclude its example from
-`example_files`, or the model is simply shown the answer.
-`configs/cohere_fewshot.yaml` excludes `meat_sale` for exactly that reason.
+`contracts/` — if you run one as input, exclude its example from
+`example_files`, or the model is simply shown the answer (pairings and why:
+[docs/architecture.md](docs/architecture.md)).
 
 To add your own, create `examples/your_example.yaml` with two block scalars,
-`contract_text` and `symboleo_code`. Copy `examples/equipment_loan.yaml` as the
-model — it is the one example verified faithful to its source text, not merely
-valid.
+`contract_text` and `symboleo_code` — copy `examples/equipment_loan.yaml` as
+the model.
 
 Then reference it in your config **by name** — not by path, so the config means the same thing on any machine:
 
@@ -171,18 +156,9 @@ generation:
 
 ## Output
 
-Each run produces a timestamped directory under `output/`:
-
-```
-output/run_20260601_143022/
-├── contract_final.symboleo  # final generated contract
-├── report.json              # full run details: iterations, errors, convergence
-├── config.yaml              # copy of the config used (for reproducibility)
-└── intermediates/           # per-iteration .symboleo (if save_intermediates: true), plus
-                             # iteration_N_rejected.txt if a correction returned no contract
-```
-
-These directories are portable: config paths are written with forward slashes, so a run recorded on one OS can be re-run on another. (Only for relative paths — an absolute `output.directory` or `jar_path` is machine-specific regardless.)
+Each run writes a timestamped `output/run_*/` directory holding the final
+contract, a full `report.json`, and a copy of the config used. Layout and how to
+read the report: [docs/architecture.md](docs/architecture.md).
 
 ## Web UI
 

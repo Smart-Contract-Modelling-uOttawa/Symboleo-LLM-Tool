@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=schemas/config.schema.json
 # TEMPORARY — for manual testing without an API key.
 # To remove: delete this file, mock_adapter.py, and the "mock" branch in factory.py.
 

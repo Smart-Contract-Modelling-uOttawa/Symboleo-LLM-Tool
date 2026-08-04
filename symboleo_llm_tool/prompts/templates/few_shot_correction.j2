@@ -9,6 +9,20 @@
 {% include '_output_format.j2' %}
 {% include '_reserved_names.j2' %}
 {% include '_grammar_section.j2' %}
+{% if examples %}
+## Examples
+
+{% for example in examples %}
+### Example {{ loop.index }}
+
+**Contract:**
+{{ example.contract_text }}
+
+**SymboleoAC:**
+{{ example.symboleo_code }}
+
+{% endfor %}
+{% endif %}
 ## Current Contract (contains errors)
 
 {{ current_code }}

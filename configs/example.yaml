@@ -1,37 +1,59 @@
+# yaml-language-server: $schema=schemas/config.schema.json
+#
+# Reference config — every field, annotated. Copy this file and edit.
+# Structure (types, ranges, no unknown keys) is validated by
+# schemas/config.schema.json — editors with the YAML extension check it as you
+# type — and again by the loader, which rejects any misspelled key outright.
+
 pipeline:
-  num_candidates: 1
-  max_iterations: 3
-  stop_on_first_convergence: false
+  num_candidates: 1                 # independent candidates; success = any one converges
+  max_iterations: 3                 # correction attempts AFTER generation (0 = generate only)
+  stop_on_first_convergence: false  # true: stop remaining candidates once one converges
+                                    # (saves tokens, records less research data)
 
-generation:
+generation:                         # the stage that writes the first draft
   llm:
+    # Any provider/model LiteLLM supports works here — ui_config.yaml is only
+    # the web UI's menu. Prefixes and names: https://docs.litellm.ai/docs/providers
+    # (brand-new models run fine but may report cost as unknown — see
+    # docs/architecture.md)
     provider: anthropic
     model: claude-sonnet-4-6
-    temperature: 0.7
+    temperature: 0.2                # keep low when comparing configs (higher mostly
+                                    # measures sampling noise); OMIT the key entirely
+                                    # for reasoning models — they reject it
     max_tokens: 4096
-  strategy: zero_shot
-  strategy_params: {}
-  include_grammar: true
+  strategy: zero_shot               # zero_shot | few_shot | cot
+  strategy_params: {}               # few_shot takes {example_files: [meat_sale, ...]} —
+                                    # example NAMES from examples/, never paths. Exclude
+                                    # the example matching your input contract, or the
+                                    # model is shown the answer.
+  include_grammar: true             # inject the full SymboleoAC grammar text (research
+                                    # flag; grammar-derived guidance ships regardless)
 
-correction:
+correction:                         # the stage that fixes validator errors —
+                                    # configured independently of generation
   llm:
     provider: anthropic
     model: claude-sonnet-4-6
-    temperature: 0.3
+    temperature: 0.2
     max_tokens: 4096
   strategy: zero_shot
   strategy_params: {}
   include_grammar: true
 
 symboleo:
-  jar_path: ./lib/symboleo-cli.jar
-  java_executable: java
+  jar_path: ./lib/symboleo-cli.jar  # the validator JAR; keep the path relative so the
+                                    # run record replays on a teammate's machine
+  java_executable: java             # must resolve to Java 17+
 
 output:
-  directory: ./output
-  save_intermediates: false
+  directory: ./output               # runs land in timestamped subdirectories here
+  save_intermediates: false         # true: keep each iteration's .symboleo (and any
+                                    # rejected correction response) for diffing
 
 observability:
   langsmith:
-    enabled: false
+    enabled: false                  # true needs the langsmith package installed and
+                                    # LANGSMITH_API_KEY in .env
     project: symboleo-research

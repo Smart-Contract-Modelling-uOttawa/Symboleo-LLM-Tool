@@ -200,7 +200,7 @@ def test_sequential_suite_forwards_cancel_to_pipeline() -> None:
 
 
 def test_empty_suite_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="at least one experiment"):
+    with pytest.raises(ValidationError, match="at least 1 item"):
         SuiteConfig(contract_text="x", experiments=[])
 
 

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=schemas/config.schema.json
 pipeline:
   num_candidates: 1
   max_iterations: 5
@@ -10,9 +11,10 @@ generation:
     temperature: 0.2
     max_tokens: 4096
   strategy: few_shot
-  # vaccine_procurement is the one non-MeatSale example showing the
-  # `role: Type with name := paramP.name` declaration idiom. meat_sale must
-  # stay excluded while the eval contract is sample_contract.txt (leave-one-out).
+  # vaccine_procurement is a non-MeatSale example showing the
+  # `role: Type with name := paramP.name` declaration idiom (equipment_loan
+  # shows it too). meat_sale must stay excluded while the eval contract is
+  # the MeatSale text (leave-one-out).
   strategy_params:
     example_files:
       - vaccine_procurement
@@ -24,8 +26,9 @@ correction:
     model: command-a-03-2025
     temperature: 0.2
     max_tokens: 4096
-  # zero_shot, not few_shot: the few-shot correction prompt renders no examples,
-  # so this is the same prompt under its honest name.
+  # zero_shot, not few_shot — a cost choice: few_shot correction re-sends every
+  # configured example on every correction iteration, and this experiment only
+  # wants the examples at generation time.
   strategy: zero_shot
   strategy_params: {}
   include_grammar: true
