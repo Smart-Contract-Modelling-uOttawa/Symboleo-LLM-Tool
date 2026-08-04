@@ -324,6 +324,15 @@ def test_few_shot_generation_includes_examples(few_shot: FewShotStrategy) -> Non
     assert "Contract Example" in prompt
 
 
+def test_few_shot_correction_includes_examples(few_shot: FewShotStrategy) -> None:
+    # Without this, few_shot correction silently renders the zero_shot prompt —
+    # a "few-shot" stage with no shots. The strategy's name is the contract.
+    ctx = PromptContext(current_code="Domain D endDomain", errors=[make_issue()])
+    prompt = few_shot.build_correction_prompt(ctx)
+    assert "Buyer shall pay $100." in prompt
+    assert "Contract Example" in prompt
+
+
 def test_few_shot_empty_example_files_raises() -> None:
     with pytest.raises(ValueError, match="must not be empty"):
         FewShotStrategy({})

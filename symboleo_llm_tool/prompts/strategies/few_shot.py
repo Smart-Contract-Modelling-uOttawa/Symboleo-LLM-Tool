@@ -33,4 +33,5 @@ class FewShotStrategy(PromptStrategy):
             current_code=context.current_code,
             errors=context.errors,
             grammar_context=context.grammar_context,
+            examples=self._examples,
         )
