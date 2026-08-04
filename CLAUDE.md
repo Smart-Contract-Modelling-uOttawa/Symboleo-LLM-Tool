@@ -125,6 +125,7 @@ Standard module order for **correction** templates:
 ## Output Format   ← {% include '_output_format.j2' %}; same structural grounding as generation
 ## Reserved Names  ← {% include '_reserved_names.j2' %}; adds the rename-is-a-required-fix clause
 ## Grammar         ← conditional on include_grammar flag; {% include '_grammar_section.j2' %}
+## Examples        ← few_shot only — the same pairs as generation, re-sent every iteration (the strategy's name is the contract; a "few-shot" stage with no shots is zero_shot renamed). Cost-noteworthy: correction configs wanting lean loops use zero_shot for correction (cf. configs/cohere_fewshot.yaml)
 ## Current Contract
 {{ current_code }}
 ## Errors to Fix
@@ -156,6 +157,7 @@ Shared partials are `{% include %}`d at the appropriate position within this str
 - `output.save_intermediates` saves each iteration's `.symboleo` output — off by default
 - `stop_on_first_convergence` flag — default `false` (full research data), flip to `true` to save tokens
 - Input file is a CLI argument, not a config concern
+- **The JSON Schemas in `configs/schemas/` are generated, committed artifacts** (generated files get their own subdirectory so hand-edited YAML and rendered JSON never mix) — `scripts/generate_config_schemas.py` renders them via `config/loader.py::render_config_schemas()`, which owns what they contain, including where a config *file* differs from its model (a suite file carries no `contract_text`, so the suite schema strips it — the loader is the one module already stating that fact on load and dump) so editors validate YAML via the `# yaml-language-server: $schema=...` modelines in the shipped configs. **Regenerate + commit after any config-model change**; `tests/unit/test_config_schema.py` compares committed against live generation, so CI stays red until you do (same convention as `schema.d.ts`, with a stronger fence). Range checks on the models are declarative `Field(ge=/le=)` so they reach the schema — a `@field_validator` body is invisible to `model_json_schema()`; *behaviour* (e.g. `SuiteConfig`'s clamp) stays a validator and deliberately gets no schema bound, since the schema would otherwise reject values the loader accepts. `provider`/`model` stay open strings: config files are wider than the UI on purpose (`configs/mock.yaml` proves it), and model validity belongs to LiteLLM/the provider at call time
 - **Path-valued fields use `PortablePath`, not bare `Path`**, so run records reload on any OS (`config/models.py` carries the mechanism and its limits). The convention is **opt-in**, so `test_every_path_config_field_is_portable` reflects over the config tree and fails naming any bare `Path` field
 - CLI override support (`--set key=value`) for quick experiments — deferred (see Known Issues)
 
@@ -231,6 +233,12 @@ A correction response is adopted only when it carries a contract; `_has_contract
 - **Naming convention — UI vs API layer:** API-layer functions in `api/client.ts` use domain vocabulary (`generate`, not `submitGenerate`). Page-level types that hold raw form input values use a `*FormValues` suffix (`StageFormValues`, `AdvancedFormValues`) to distinguish them from API contract types (`StageRequest`). `buildStageRequest(StageFormValues): StageRequest` is the explicit translation point between the two layers — it parses strings to typed values and handles conditional fields.
 - **SSE error discrimination in `useEventStream`:** `hasEverConnected` flag distinguishes a never-connected failure (fail immediately — likely a 404 or server down) from a mid-stream drop (retry up to `MAX_RETRIES`). The browser handles reconnect timing automatically via `EventSource`; the hook only tracks retry count and sets `'reconnecting'` status between attempts.
 - **Frontend type checking and linting:** mypy and ruff do not cover `frontend/`. TypeScript (`tsc`, run as part of `npm run build`) handles type safety; ESLint handles linting (`npm run lint`). Both are separate from the Python CI checks.
+
+### Documentation Surfaces (where prose goes, and who audits it)
+- **Three surfaces, one home per fact:** `README.md` carries what someone needs *while typing a command or editing a config* (imperatives, file choosers, footguns); `docs/architecture.md` carries what someone needs *while designing or interpreting an experiment* (definitions, anatomy of configs and run artifacts); CLAUDE.md carries what someone needs *while changing the code* (conventions, decisions, rejected alternatives, evidence). When two surfaces need one fact, the lower one gets a one-line imperative + link, never a second copy at the same altitude.
+- **architecture.md may restate stable shape and reader-operative definitions in its own words; it must not carry volatile enumerations a fenced source owns** (endpoint lists → `/docs`; config fields → `example.yaml` + the generated schemas; counts, token figures) **and links here for evidence** (census numbers, audits, rationale).
+- **Audit ownership:** `/doc-rot` audits README, `docs/*.md`, and in-code prose; `/doc-audit` audits CLAUDE.md only. One auditor per surface — overlapping auditors produce ownerless findings.
+- **Config semantics live in `configs/example.yaml` comments; config structure lives in the generated schemas.** Do not add `Field(description=...)` to the config models — that would create a second home for semantics beside the YAML comments.
 
 ### Testing Strategy
 - **Unit tests:** Mock both LLM adapter and CLI subprocess wrapper. Focus on pipeline loop logic (iteration bounds, early stopping, error passing).

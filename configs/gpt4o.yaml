@@ -1,6 +1,7 @@
+# yaml-language-server: $schema=schemas/config.schema.json
 pipeline:
   num_candidates: 1
-  max_iterations: 3
+  max_iterations: 5
   stop_on_first_convergence: false
 
 generation:

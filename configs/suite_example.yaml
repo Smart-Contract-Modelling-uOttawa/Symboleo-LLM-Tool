@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=schemas/suite.schema.json
 # Suite config — compare several experiment configs against ONE contract.
 #
 # Run with:

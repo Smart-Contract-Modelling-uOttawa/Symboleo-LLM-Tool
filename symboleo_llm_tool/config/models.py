@@ -24,34 +24,29 @@ class _StrictModel(BaseModel):
 
     Stated once here rather than per model so a new config model cannot opt out
     by omission; ``extra="forbid"`` is inherited by subclasses.
+
+    Range checks on subclasses are declarative ``Field(ge=/le=/min_length=)``
+    so they reach the generated JSON Schemas — a ``@field_validator`` body is
+    invisible to ``model_json_schema()``. *Behaviour* (e.g. ``SuiteConfig``'s
+    clamp) stays a validator and deliberately gets no schema bound. Full
+    convention: CLAUDE.md, "Config Schema".
     """
 
     model_config = ConfigDict(extra="forbid")
 
 
 class LLMConfig(_StrictModel):
+    # ``provider``/``model`` are open strings on purpose: the CLI passes them
+    # straight to LiteLLM, so any model a provider serves works without a repo
+    # change. ``configs/ui_config.yaml`` is only the web form's curated menu.
     provider: str
     model: str
     # Optional so it is only sent when explicitly set. Reasoning models (OpenAI
     # o-series/GPT-5, Anthropic Opus 4.x/Fable 5) reject sampling params; omitting
     # temperature for those models avoids a 400 without relying on LiteLLM's
     # (imperfect) param-support table to drop it. See CLAUDE.md Known Issues.
-    temperature: float | None = None
-    max_tokens: int = 4096
-
-    @field_validator("temperature")
-    @classmethod
-    def _validate_temperature(cls, v: float | None) -> float | None:
-        if v is not None and not 0.0 <= v <= 2.0:
-            raise ValueError(f"temperature must be between 0.0 and 2.0, got {v}")
-        return v
-
-    @field_validator("max_tokens")
-    @classmethod
-    def _validate_max_tokens(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError(f"max_tokens must be at least 1, got {v}")
-        return v
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=4096, ge=1)
 
     @property
     def litellm_model(self) -> str:
@@ -71,23 +66,10 @@ class StageConfig(_StrictModel):
 
 
 class RunConfig(_StrictModel):
-    num_candidates: int = 1
-    max_iterations: int = 3
+    num_candidates: int = Field(default=1, ge=1)
+    # 0 is valid: generation only, no correction loop.
+    max_iterations: int = Field(default=3, ge=0)
     stop_on_first_convergence: bool = False
-
-    @field_validator("num_candidates")
-    @classmethod
-    def _validate_num_candidates(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError(f"num_candidates must be at least 1, got {v}")
-        return v
-
-    @field_validator("max_iterations")
-    @classmethod
-    def _validate_max_iterations(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError(f"max_iterations must be >= 0, got {v}")
-        return v
 
 
 class SymboleoConfig(_StrictModel):
@@ -138,7 +120,9 @@ class SuiteConfig(_StrictModel):
     """
 
     contract_text: str
-    experiments: list[Experiment]
+    # Non-emptiness is declarative so it reaches the schema as minItems;
+    # name-uniqueness is genuinely behavioural and stays in the validator.
+    experiments: list[Experiment] = Field(min_length=1)
     # Max candidates running concurrently across the whole suite (one global
     # throttle for both axes; see docs/suite-concurrency-design.md). 1 is the
     # sequential floor — the unchanged single-threaded path.
@@ -154,8 +138,6 @@ class SuiteConfig(_StrictModel):
     @field_validator("experiments")
     @classmethod
     def _validate_experiments(cls, v: list[Experiment]) -> list[Experiment]:
-        if not v:
-            raise ValueError("a suite must contain at least one experiment")
         names = [e.name for e in v]
         if len(names) != len(set(names)):
             raise ValueError("experiment names must be unique within a suite")

@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "LLMConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        },
+        "max_tokens": {
+          "default": 4096,
+          "minimum": 1,
+          "title": "Max Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
+      "title": "LLMConfig",
+      "type": "object"
+    },
+    "LangSmithConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "project": {
+          "default": "symboleo-research",
+          "title": "Project",
+          "type": "string"
+        }
+      },
+      "title": "LangSmithConfig",
+      "type": "object"
+    },
+    "ObservabilityConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "langsmith": {
+          "$ref": "#/$defs/LangSmithConfig"
+        }
+      },
+      "title": "ObservabilityConfig",
+      "type": "object"
+    },
+    "OutputConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "format": "path",
+          "title": "Directory",
+          "type": "string"
+        },
+        "save_intermediates": {
+          "default": false,
+          "title": "Save Intermediates",
+          "type": "boolean"
+        }
+      },
+      "title": "OutputConfig",
+      "type": "object"
+    },
+    "RunConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "num_candidates": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Num Candidates",
+          "type": "integer"
+        },
+        "max_iterations": {
+          "default": 3,
+          "minimum": 0,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "stop_on_first_convergence": {
+          "default": false,
+          "title": "Stop On First Convergence",
+          "type": "boolean"
+        }
+      },
+      "title": "RunConfig",
+      "type": "object"
+    },
+    "StageConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "llm": {
+          "$ref": "#/$defs/LLMConfig"
+        },
+        "strategy": {
+          "title": "Strategy",
+          "type": "string"
+        },
+        "strategy_params": {
+          "additionalProperties": true,
+          "title": "Strategy Params",
+          "type": "object"
+        },
+        "include_grammar": {
+          "default": true,
+          "title": "Include Grammar",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "llm",
+        "strategy"
+      ],
+      "title": "StageConfig",
+      "type": "object"
+    },
+    "SymboleoConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "jar_path": {
+          "format": "path",
+          "title": "Jar Path",
+          "type": "string"
+        },
+        "java_executable": {
+          "default": "java",
+          "title": "Java Executable",
+          "type": "string"
+        }
+      },
+      "title": "SymboleoConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "pipeline": {
+      "$ref": "#/$defs/RunConfig"
+    },
+    "generation": {
+      "$ref": "#/$defs/StageConfig"
+    },
+    "correction": {
+      "$ref": "#/$defs/StageConfig"
+    },
+    "symboleo": {
+      "$ref": "#/$defs/SymboleoConfig"
+    },
+    "output": {
+      "$ref": "#/$defs/OutputConfig"
+    },
+    "observability": {
+      "$ref": "#/$defs/ObservabilityConfig"
+    }
+  },
+  "required": [
+    "generation",
+    "correction"
+  ],
+  "title": "PipelineConfig",
+  "type": "object"
+}

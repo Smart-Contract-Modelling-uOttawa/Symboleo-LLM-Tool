@@ -15,7 +15,12 @@ from typing import Any, get_args
 import pytest
 from pydantic import BaseModel, PlainSerializer, ValidationError
 
-from symboleo_llm_tool.config.models import PipelineConfig, SuiteConfig
+from symboleo_llm_tool.config.models import (
+    LLMConfig,
+    PipelineConfig,
+    RunConfig,
+    SuiteConfig,
+)
 
 # Raw dicts, not model instances: what is under test is how unrecognized input
 # is treated on the way *into* the model, so the input cannot be pre-validated.
@@ -106,6 +111,26 @@ def test_dumped_suite_reloads_under_forbid() -> None:
     reloaded = SuiteConfig(**suite.model_dump(mode="json"))
 
     assert reloaded == suite
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("temperature", 2.5), ("temperature", -0.1), ("max_tokens", 0)],
+)
+def test_llm_config_rejects_out_of_range(field: str, value: float) -> None:
+    """Pins the *behaviour* of the numeric bounds, not their schema rendering.
+
+    Why behaviour tests are the load-bearing half:
+    ``test_config_schema.py::test_schema_carries_the_numeric_bounds``.
+    """
+    with pytest.raises(ValidationError):
+        LLMConfig(provider="openai", model="gpt-4o-mini", **{field: value})
+
+
+@pytest.mark.parametrize(("field", "value"), [("num_candidates", 0), ("max_iterations", -1)])
+def test_run_config_rejects_out_of_range(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        RunConfig(**{field: value})
 
 
 def test_path_fields_serialize_with_forward_slashes() -> None:
