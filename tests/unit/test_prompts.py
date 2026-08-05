@@ -1,3 +1,4 @@
+import re
 from importlib import resources
 from pathlib import Path
 
@@ -205,6 +206,110 @@ def test_output_format_rule_count_is_capped() -> None:
     )
     bullets = [ln for ln in template.splitlines() if ln.startswith("- ")]
     assert len(bullets) <= 15, f"## Output Format has {len(bullets)} bullets; cap is 15"
+
+
+# --- Example vocabulary (## Output Format) -------------------------------------
+
+# The worked examples come from a fictional domain that is no benchmark
+# contract's domain. The invariant is GENERALITY, not zero overlap: the bias
+# being prevented operates through answer-key fragments — multi-token,
+# solution-specific identifiers a model can copy wholesale into one
+# benchmark's solution (the retired MeatSale examples carried literal lines
+# of sample_contract's answer) — while sharing an ordinary English word with
+# a contract's prose leaks nothing. So only the distinctive tokens are fenced
+# against the corpus; the generic ones are checked for template presence only.
+# The partial ships in every strategy regardless of config, which is why this
+# matters at all: few-shot leakage is at least configurable, this is not.
+_DISTINCTIVE_EXAMPLE_TOKENS = (
+    "CargoGrade",
+    "MIDGRADE",
+    "unitTally",
+    "expectedBy",
+    "beginDate",
+    "windowDays",
+    "conveyCargo",
+)
+_GENERIC_EXAMPLE_TOKENS = (
+    "PREMIUM",
+    "BULK",
+    "cargo",
+    "grade",
+    "tally",
+    "holder",
+    "recipient",
+    "Conveyed",
+    "conveyed",
+)
+
+# MeatSale's identifier ensemble. Some are ordinary words on their own, but
+# each is an identifier in the default benchmark's gold solution, so any one
+# reappearing in a template signals MeatSale-flavored editing drifting back in.
+_RETIRED_MEATSALE_TOKENS = (
+    "MeatQuality",
+    "PRIME",
+    "CHOICE",
+    "delDueDateDays",
+    "delDueDate",
+    "effDate",
+    "qnt",
+    "deliverGoods",
+    "goods",
+    "buyer",
+    "Delivered",
+    "delivered",
+)
+
+_CORPUS_FILES = (
+    *sorted(Path("contracts").glob("*.txt")),
+    *sorted(Path("examples").glob("*.yaml")),
+    *sorted(Path("tests/fixtures").glob("*.txt")),
+)
+
+
+def _template_files() -> list:
+    return [
+        entry
+        for entry in resources.files("symboleo_llm_tool.prompts.templates").iterdir()
+        if entry.name.endswith(".j2")
+    ]
+
+
+def test_example_vocabulary_is_present_in_output_format() -> None:
+    # Freshness guard for the overlap test below: a token that no longer
+    # appears in the template is stale in these lists, and the overlap test
+    # would keep "passing" for vocabulary the examples no longer use.
+    template = (
+        resources.files("symboleo_llm_tool.prompts.templates")
+        .joinpath("_output_format.j2")
+        .read_text(encoding="utf-8")
+    )
+    for token in _DISTINCTIVE_EXAMPLE_TOKENS + _GENERIC_EXAMPLE_TOKENS:
+        assert re.search(rf"\b{token}\b", template), f"{token!r} not in _output_format.j2"
+
+
+def test_distinctive_example_tokens_do_not_overlap_the_corpus() -> None:
+    # A corpus file containing `expectedBy` or `conveyCargo` is borrowing, not
+    # prose — it happened once (equipment_loan absorbed `dueBy`/`startDate`
+    # from the original de-bias plan), so this reds at introduction time while
+    # a rename is still cheap on either side. Deliberately NOT applied to the
+    # generic tokens: a contract whose prose says "recipient" or "grade" is
+    # routine English and leaks nothing.
+    assert len(_CORPUS_FILES) >= 3, "corpus glob found nothing — wrong CWD?"
+    for path in _CORPUS_FILES:
+        text = path.read_text(encoding="utf-8")
+        for token in _DISTINCTIVE_EXAMPLE_TOKENS:
+            assert not re.search(rf"\b{token}\b", text, re.IGNORECASE), (
+                f"distinctive example token {token!r} appears in {path} — rename one side"
+            )
+
+
+def test_retired_meatsale_vocabulary_stays_out_of_templates() -> None:
+    # sample_contract.txt IS MeatSale, so any of these tokens reappearing in a
+    # template re-biases every strategy toward that one benchmark contract.
+    for entry in _template_files():
+        text = entry.read_text(encoding="utf-8")
+        for token in _RETIRED_MEATSALE_TOKENS:
+            assert not re.search(rf"\b{token}\b", text), f"{token!r} back in {entry.name}"
 
 
 def test_placement_rule_phrases_are_unique_in_the_prompt(
