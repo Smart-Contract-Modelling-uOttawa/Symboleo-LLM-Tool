@@ -7,6 +7,9 @@ export interface StreamProgress {
   experimentIndex: number | null
   candidateId: number
   iteration: number
+  // Blocking errors in the iteration that just validated (warnings excluded —
+  // they never gate convergence, so they are not part of the live count).
+  errorCount: number
 }
 
 interface UseEventStreamResult<TResult> {
@@ -24,7 +27,13 @@ interface UseEventStreamResult<TResult> {
 // generated schema shares one EventType enum across the event variants, which
 // blocks discriminated-union narrowing). result is generic per stream.
 type StreamEvent<TResult> =
-  | { type: 'progress'; experiment_index?: number | null; candidate_id: number; iteration: number }
+  | {
+      type: 'progress'
+      experiment_index?: number | null
+      candidate_id: number
+      iteration: number
+      error_count: number
+    }
   | {
       type: 'complete'
       result: TResult
@@ -76,6 +85,7 @@ export function useEventStream<TResult>(url: string): UseEventStreamResult<TResu
           experimentIndex: data.experiment_index ?? null,
           candidateId: data.candidate_id,
           iteration: data.iteration,
+          errorCount: data.error_count,
         })
       } else if (data.type === 'complete') {
         closed = true

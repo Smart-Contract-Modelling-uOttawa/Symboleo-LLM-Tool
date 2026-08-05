@@ -58,6 +58,7 @@ function pipelineResult(
       error_history: [],
       total_tokens: split.tokens,
       total_cost_usd: split.cost,
+      final_error_count: converged ? 0 : 3,
       final_warning_count: 0,
     })),
   }
@@ -125,17 +126,19 @@ describe('SuiteResultsPage', () => {
     expect(screen.getByText('Connecting...')).toBeInTheDocument()
   })
 
-  it('shows the experiment/candidate/iteration counter from a progress event', () => {
+  it('shows the experiment/candidate/iteration/error counter from a progress event', () => {
     mockUseSuiteStream.mockReturnValue({
       status: 'running',
-      progress: { experimentIndex: 1, candidateId: 0, iteration: 2 },
+      progress: { experimentIndex: 1, candidateId: 0, iteration: 2, errorCount: 4 },
       result: null,
       errorMessage: null,
       outputDir: null,
       writeError: null,
     })
     renderSuiteResultsPage()
-    expect(screen.getByText('Experiment 2 — Candidate 1 — Iteration 2')).toBeInTheDocument()
+    expect(
+      screen.getByText('Experiment 2 — Candidate 1 — Iteration 2 — 4 errors')
+    ).toBeInTheDocument()
   })
 
   it('shows an error alert with the error message from the stream', () => {
@@ -283,7 +286,7 @@ describe('SuiteResultsPage', () => {
     const user = userEvent.setup()
     mockUseSuiteStream.mockReturnValue({
       status: 'running',
-      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,
@@ -300,7 +303,7 @@ describe('SuiteResultsPage', () => {
   it('tells the user the browser is retrying a dropped connection', () => {
     mockUseSuiteStream.mockReturnValue({
       status: 'reconnecting',
-      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,
@@ -309,7 +312,7 @@ describe('SuiteResultsPage', () => {
     renderSuiteResultsPage()
     expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
     expect(
-      screen.queryByText('Experiment 1 — Candidate 1 — Iteration 1')
+      screen.queryByText('Experiment 1 — Candidate 1 — Iteration 1 — 2 errors')
     ).not.toBeInTheDocument()
   })
 
@@ -317,7 +320,7 @@ describe('SuiteResultsPage', () => {
     const user = userEvent.setup()
     mockUseSuiteStream.mockReturnValue({
       status: 'running',
-      progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
+      progress: { experimentIndex: 0, candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,

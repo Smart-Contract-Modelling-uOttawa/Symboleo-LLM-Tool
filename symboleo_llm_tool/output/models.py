@@ -59,6 +59,14 @@ class CandidateResult(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
     @property
+    def final_error_count(self) -> int:
+        """Blocking errors remaining in the final output — the magnitude behind
+        ``converged: false`` (0 also for a run cancelled before any validation).
+        """
+        return metrics.candidate_final_error_count(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
     def final_warning_count(self) -> int:
         """Warnings lingering in the final output — surfaced, never blocking."""
         return metrics.candidate_final_warning_count(self)

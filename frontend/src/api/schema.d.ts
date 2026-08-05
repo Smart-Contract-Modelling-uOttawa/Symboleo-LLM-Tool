@@ -165,6 +165,12 @@ export interface components {
             /** Total Cost Usd */
             readonly total_cost_usd: number | null;
             /**
+             * Final Error Count
+             * @description Blocking errors remaining in the final output — the magnitude behind
+             *     ``converged: false`` (0 also for a run cancelled before any validation).
+             */
+            readonly final_error_count: number;
+            /**
              * Final Warning Count
              * @description Warnings lingering in the final output — surfaced, never blocking.
              */

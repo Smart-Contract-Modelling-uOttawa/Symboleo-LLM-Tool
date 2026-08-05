@@ -54,11 +54,19 @@ def candidate_total_cost_usd(candidate: CandidateResult) -> float | None:
     return _sum_optional_costs(u.cost_usd for u in _candidate_usages(candidate))
 
 
+def candidate_final_error_count(candidate: CandidateResult) -> int:
+    """ERROR-severity issues in the candidate's final iteration (0 for empty history)."""
+    if not candidate.error_history:
+        return 0
+    return sum(1 for issue in candidate.error_history[-1].errors if issue.is_error)
+
+
 def candidate_final_warning_count(candidate: CandidateResult) -> int:
     """Non-ERROR issues in the candidate's final iteration (0 for empty history).
 
-    Counts non-ERROR rather than ``== "WARNING"`` so error and warning counts
-    stay a true partition if the validator ever emits another severity (INFO).
+    Counts non-ERROR rather than ``== "WARNING"`` so the error and warning
+    counts partition the final record's issues even if the validator emits
+    another severity (INFO).
     """
     if not candidate.error_history:
         return 0
