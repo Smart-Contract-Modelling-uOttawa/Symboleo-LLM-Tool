@@ -1,6 +1,18 @@
+from typing import Any
+
 from symboleo_llm_tool.llm.base import GenerationResult
 from symboleo_llm_tool.output.models import TokenUsage
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
+
+
+async def passthrough_threadpool(func: Any, *args: Any, **kwargs: Any) -> Any:
+    """Stand-in for ``run_in_threadpool`` that calls through synchronously.
+
+    The API bridges await the threadpool twice (the run, then the writer), so a
+    single ``AsyncMock`` return value would leak the first hop's result into the
+    write hop. Calling through lets each hop's own patch supply its value.
+    """
+    return func(*args, **kwargs)
 
 
 def make_usage(

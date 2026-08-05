@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -22,7 +23,7 @@ from symboleo_llm_tool.output.models import (
     PipelineResult,
     SuiteResult,
 )
-from tests.helpers import make_issue
+from tests.helpers import make_issue, passthrough_threadpool
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -246,10 +247,11 @@ def test_run_suite_puts_suite_complete_event_on_queue() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = result
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", return_value=result),
+            patch("symboleo_llm_tool.api.routes.write_suite_results", return_value=Path("out")),
+        ):
             await _run_suite(job, _suite_config(), loop)
 
     asyncio.run(run())
@@ -266,14 +268,90 @@ def test_run_suite_forwards_job_cancel_token() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = _suite_result()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", return_value=_suite_result()) as m,
+            patch("symboleo_llm_tool.api.routes.write_suite_results", return_value=Path("out")),
+        ):
             await _run_suite(job, _suite_config(), loop)
-            assert mock_tp.call_args.kwargs["cancel"] is job.cancel
+            assert m.call_args.kwargs["cancel"] is job.cancel
 
     asyncio.run(run())
+
+
+def test_run_suite_writes_results_before_suite_complete_event() -> None:
+    # Mirror of the single-run fence: a `complete` event implies the artifact
+    # exists, and the suite writer is handed the config (it carries the
+    # contract, so there is no contract kwarg here).
+    job = create_suite_job("suite-writes")
+    result = _suite_result()
+    config = _suite_config()
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", return_value=result),
+            patch(
+                "symboleo_llm_tool.api.routes.write_suite_results",
+                return_value=Path("output/suite_20260101_120000"),
+            ) as mock_write,
+        ):
+            await _run_suite(job, config, loop)
+            mock_write.assert_called_once_with(result, config)
+
+    asyncio.run(run())
+
+    event = job.queue.get_nowait()
+    assert isinstance(event, SuiteCompleteEvent)
+    assert event.output_dir == str(Path("output/suite_20260101_120000"))
+    assert event.write_error is None
+    assert job.output_dir == event.output_dir
+
+
+def test_run_suite_write_failure_still_delivers_result() -> None:
+    job = create_suite_job("suite-write-fail")
+    result = _suite_result()
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", return_value=result),
+            patch(
+                "symboleo_llm_tool.api.routes.write_suite_results",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            await _run_suite(job, _suite_config(), loop)
+
+    asyncio.run(run())
+
+    # job.error is reserved for pipeline failures — a write failure must not
+    # make a delivered run look like a failed one.
+    assert job.error is None
+    event = job.queue.get_nowait()
+    assert isinstance(event, SuiteCompleteEvent)
+    assert event.result is result
+    assert event.output_dir is None
+    assert event.write_error is not None
+    assert "disk full" in event.write_error
+
+
+def test_suite_stream_reconnect_carries_persistence_fields(client: TestClient) -> None:
+    # Fences the suite stream's on_complete lambda reading the job stash.
+    job = create_suite_job("suite-reconnect")
+    job.result = _suite_result()
+    job.output_dir = "output/suite_20260101_120000"
+    job.write_error = None
+    job.completed_at = datetime.now()
+
+    response = client.get("/api/suites/suite-reconnect/stream")
+
+    events = _parse_all_sse(response.text)
+    assert events[-1]["type"] == "complete"
+    assert events[-1]["output_dir"] == "output/suite_20260101_120000"
+    assert events[-1]["write_error"] is None
 
 
 def test_run_suite_puts_error_event_on_exception() -> None:
@@ -281,11 +359,14 @@ def test_run_suite_puts_error_event_on_exception() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.side_effect = RuntimeError("suite boom")
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", side_effect=RuntimeError("suite boom")),
+            patch("symboleo_llm_tool.api.routes.write_suite_results") as mock_write,
+        ):
             await _run_suite(job, _suite_config(), loop)
+            # CLI parity: the suite-exception path writes nothing.
+            mock_write.assert_not_called()
 
     asyncio.run(run())
 
@@ -303,12 +384,13 @@ def test_run_suite_progress_event_error_count_excludes_warnings() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = _suite_result()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.api.routes.run_suite", return_value=_suite_result()) as m,
+            patch("symboleo_llm_tool.api.routes.write_suite_results", return_value=Path("out")),
+        ):
             await _run_suite(job, _suite_config(), loop)
-            on_progress = mock_tp.call_args.kwargs["on_progress"]
+            on_progress = m.call_args.kwargs["on_progress"]
             on_progress(
                 1,
                 0,

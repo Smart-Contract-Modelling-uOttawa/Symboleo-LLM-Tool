@@ -102,11 +102,19 @@ class ProgressEvent(BaseModel):
 class CompleteEvent(BaseModel):
     type: EventType = EventType.COMPLETE
     result: PipelineResult
+    # Where the server persisted this run's artifacts. None exactly when
+    # write_error is set: the run succeeded but the write failed, so the result
+    # is still delivered — with the failure named — and no copy exists on disk.
+    output_dir: str | None = None
+    write_error: str | None = None
 
 
 class SuiteCompleteEvent(BaseModel):
     type: EventType = EventType.COMPLETE
     result: SuiteResult
+    # Same persistence semantics as CompleteEvent.
+    output_dir: str | None = None
+    write_error: str | None = None
 
 
 class ErrorEvent(BaseModel):

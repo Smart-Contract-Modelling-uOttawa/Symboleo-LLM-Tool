@@ -25,7 +25,7 @@ export default function SuiteResultsPage() {
   const { suiteId } = useParams<{ suiteId: string }>()
   const navigate = useNavigate()
   const { state } = useLocation()
-  const { status, progress, result, errorMessage } = useSuiteStream(suiteId!)
+  const { status, progress, result, errorMessage, outputDir, writeError } = useSuiteStream(suiteId!)
   const isRunning = status === 'connecting' || status === 'running' || status === 'reconnecting'
   const { stopping, stop } = useRunCancel(suiteId!, isRunning)
 
@@ -84,7 +84,17 @@ export default function SuiteResultsPage() {
               <AlertDescription>Suite stopped — showing partial results.</AlertDescription>
             </Alert>
           )}
+          {writeError && (
+            <Alert variant="warning" className="mb-4">
+              <AlertTitle>Results were not saved</AlertTitle>
+              {/* Shown in full — an undisplayed write failure is silent artifact loss. */}
+              <AlertDescription>{writeError}</AlertDescription>
+            </Alert>
+          )}
           <SuiteView result={result} />
+          {outputDir && (
+            <p className="mt-6 text-xs text-muted-foreground">Saved to {outputDir}</p>
+          )}
         </>
       )}
     </div>

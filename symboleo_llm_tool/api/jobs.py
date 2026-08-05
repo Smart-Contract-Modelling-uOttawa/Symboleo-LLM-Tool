@@ -23,6 +23,11 @@ class Job(Generic[T]):
     task: "asyncio.Task[None] | None" = field(default=None)
     result: T | None = field(default=None)
     error: str | None = field(default=None)
+    # Persistence outcome of a completed run (see CompleteEvent for semantics).
+    # Stashed here because the reconnect branch of the stream rebuilds the
+    # terminal event from the job — without these it would blank the fields.
+    output_dir: str | None = field(default=None)
+    write_error: str | None = field(default=None)
     # Request-scoped cancellation, tripped when the stream stays detached past the
     # grace window (see cancel_abandoned). The pipeline checks it cooperatively.
     cancel: CancellationToken = field(default_factory=CancellationToken)

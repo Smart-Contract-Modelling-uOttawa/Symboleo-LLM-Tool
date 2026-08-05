@@ -13,9 +13,10 @@ from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
 def _write_run(result: PipelineResult, config: PipelineConfig, dest_dir: Path) -> None:
     """Write one pipeline run's artifacts into ``dest_dir`` (which must exist).
 
-    Factored out of ``write_results`` so both the single-run writer (a timestamped
-    directory) and the suite writer (a per-experiment subdirectory) produce the
-    identical on-disk layout from one definition.
+    Factored out of ``write_results`` so the single-run writer (a timestamped
+    directory) and the suite writer (a per-experiment subdirectory) share one
+    definition of the core layout. Callers add what differs: ``write_results``
+    a per-run ``contract.txt``, the suite writer one shared copy at suite level.
     """
     (dest_dir / "report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     config_yaml = yaml.dump(
@@ -48,27 +49,55 @@ def _write_run(result: PipelineResult, config: PipelineConfig, dest_dir: Path) -
                     )
 
 
-def write_results(result: PipelineResult, config: PipelineConfig) -> Path:
+def _unique_dir(parent: Path, base_name: str) -> Path:
+    """Create and return ``parent/base_name``, suffixing ``_2``, ``_3``, … on
+    collision.
+
+    Directory names are second-granular timestamps, so two runs finishing within
+    the same second would otherwise share a directory and silently interleave
+    their files (report.json last-writer-wins). ``mkdir`` without ``exist_ok``
+    is the atomic claim — race-safe across threads and processes.
+    """
+    parent.mkdir(parents=True, exist_ok=True)
+    candidate = parent / base_name
+    n = 2
+    while True:
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            candidate = parent / f"{base_name}_{n}"
+            n += 1
+        else:
+            return candidate
+
+
+def write_results(
+    result: PipelineResult, config: PipelineConfig, *, contract_text: str | None = None
+) -> Path:
     timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
-    run_dir = config.output.directory / f"run_{timestamp}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = _unique_dir(config.output.directory, f"run_{timestamp}")
     _write_run(result, config, run_dir)
+    if contract_text is not None:
+        (run_dir / "contract.txt").write_text(contract_text, encoding="utf-8")
     return run_dir
 
 
 def write_suite_results(result: SuiteResult, suite: SuiteConfig) -> Path:
     """Persist a suite run: a suite directory holding a suite-level report, a
-    reloadable copy of the suite file, a comparison CSV, and one subdirectory per
-    experiment (each in the single-run layout).
+    reloadable copy of the suite file, the input contract, a comparison CSV, and
+    one subdirectory per experiment (each in the single-run layout).
     """
     timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
-    suite_dir = suite.output_directory / f"suite_{timestamp}"
-    suite_dir.mkdir(parents=True, exist_ok=True)
+    suite_dir = _unique_dir(suite.output_directory, f"suite_{timestamp}")
 
     (suite_dir / "suite_report.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     # Not `minimal`: this is the record of a run, so it keeps values that merely
     # happen to equal a current default (see dump_suite_file).
     (suite_dir / "suite.yaml").write_text(dump_suite_file(suite), encoding="utf-8")
+    # One suite-level copy (the experiments share one contract by design) —
+    # together with suite.yaml this makes the directory directly replayable:
+    # `symboleo-tool suite contract.txt --config suite.yaml`.
+    (suite_dir / "contract.txt").write_text(suite.contract_text, encoding="utf-8")
     (suite_dir / "summary.csv").write_text(_summary_csv(result), encoding="utf-8")
 
     # Pair each result with its source config by name, not by position — no

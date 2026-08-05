@@ -7,6 +7,8 @@ interface UseSuiteStreamResult {
   progress: StreamProgress | null
   result: SuiteResult | null
   errorMessage: string | null
+  outputDir: string | null
+  writeError: string | null
 }
 
 export function useSuiteStream(suiteId: string): UseSuiteStreamResult {

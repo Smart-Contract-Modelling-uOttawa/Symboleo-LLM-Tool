@@ -8,3 +8,6 @@ services:
       - ./configs:/app/configs:ro
       - ./examples:/app/examples:ro
       - ./frontend/dist:/app/frontend/dist:ro
+      # The one read-write mount: the API persists run artifacts to output/,
+      # and without the mount they die with the container.
+      - ./output:/app/output

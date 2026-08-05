@@ -6,12 +6,13 @@ interface UseStreamResult {
   progress: { candidateId: number; iteration: number } | null
   result: PipelineResult | null
   errorMessage: string | null
+  outputDir: string | null
+  writeError: string | null
 }
 
 export function useStream(runId: string): UseStreamResult {
-  const { status, progress, result, errorMessage } = useEventStream<PipelineResult>(
-    `/api/runs/${runId}/stream`,
-  )
+  const { status, progress, result, errorMessage, outputDir, writeError } =
+    useEventStream<PipelineResult>(`/api/runs/${runId}/stream`)
   return {
     status,
     // A single run has no experiment dimension — drop it from the public shape.
@@ -20,5 +21,7 @@ export function useStream(runId: string): UseStreamResult {
       : null,
     result,
     errorMessage,
+    outputDir,
+    writeError,
   }
 }

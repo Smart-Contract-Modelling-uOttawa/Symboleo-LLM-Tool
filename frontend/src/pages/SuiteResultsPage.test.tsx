@@ -118,6 +118,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('Connecting...')).toBeInTheDocument()
@@ -129,6 +131,8 @@ describe('SuiteResultsPage', () => {
       progress: { experimentIndex: 1, candidateId: 0, iteration: 2 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('Experiment 2 — Candidate 1 — Iteration 2')).toBeInTheDocument()
@@ -140,6 +144,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: 'Suite failed unexpectedly',
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('Suite failed unexpectedly')).toBeInTheDocument()
@@ -151,6 +157,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('1 of 2 experiments converged.')).toBeInTheDocument()
@@ -164,6 +172,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     const convergedRow = row(/^zero-shot/)
@@ -181,6 +191,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(within(row(/^zero-shot/)).getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
@@ -193,6 +205,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('Suite total: 3,500 tokens · $0.0070')).toBeInTheDocument()
@@ -205,6 +219,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
@@ -219,12 +235,44 @@ describe('SuiteResultsPage', () => {
     expect(rows[2]).toBe('cot,false,,2000,0.004')
   })
 
+  it('shows where the server saved the suite', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+      outputDir: 'output/suite_20260101_120000',
+      writeError: null,
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('Saved to output/suite_20260101_120000')).toBeInTheDocument()
+    expect(screen.queryByText('Results were not saved')).not.toBeInTheDocument()
+  })
+
+  it('still shows the comparison when the server could not write it to disk', () => {
+    mockUseSuiteStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_SUITE_RESULT,
+      errorMessage: null,
+      outputDir: null,
+      writeError: 'Results were not written to disk: disk full',
+    })
+    renderSuiteResultsPage()
+    expect(screen.getByText('Results were not saved')).toBeInTheDocument()
+    expect(screen.getByText('Results were not written to disk: disk full')).toBeInTheDocument()
+    expect(screen.getByText('zero-shot')).toBeInTheDocument()
+    expect(screen.queryByText(/Saved to/)).not.toBeInTheDocument()
+  })
+
   it('renders configuration warnings forwarded via navigation state', () => {
     mockUseSuiteStream.mockReturnValue({
       status: 'connecting',
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage(['zero-shot: temperature ignored'])
     expect(screen.getByText('Configuration warnings')).toBeInTheDocument()
@@ -238,6 +286,8 @@ describe('SuiteResultsPage', () => {
       progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: 'Stop' }))
@@ -253,6 +303,8 @@ describe('SuiteResultsPage', () => {
       progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
@@ -268,6 +320,8 @@ describe('SuiteResultsPage', () => {
       progress: { experimentIndex: 0, candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     // Clicking Stop re-renders, by which point the stream has completed.
@@ -276,6 +330,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: MOCK_SUITE_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     await user.click(screen.getByRole('button', { name: 'Stop' }))
 
@@ -296,6 +352,8 @@ describe('SuiteResultsPage', () => {
         ],
       },
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
@@ -311,6 +369,8 @@ describe('SuiteResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderSuiteResultsPage()
     await user.click(screen.getByRole('button', { name: 'New Suite' }))

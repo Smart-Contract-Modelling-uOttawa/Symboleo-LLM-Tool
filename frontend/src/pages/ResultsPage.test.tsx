@@ -86,6 +86,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('Connecting...')).toBeInTheDocument()
@@ -97,6 +99,8 @@ describe('ResultsPage', () => {
       progress: { candidateId: 0, iteration: 2 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     // iteration 2 is the 2nd correction — not "Iteration 3" (no +1; that
@@ -110,6 +114,8 @@ describe('ResultsPage', () => {
       progress: { candidateId: 0, iteration: 0 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('Candidate 1 — Generating...')).toBeInTheDocument()
@@ -121,6 +127,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: 'Pipeline failed unexpectedly',
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('Pipeline failed unexpectedly')).toBeInTheDocument()
@@ -132,6 +140,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('An unknown error occurred.')).toBeInTheDocument()
@@ -143,6 +153,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('At least one candidate converged.')).toBeInTheDocument()
@@ -156,6 +168,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('Converged')).toBeInTheDocument()
@@ -168,6 +182,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('3 warnings')).toBeInTheDocument()
@@ -183,9 +199,43 @@ describe('ResultsPage', () => {
         candidates: [{ ...MOCK_RESULT.candidates[0], final_warning_count: 1 }],
       },
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('1 warning')).toBeInTheDocument()
+  })
+
+  it('shows where the server saved the run', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+      outputDir: 'output/run_20260101_120000',
+      writeError: null,
+    })
+    renderResultsPage()
+    expect(screen.getByText('Saved to output/run_20260101_120000')).toBeInTheDocument()
+    expect(screen.queryByText('Results were not saved')).not.toBeInTheDocument()
+  })
+
+  it('still shows the results when the server could not write them to disk', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+      outputDir: null,
+      writeError: 'Results were not written to disk: disk full',
+    })
+    renderResultsPage()
+    // The run succeeded — the candidates render, with the write failure named
+    // beside them rather than replacing them.
+    expect(screen.getByText('Results were not saved')).toBeInTheDocument()
+    expect(screen.getByText('Results were not written to disk: disk full')).toBeInTheDocument()
+    expect(screen.getByText('Candidate 1')).toBeInTheDocument()
+    expect(screen.queryByText(/Saved to/)).not.toBeInTheDocument()
   })
 
   it('shows "no candidates converged" when success is false', () => {
@@ -194,6 +244,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: { ...MOCK_RESULT, success: false },
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.getByText('No candidates converged.')).toBeInTheDocument()
@@ -205,6 +257,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('2 iterations')).toBeInTheDocument()
@@ -217,6 +271,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('1,500 tokens · $0.0030')).toBeInTheDocument()
@@ -229,6 +285,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage(["generation: temperature=0.2 is set, but 'gpt-5' is a reasoning model"])
     expect(screen.getByText('Configuration warnings')).toBeInTheDocument()
@@ -241,6 +299,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.queryByText('Configuration warnings')).not.toBeInTheDocument()
@@ -253,6 +313,8 @@ describe('ResultsPage', () => {
       progress: { candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     await user.click(screen.getByRole('button', { name: 'Stop' }))
@@ -268,6 +330,8 @@ describe('ResultsPage', () => {
       progress: { candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     // The retry message replaces the progress counter, so a reader is not left
@@ -283,6 +347,8 @@ describe('ResultsPage', () => {
       progress: { candidateId: 0, iteration: 1 },
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     // Clicking Stop re-renders, by which point the stream has completed.
@@ -291,6 +357,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     await user.click(screen.getByRole('button', { name: 'Stop' }))
 
@@ -303,6 +371,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: MOCK_RESULT,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     expect(screen.queryByText('Run stopped — showing partial results.')).not.toBeInTheDocument()
@@ -315,6 +385,8 @@ describe('ResultsPage', () => {
       progress: null,
       result: null,
       errorMessage: null,
+      outputDir: null,
+      writeError: null,
     })
     renderResultsPage()
     await user.click(screen.getByRole('button', { name: 'New Run' }))
