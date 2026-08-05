@@ -141,6 +141,44 @@ def test_reserved_names_survive_grammar_omission(any_strategy: PromptStrategy) -
         assert "## Reserved Names" in prompt
 
 
+def test_state_word_event_guidance_reaches_both_stages(any_strategy: PromptStrategy) -> None:
+    # The observed collision family is the past-participle event-naming idiom
+    # landing on the reserved state words. Both stages emit contract code, so
+    # the trap guidance must reach both — and each phrase must be unique, or a
+    # deleted sentence would stay satisfied by an accidental echo elsewhere.
+    # Two sentinels because the sentence has two load-bearing halves: the
+    # prohibition, and the suffixed-escape prescription the corrections use.
+    gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
+    corr = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])
+    )
+    for prompt in (gen, corr):
+        assert prompt.count("never the bare state word") == 1
+        assert prompt.count("Use a suffixed name") == 1
+
+
+def test_state_word_guidance_names_only_reserved_words() -> None:
+    # The guidance hand-enumerates the state-word family for emphasis — the
+    # pointer at the derived list demonstrably failed, with models colliding on
+    # words that list already contained. Hand-listing can drift from the
+    # grammar, so pin both directions: every named word must still be reserved
+    # (a JAR/grammar refresh that unreserves one is named here), and the family
+    # must stay fully enumerated — deduplicated, with the prescribed `*Event`
+    # escapes excluded, so a trimmed paragraph cannot hide behind the closing
+    # "not `Suspension`, not `Suspended`" repeats.
+    template = (
+        resources.files("symboleo_llm_tool.prompts.templates")
+        .joinpath("_reserved_names.j2")
+        .read_text(encoding="utf-8")
+    )
+    reserved = grammar.reserved_names()
+    named = re.findall(r"`(\w+)`", template.split("The state words collide most")[1])
+    family = {w for w in named if w not in ("Conveyed", "Paid") and not w.endswith("Event")}
+    assert len(family) >= 13, f"family enumeration shrank: {sorted(family)}"
+    for word in family:
+        assert word in reserved, f"guidance names {word!r} but the grammar does not reserve it"
+
+
 def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrategy) -> None:
     # Correction's first constraint forbids editing lines with no listed error;
     # a rename cascades across exactly such lines, so the permission must be

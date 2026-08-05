@@ -1,4 +1,6 @@
-"""Pins the JAR-verified placement rules `_output_format.j2` asserts.
+"""Pins the JAR-verified rules the prompt guidance asserts: the placement
+rules in `_output_format.j2`, and the reserved state-word boundary in
+`_reserved_names.j2`.
 
 These rules are hand-written rather than derived from `Symboleo.xtext`, because
 the grammar is not the whole specification: a large share of what the JAR
@@ -404,3 +406,24 @@ def test_happens_of_obligation_state_is_legal(wrapper: SymboleoWrapper) -> None:
     # prompt's "powers alone" rule must not be read as covering it.
     extra = "  o2: O(seller, buyer, Happens(Suspended(obligations.o1)), true);\n"
     assert errors(wrapper, contract(extra=extra)) == []
+
+
+# --- Reserved state words (## Reserved Names) ---------------------------------
+
+
+def test_state_word_as_event_type_name_fails_opaquely(wrapper: SymboleoWrapper) -> None:
+    # `Suspended isAn Event` cannot parse - the participle is a grammar keyword
+    # - and the message never says the name is the problem, which is
+    # why `_reserved_names.j2` prevents rather than relying on recovery.
+    code = sub(contract(), "Delivered isAn Event", "Suspended isAn Event")
+    code = sub(code, "delivered: Delivered with", "delivered: Suspended with")
+    msgs = errors(wrapper, code)
+    assert msgs
+    assert any("mismatched input 'Suspended'" in m for m in msgs)
+
+
+def test_suffixed_state_word_event_name_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The escape the guidance prescribes: `SuspensionEvent isAn Event`.
+    code = sub(contract(), "Delivered isAn Event", "SuspensionEvent isAn Event")
+    code = sub(code, "delivered: Delivered with", "delivered: SuspensionEvent with")
+    assert errors(wrapper, code) == []
