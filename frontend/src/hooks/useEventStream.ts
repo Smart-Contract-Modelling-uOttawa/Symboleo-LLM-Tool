@@ -14,6 +14,10 @@ interface UseEventStreamResult<TResult> {
   progress: StreamProgress | null
   result: TResult | null
   errorMessage: string | null
+  // Where the server persisted the run's artifacts; null when the write failed
+  // (writeError then names why — nothing was saved to disk).
+  outputDir: string | null
+  writeError: string | null
 }
 
 // Literal-typed wire shape so `data.type === '...'` narrows correctly (the
@@ -21,7 +25,12 @@ interface UseEventStreamResult<TResult> {
 // blocks discriminated-union narrowing). result is generic per stream.
 type StreamEvent<TResult> =
   | { type: 'progress'; experiment_index?: number | null; candidate_id: number; iteration: number }
-  | { type: 'complete'; result: TResult }
+  | {
+      type: 'complete'
+      result: TResult
+      output_dir?: string | null
+      write_error?: string | null
+    }
   | { type: 'error'; message: string }
 
 const MAX_RETRIES = 3
@@ -35,6 +44,8 @@ export function useEventStream<TResult>(url: string): UseEventStreamResult<TResu
   const [progress, setProgress] = useState<StreamProgress | null>(null)
   const [result, setResult] = useState<TResult | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [outputDir, setOutputDir] = useState<string | null>(null)
+  const [writeError, setWriteError] = useState<string | null>(null)
 
   useEffect(() => {
     let closed = false
@@ -69,6 +80,8 @@ export function useEventStream<TResult>(url: string): UseEventStreamResult<TResu
       } else if (data.type === 'complete') {
         closed = true
         setResult(data.result)
+        setOutputDir(data.output_dir ?? null)
+        setWriteError(data.write_error ?? null)
         setStatus('complete')
         es.close()
       } else if (data.type === 'error') {
@@ -110,5 +123,5 @@ export function useEventStream<TResult>(url: string): UseEventStreamResult<TResu
     }
   }, [url])
 
-  return { status, progress, result, errorMessage }
+  return { status, progress, result, errorMessage, outputDir, writeError }
 }

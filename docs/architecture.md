@@ -42,7 +42,7 @@ flowchart TD
     config[/"config .yaml"/] --> asm
     genclean -- "draft (adopted unconditionally)" --> val["validate with the SymboleoAC JAR"]
     val -- "issue list" --> errs{"any ERROR-severity issues?"}
-    errs -- "no — converged" --> outdir[/"run directory<br/>report.json · contract_final.symboleo · config.yaml"/]
+    errs -- "no — converged" --> outdir[/"run directory<br/>report.json · contract_final.symboleo · config.yaml · contract.txt"/]
     errs -- "yes" --> left{"correction attempts left?"}
     left -- "no — converged: false" --> outdir
 
@@ -282,12 +282,13 @@ templates are short and readable directly; the reasoning behind their rules
 
 ## Anatomy of a run directory
 
-Every run writes a timestamped directory — the durable research artifact. The
-web UI is only a live view of it (jobs expire minutes after completion); if a
-number matters, it comes from here.
+Every run — CLI or web UI — writes a timestamped directory, the durable
+research artifact (the UI's pages are a live view that expires minutes after
+completion); if a number matters, it comes from here.
 
 ```
 output/run_20260804_131453/
+├── contract.txt              # the input contract, as submitted
 ├── contract_final.symboleo   # the final draft (converged, or the last adopted attempt)
 ├── report.json               # everything below
 ├── config.yaml               # the config as loaded — rerunning replays the same
@@ -298,7 +299,9 @@ output/run_20260804_131453/
 ```
 
 Multi-candidate runs suffix per candidate (`contract_candidate_0_final.symboleo`,
-`intermediates_candidate_0/`).
+`intermediates_candidate_0/`). Two runs finishing within the same second get
+distinct directories — the later one is suffixed (`run_..._2`), never merged
+into the first.
 
 `report.json`, top to bottom:
 
@@ -322,9 +325,12 @@ introduced, or failed to change.
 ### Suite output
 
 A suite writes `output/suite_*/` rather than a single run directory: a
-suite-level `suite_report.json`, a reloadable `suite.yaml`, a `summary.csv`
+suite-level `suite_report.json`, a reloadable `suite.yaml` beside the
+`contract.txt` it ran — the pair replays directly as
+`symboleo-tool suite contract.txt --config suite.yaml` — a `summary.csv`
 comparison (one row per experiment — convergence, iterations, tokens, cost),
-and one subdirectory per experiment in the single-run layout above.
+and one subdirectory per experiment in the single-run layout above (minus
+`contract.txt` — the suite keeps the one shared copy at the top level).
 
 ## What "converged" means — and does not
 

@@ -156,9 +156,10 @@ generation:
 
 ## Output
 
-Each run writes a timestamped `output/run_*/` directory holding the final
-contract, a full `report.json`, and a copy of the config used. Layout and how to
-read the report: [docs/architecture.md](docs/architecture.md).
+Each run — CLI or web UI — writes a timestamped `output/run_*/` directory
+holding the final contract, a full `report.json`, the input contract, and a copy
+of the config used. Layout and how to read the report:
+[docs/architecture.md](docs/architecture.md).
 
 ## Web UI
 
@@ -202,7 +203,9 @@ docker compose up symboleo-api
 
 Open **`http://localhost:8000`** — here the API serves the built frontend itself,
 so there is no separate port. `configs/`, `examples/`, and `frontend/dist/` are
-mounted read-only, so model lists and the corpus can change without a rebuild.
+mounted read-only, so model lists and the corpus can change without a rebuild;
+`output/` is mounted read-write so run artifacts land on the host and survive
+the container.
 
 ### Experiment Suites
 

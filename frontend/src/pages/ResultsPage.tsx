@@ -22,7 +22,7 @@ export default function ResultsPage() {
   const { runId } = useParams<{ runId: string }>()
   const navigate = useNavigate()
   const { state } = useLocation()
-  const { status, progress, result, errorMessage } = useStream(runId!)
+  const { status, progress, result, errorMessage, outputDir, writeError } = useStream(runId!)
   const isRunning = status === 'connecting' || status === 'running' || status === 'reconnecting'
   const { stopping, stop } = useRunCancel(runId!, isRunning)
 
@@ -81,7 +81,17 @@ export default function ResultsPage() {
               <AlertDescription>Run stopped — showing partial results.</AlertDescription>
             </Alert>
           )}
+          {writeError && (
+            <Alert variant="warning" className="mb-4">
+              <AlertTitle>Results were not saved</AlertTitle>
+              {/* Shown in full — an undisplayed write failure is silent artifact loss. */}
+              <AlertDescription>{writeError}</AlertDescription>
+            </Alert>
+          )}
           <ResultsView result={result} />
+          {outputDir && (
+            <p className="mt-6 text-xs text-muted-foreground">Saved to {outputDir}</p>
+          )}
         </>
       )}
     </div>

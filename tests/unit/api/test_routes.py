@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +13,7 @@ from symboleo_llm_tool.api.models import CompleteEvent, ErrorEvent, ProgressEven
 from symboleo_llm_tool.api.routes import _run_pipeline, _stream_job
 from symboleo_llm_tool.config.models import LLMConfig, PipelineConfig, StageConfig
 from symboleo_llm_tool.output.models import CandidateResult, PipelineResult
-from tests.helpers import make_issue
+from tests.helpers import make_issue, passthrough_threadpool
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -139,6 +139,24 @@ def test_stream_complete_job_yields_complete_event(client: TestClient) -> None:
     payload = _parse_sse(response.text)
     assert payload["type"] == "complete"
     assert payload["result"]["success"] is True
+
+
+def test_stream_complete_job_reconnect_carries_persistence_fields(client: TestClient) -> None:
+    # The reconnect branch rebuilds the terminal event from the job's stash;
+    # without it a client that reconnects after completion gets blanked fields.
+    # This test uses the write-failure state; the suite mirror uses the success
+    # state, so between them both fields are pinned on the reconnect path.
+    job = create_job("test-run-reconnect")
+    job.result = _make_pipeline_result(success=True)
+    job.write_error = "Results were not written to disk: disk full"
+    job.completed_at = datetime.now()
+
+    response = client.get("/api/runs/test-run-reconnect/stream")
+
+    payload = _parse_sse(response.text)
+    assert payload["type"] == "complete"
+    assert payload["output_dir"] is None
+    assert payload["write_error"] == "Results were not written to disk: disk full"
 
 
 def test_stream_error_job_yields_error_event(client: TestClient) -> None:
@@ -382,10 +400,11 @@ def test_run_pipeline_puts_complete_event_on_queue() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = result
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.pipeline.run", return_value=result),
+            patch("symboleo_llm_tool.api.routes.write_results", return_value=Path("out")),
+        ):
             await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
 
     asyncio.run(run())
@@ -403,14 +422,78 @@ def test_run_pipeline_forwards_job_cancel_token() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = _make_pipeline_result()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch(
+                "symboleo_llm_tool.pipeline.run", return_value=_make_pipeline_result()
+            ) as mock_run,
+            patch("symboleo_llm_tool.api.routes.write_results", return_value=Path("out")),
+        ):
             await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
-            assert mock_tp.call_args.kwargs["cancel"] is job.cancel
+            assert mock_run.call_args.kwargs["cancel"] is job.cancel
 
     asyncio.run(run())
+
+
+def test_run_pipeline_writes_results_before_complete_event() -> None:
+    # A `complete` event implies the artifact exists (or write_error says why
+    # not) — so the write must happen before the terminal event is queued, and
+    # the event must carry where it landed.
+    job = create_job("pipe-writes")
+    result = _make_pipeline_result(success=True)
+    config = _make_pipeline_config()
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.pipeline.run", return_value=result),
+            patch(
+                "symboleo_llm_tool.api.routes.write_results",
+                return_value=Path("output/run_20260101_120000"),
+            ) as mock_write,
+        ):
+            await _run_pipeline(job, "contract text", config, loop)
+            mock_write.assert_called_once_with(result, config, contract_text="contract text")
+
+    asyncio.run(run())
+
+    event = job.queue.get_nowait()
+    assert isinstance(event, CompleteEvent)
+    assert event.output_dir == str(Path("output/run_20260101_120000"))
+    assert event.write_error is None
+    # Stashed on the job too — the reconnect branch rebuilds the event from it.
+    assert job.output_dir == event.output_dir
+
+
+def test_run_pipeline_write_failure_still_delivers_result() -> None:
+    # The run succeeded; only the disk failed. The result the client is waiting
+    # for must still arrive, with the failure named on the same event.
+    job = create_job("pipe-write-fail")
+    result = _make_pipeline_result(success=True)
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.pipeline.run", return_value=result),
+            patch("symboleo_llm_tool.api.routes.write_results", side_effect=OSError("disk full")),
+        ):
+            await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
+
+    asyncio.run(run())
+
+    # job.error is reserved for pipeline failures — a write failure must not
+    # make a delivered run look like a failed one.
+    assert job.error is None
+    assert job.output_dir is None
+    event = job.queue.get_nowait()
+    assert isinstance(event, CompleteEvent)
+    assert event.result is result
+    assert event.output_dir is None
+    assert event.write_error is not None
+    assert "disk full" in event.write_error
+    assert job.write_error == event.write_error
 
 
 def test_run_pipeline_puts_error_event_on_exception() -> None:
@@ -418,11 +501,15 @@ def test_run_pipeline_puts_error_event_on_exception() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.side_effect = RuntimeError("pipeline boom")
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch("symboleo_llm_tool.pipeline.run", side_effect=RuntimeError("pipeline boom")),
+            patch("symboleo_llm_tool.api.routes.write_results") as mock_write,
+        ):
             await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
+            # CLI parity: the pipeline-exception path writes nothing — there is
+            # no result to persist, and half-writing would mask the failure.
+            mock_write.assert_not_called()
 
     asyncio.run(run())
 
@@ -440,12 +527,15 @@ def test_run_pipeline_progress_event_error_count_excludes_warnings() -> None:
 
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        with patch(
-            "symboleo_llm_tool.api.routes.run_in_threadpool", new_callable=AsyncMock
-        ) as mock_tp:
-            mock_tp.return_value = _make_pipeline_result()
+        with (
+            patch("symboleo_llm_tool.api.routes.run_in_threadpool", passthrough_threadpool),
+            patch(
+                "symboleo_llm_tool.pipeline.run", return_value=_make_pipeline_result()
+            ) as mock_run,
+            patch("symboleo_llm_tool.api.routes.write_results", return_value=Path("out")),
+        ):
             await _run_pipeline(job, "contract text", _make_pipeline_config(), loop)
-            on_progress = mock_tp.call_args.kwargs["on_progress"]
+            on_progress = mock_run.call_args.kwargs["on_progress"]
             # Asymmetric counts on purpose: 2 errors vs 1 warning separates
             # "counts errors" from "counts warnings", from len(), and from 0.
             on_progress(

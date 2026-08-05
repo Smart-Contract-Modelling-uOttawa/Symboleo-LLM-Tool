@@ -58,6 +58,35 @@ def test_write_results_creates_timestamped_directory(tmp_path: Path) -> None:
     assert run_dir.name == "run_20260101_120000"
 
 
+def test_write_results_uniquifies_a_colliding_directory(tmp_path: Path) -> None:
+    # Timestamps are second-granular, so two back-to-back runs can share a name.
+    # The second must land in a suffixed sibling — never interleave into the
+    # first, where report.json would silently be last-writer-wins.
+    first = write_results(_result(), _config(tmp_path))
+    (first / "marker.txt").write_text("first", encoding="utf-8")
+
+    second = write_results(_result(), _config(tmp_path))
+    third = write_results(_result(), _config(tmp_path))
+
+    assert first.name == "run_20260101_120000"
+    assert second.name == "run_20260101_120000_2"
+    assert third.name == "run_20260101_120000_3"
+    assert (first / "marker.txt").read_text(encoding="utf-8") == "first"
+    assert not (second / "marker.txt").exists()
+
+
+def test_write_results_persists_contract_text_when_provided(tmp_path: Path) -> None:
+    run_dir = write_results(_result(), _config(tmp_path), contract_text="Seller shall deliver.")
+
+    assert (run_dir / "contract.txt").read_text(encoding="utf-8") == "Seller shall deliver."
+
+
+def test_write_results_omits_contract_file_when_text_not_provided(tmp_path: Path) -> None:
+    run_dir = write_results(_result(), _config(tmp_path))
+
+    assert not (run_dir / "contract.txt").exists()
+
+
 def test_write_results_writes_report_and_config(tmp_path: Path) -> None:
     run_dir = write_results(_result(), _config(tmp_path))
 
@@ -224,6 +253,25 @@ def test_write_suite_creates_suite_dir_with_reports(tmp_path: Path) -> None:
     assert (suite_dir / "suite_report.json").exists()
     assert (suite_dir / "suite.yaml").exists()
     assert (suite_dir / "summary.csv").exists()
+
+
+def test_write_suite_uniquifies_a_colliding_directory(tmp_path: Path) -> None:
+    first = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    second = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    assert first.name == "suite_20260101_120000"
+    assert second.name == "suite_20260101_120000_2"
+
+
+def test_write_suite_persists_one_top_level_contract(tmp_path: Path) -> None:
+    suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
+
+    contract = (suite_dir / "contract.txt").read_text(encoding="utf-8")
+    assert contract == "Seller shall deliver the goods."
+    # One suite-level copy only: the experiments share one contract by design,
+    # and `suite contract.txt --config suite.yaml` replays the whole directory.
+    assert not (suite_dir / "0_zero-shot" / "contract.txt").exists()
 
 
 def test_write_suite_creates_per_experiment_subdirs(tmp_path: Path) -> None:

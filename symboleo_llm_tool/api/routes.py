@@ -1,8 +1,10 @@
 import asyncio
+import logging
 import uuid
 from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, TypeVar
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -41,9 +43,12 @@ from symboleo_llm_tool.config.models import PipelineConfig, SuiteConfig
 from symboleo_llm_tool.experiments import run_suite
 from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
+from symboleo_llm_tool.output.writer import write_results, write_suite_results
 from symboleo_llm_tool.prompts.examples import list_example_names
 from symboleo_llm_tool.prompts.strategies import list_strategies
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -69,6 +74,56 @@ def reset_router() -> None:
     global _ui_config, _model_to_provider
     _ui_config = {}
     _model_to_provider = {}
+
+
+# ---------------------------------------------------------------------------
+# Persistence — shared by both bridges and both stream routes
+# ---------------------------------------------------------------------------
+
+_T = TypeVar("_T")
+
+
+def _complete_event(job: Job[PipelineResult], result: PipelineResult) -> CompleteEvent:
+    """The one builder for the run terminal event — used by the live path
+    (``_persist_and_complete``) and the reconnect path (``stream_run``) alike,
+    so a new field cannot land on one and silently blank on the other."""
+    return CompleteEvent(result=result, output_dir=job.output_dir, write_error=job.write_error)
+
+
+def _suite_complete_event(job: Job[SuiteResult], result: SuiteResult) -> SuiteCompleteEvent:
+    """Suite counterpart of ``_complete_event`` — same single-builder rule."""
+    return SuiteCompleteEvent(result=result, output_dir=job.output_dir, write_error=job.write_error)
+
+
+async def _persist_and_complete(
+    job: Job[_T],
+    result: _T,
+    write: Callable[[], Path],
+    make_event: Callable[["Job[_T]", _T], BaseModel],
+    kind: str,
+) -> None:
+    """Persist the artifacts, stamp the job, and queue the terminal event.
+
+    The write is its own threadpool hop, BEFORE the terminal event is queued —
+    after it, the stream is over and a failure has no channel back. The two
+    failure domains take different exits: a pipeline/suite exception never
+    reaches here (the bridges queue an ErrorEvent and return), while a write
+    failure still delivers the result, with the failure named on the complete
+    event. Never an ErrorEvent for a write failure — that would demote a
+    delivered result to a disk complaint — and ``job.error`` stays ``None``:
+    it is reserved for pipeline failures, and stamping it here would
+    misdescribe a run that succeeded.
+    """
+    try:
+        output_dir = await run_in_threadpool(write)
+    except Exception as exc:
+        logger.exception("Failed to write results for %s %s", kind, job.run_id)
+        job.write_error = f"Results were not written to disk: {exc}"
+    else:
+        job.output_dir = str(output_dir)
+    job.result = result
+    job.completed_at = datetime.now()
+    await job.queue.put(make_event(job, result))
 
 
 # ---------------------------------------------------------------------------
@@ -117,13 +172,19 @@ async def _run_pipeline(
         result = await run_in_threadpool(
             pipeline.run, contract_text, config, on_progress=on_progress, cancel=job.cancel
         )
-        job.result = result
-        job.completed_at = datetime.now()
-        await job.queue.put(CompleteEvent(result=result))
     except Exception as exc:
         job.error = str(exc)
         job.completed_at = datetime.now()
         await job.queue.put(ErrorEvent(message=str(exc)))
+        return
+
+    await _persist_and_complete(
+        job,
+        result,
+        lambda: write_results(result, config, contract_text=contract_text),
+        _complete_event,
+        "run",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,13 +234,20 @@ async def _run_suite(
         result = await run_in_threadpool(
             run_suite, suite_config, on_progress=on_progress, cancel=job.cancel
         )
-        job.result = result
-        job.completed_at = datetime.now()
-        await job.queue.put(SuiteCompleteEvent(result=result))
     except Exception as exc:
         job.error = str(exc)
         job.completed_at = datetime.now()
         await job.queue.put(ErrorEvent(message=str(exc)))
+        return
+
+    # No contract kwarg for the suite writer: the suite config carries its contract.
+    await _persist_and_complete(
+        job,
+        result,
+        lambda: write_suite_results(result, suite_config),
+        _suite_complete_event,
+        "suite",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +313,7 @@ async def stream_run(  # type: ignore[no-untyped-def]
     job = get_job(run_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found or expired")
-    return await _stream_job(job, request, lambda result: CompleteEvent(result=result))
+    return await _stream_job(job, request, lambda result: _complete_event(job, result))
 
 
 @router.get(
@@ -258,7 +326,7 @@ async def stream_suite(  # type: ignore[no-untyped-def]
     job = get_suite_job(suite_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Suite {suite_id!r} not found or expired")
-    return await _stream_job(job, request, lambda result: SuiteCompleteEvent(result=result))
+    return await _stream_job(job, request, lambda result: _suite_complete_event(job, result))
 
 
 async def _stream_job(

@@ -120,7 +120,7 @@ def run(
         _fatal(str(e))
 
     try:
-        run_dir = write_results(result, config)
+        run_dir = write_results(result, config, contract_text=contract_text)
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 

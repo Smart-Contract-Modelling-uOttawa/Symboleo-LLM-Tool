@@ -79,6 +79,27 @@ describe('useEventStream', () => {
     expect(source().closed).toBe(true)
   })
 
+  it('captures the persistence fields from a complete event', () => {
+    const { result } = renderHook(() => useEventStream<{ ok: boolean }>('/x'))
+    open()
+    send({
+      type: 'complete',
+      result: { ok: true },
+      output_dir: 'output/run_20260101_120000',
+      write_error: 'Results were not written to disk: disk full',
+    })
+    expect(result.current.outputDir).toBe('output/run_20260101_120000')
+    expect(result.current.writeError).toBe('Results were not written to disk: disk full')
+  })
+
+  it('defaults the persistence fields to null when the event omits them', () => {
+    const { result } = renderHook(() => useEventStream<{ ok: boolean }>('/x'))
+    open()
+    send({ type: 'complete', result: { ok: true } })
+    expect(result.current.outputDir).toBeNull()
+    expect(result.current.writeError).toBeNull()
+  })
+
   it('surfaces a server error event and closes the stream', () => {
     const { result } = renderHook(() => useEventStream('/x'))
     open()

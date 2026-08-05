@@ -175,6 +175,10 @@ export interface components {
             /** @default complete */
             type: components["schemas"]["EventType"];
             result: components["schemas"]["PipelineResult"];
+            /** Output Dir */
+            output_dir?: string | null;
+            /** Write Error */
+            write_error?: string | null;
         };
         /** ErrorEvent */
         ErrorEvent: {
@@ -332,6 +336,10 @@ export interface components {
             /** @default complete */
             type: components["schemas"]["EventType"];
             result: components["schemas"]["SuiteResult"];
+            /** Output Dir */
+            output_dir?: string | null;
+            /** Write Error */
+            write_error?: string | null;
         };
         /** SuiteFileResponse */
         SuiteFileResponse: {
