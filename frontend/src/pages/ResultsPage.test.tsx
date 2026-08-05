@@ -40,6 +40,7 @@ const MOCK_RESULT: PipelineResult = {
       error_history: [],
       total_tokens: 1500,
       total_cost_usd: 0.003,
+      final_error_count: 0,
       final_warning_count: 3,
     },
     {
@@ -50,6 +51,7 @@ const MOCK_RESULT: PipelineResult = {
       error_history: [],
       total_tokens: 800,
       total_cost_usd: null,
+      final_error_count: 4,
       final_warning_count: 0,
     },
   ],
@@ -93,10 +95,10 @@ describe('ResultsPage', () => {
     expect(screen.getByText('Connecting...')).toBeInTheDocument()
   })
 
-  it('shows candidate and iteration counter from a progress event', () => {
+  it('shows candidate, iteration, and error counter from a progress event', () => {
     mockUseStream.mockReturnValue({
       status: 'running',
-      progress: { candidateId: 0, iteration: 2 },
+      progress: { candidateId: 0, iteration: 2, errorCount: 4 },
       result: null,
       errorMessage: null,
       outputDir: null,
@@ -105,20 +107,20 @@ describe('ResultsPage', () => {
     renderResultsPage()
     // iteration 2 is the 2nd correction — not "Iteration 3" (no +1; that
     // overshot max_iterations). See lib/progress.
-    expect(screen.getByText('Candidate 1 — Iteration 2')).toBeInTheDocument()
+    expect(screen.getByText('Candidate 1 — Iteration 2 — 4 errors')).toBeInTheDocument()
   })
 
-  it('labels the generation pass (iteration 0) as generating, not Iteration 1', () => {
+  it('labels iteration 0 as the completed generation pass, not Iteration 1', () => {
     mockUseStream.mockReturnValue({
       status: 'running',
-      progress: { candidateId: 0, iteration: 0 },
+      progress: { candidateId: 0, iteration: 0, errorCount: 13 },
       result: null,
       errorMessage: null,
       outputDir: null,
       writeError: null,
     })
     renderResultsPage()
-    expect(screen.getByText('Candidate 1 — Generating...')).toBeInTheDocument()
+    expect(screen.getByText('Candidate 1 — Generated — 13 errors')).toBeInTheDocument()
   })
 
   it('shows an error alert with the error message from the stream', () => {
@@ -174,6 +176,36 @@ describe('ResultsPage', () => {
     renderResultsPage()
     expect(within(row(/^Candidate 1/)).getByText('Converged')).toBeInTheDocument()
     expect(within(row(/^Candidate 2/)).getByText('Failed to converge')).toBeInTheDocument()
+  })
+
+  it('shows an errors chip only when blocking errors remain', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: MOCK_RESULT,
+      errorMessage: null,
+      outputDir: null,
+      writeError: null,
+    })
+    renderResultsPage()
+    expect(within(row(/^Candidate 2/)).getByText('4 errors')).toBeInTheDocument()
+    expect(within(row(/^Candidate 1/)).queryByText(/\d+ error/)).toBeNull()
+  })
+
+  it('renders the errors chip in the singular for exactly one error', () => {
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: {
+        ...MOCK_RESULT,
+        candidates: [{ ...MOCK_RESULT.candidates[1], final_error_count: 1 }],
+      },
+      errorMessage: null,
+      outputDir: null,
+      writeError: null,
+    })
+    renderResultsPage()
+    expect(within(row(/^Candidate 2/)).getByText('1 error')).toBeInTheDocument()
   })
 
   it('shows a warnings chip only when warnings linger', () => {
@@ -310,7 +342,7 @@ describe('ResultsPage', () => {
     const user = userEvent.setup()
     mockUseStream.mockReturnValue({
       status: 'running',
-      progress: { candidateId: 0, iteration: 1 },
+      progress: { candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,
@@ -327,7 +359,7 @@ describe('ResultsPage', () => {
   it('tells the user the browser is retrying a dropped connection', () => {
     mockUseStream.mockReturnValue({
       status: 'reconnecting',
-      progress: { candidateId: 0, iteration: 1 },
+      progress: { candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,
@@ -337,14 +369,14 @@ describe('ResultsPage', () => {
     // The retry message replaces the progress counter, so a reader is not left
     // watching a stalled iteration number.
     expect(screen.getByText('Connection dropped — retrying...')).toBeInTheDocument()
-    expect(screen.queryByText('Candidate 1 — Iteration 1')).not.toBeInTheDocument()
+    expect(screen.queryByText('Candidate 1 — Iteration 1 — 2 errors')).not.toBeInTheDocument()
   })
 
   it('flags the results as partial once a stopped run completes', async () => {
     const user = userEvent.setup()
     mockUseStream.mockReturnValue({
       status: 'running',
-      progress: { candidateId: 0, iteration: 1 },
+      progress: { candidateId: 0, iteration: 1, errorCount: 2 },
       result: null,
       errorMessage: null,
       outputDir: null,

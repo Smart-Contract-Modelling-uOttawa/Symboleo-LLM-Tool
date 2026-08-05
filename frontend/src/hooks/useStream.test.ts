@@ -14,7 +14,7 @@ describe('stream wrappers', () => {
   beforeEach(() => {
     mockUseEventStream.mockReturnValue({
       status: 'running',
-      progress: { experimentIndex: 4, candidateId: 1, iteration: 2 },
+      progress: { experimentIndex: 4, candidateId: 1, iteration: 2, errorCount: 3 },
       result: null,
       errorMessage: null,
       outputDir: 'output/run_20260101_120000',
@@ -26,7 +26,7 @@ describe('stream wrappers', () => {
     const { result } = renderHook(() => useStream('run-9'))
 
     expect(mockUseEventStream).toHaveBeenCalledWith('/api/runs/run-9/stream')
-    expect(result.current.progress).toEqual({ candidateId: 1, iteration: 2 })
+    expect(result.current.progress).toEqual({ candidateId: 1, iteration: 2, errorCount: 3 })
     // useStream rebuilds its return object rather than spreading — pin that the
     // persistence fields actually pass through the rebuild.
     expect(result.current.outputDir).toBe('output/run_20260101_120000')

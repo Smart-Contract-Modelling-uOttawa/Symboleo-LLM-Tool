@@ -55,18 +55,19 @@ describe('useEventStream', () => {
   it('maps a progress event, defaulting experimentIndex to null for a single run', () => {
     const { result } = renderHook(() => useEventStream('/x'))
     open()
-    send({ type: 'progress', candidate_id: 1, iteration: 2 })
+    send({ type: 'progress', candidate_id: 1, iteration: 2, error_count: 5 })
     expect(result.current.progress).toEqual({
       experimentIndex: null,
       candidateId: 1,
       iteration: 2,
+      errorCount: 5,
     })
   })
 
   it('keeps experiment_index when a suite tags it (the client-side demux key)', () => {
     const { result } = renderHook(() => useEventStream('/x'))
     open()
-    send({ type: 'progress', experiment_index: 3, candidate_id: 0, iteration: 1 })
+    send({ type: 'progress', experiment_index: 3, candidate_id: 0, iteration: 1, error_count: 0 })
     expect(result.current.progress?.experimentIndex).toBe(3)
   })
 

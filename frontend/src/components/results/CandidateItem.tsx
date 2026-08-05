@@ -41,6 +41,14 @@ export function CandidateItem({ candidate }: { candidate: CandidateResult }) {
           <Badge variant={candidate.converged ? 'default' : 'destructive'}>
             {candidate.converged ? 'Converged' : 'Failed to converge'}
           </Badge>
+          {candidate.final_error_count > 0 && (
+            // Keyed on the count, not on !converged: a run cancelled before
+            // its first validation has no count to show.
+            <Badge variant="outline" className="text-destructive font-normal">
+              {candidate.final_error_count} error
+              {candidate.final_error_count !== 1 ? 's' : ''}
+            </Badge>
+          )}
           {candidate.final_warning_count > 0 && (
             // Warnings surface but never block: "Converged" can legitimately
             // sit beside lingering stylistic warnings.

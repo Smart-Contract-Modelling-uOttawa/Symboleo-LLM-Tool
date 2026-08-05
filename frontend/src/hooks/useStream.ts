@@ -3,7 +3,7 @@ import { useEventStream, type StreamStatus } from './useEventStream'
 
 interface UseStreamResult {
   status: StreamStatus
-  progress: { candidateId: number; iteration: number } | null
+  progress: { candidateId: number; iteration: number; errorCount: number } | null
   result: PipelineResult | null
   errorMessage: string | null
   outputDir: string | null
@@ -17,7 +17,11 @@ export function useStream(runId: string): UseStreamResult {
     status,
     // A single run has no experiment dimension — drop it from the public shape.
     progress: progress
-      ? { candidateId: progress.candidateId, iteration: progress.iteration }
+      ? {
+          candidateId: progress.candidateId,
+          iteration: progress.iteration,
+          errorCount: progress.errorCount,
+        }
       : null,
     result,
     errorMessage,

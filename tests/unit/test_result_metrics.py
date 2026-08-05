@@ -113,6 +113,46 @@ class TestCandidateRollups:
     def test_final_warning_count_zero_when_history_empty(self) -> None:
         assert _candidate([]).final_warning_count == 0
 
+    def test_final_error_count_counts_errors_in_last_iteration(self) -> None:
+        # The error half of the severity partition. The earlier record's five
+        # errors must not count — only the LAST record's, and only its ERROR
+        # issues: 1 here, distinct from the warning partition (3), len() (4),
+        # and the earlier record (5).
+        history = [
+            IterationRecord(
+                iteration=0,
+                code="",
+                errors=[make_issue(severity="ERROR")] * 5,
+                usage=None,
+            ),
+            IterationRecord(
+                iteration=1,
+                code="",
+                errors=[
+                    make_issue(severity="ERROR"),
+                    make_issue(severity="WARNING"),
+                    make_issue(severity="WARNING"),
+                    make_issue(severity="INFO"),
+                ],
+                usage=None,
+            ),
+        ]
+        candidate = CandidateResult(
+            candidate_id=0,
+            final_code="",
+            converged=False,
+            iterations_used=1,
+            error_history=history,
+        )
+        assert candidate.final_error_count == 1
+        # The two counts partition the final record's issues.
+        assert candidate.final_error_count + candidate.final_warning_count == 4
+
+    def test_final_error_count_zero_when_history_empty(self) -> None:
+        # A run cancelled before its first validation: converged is False but
+        # there is no count to show — the UI must not claim "0 errors".
+        assert _candidate([]).final_error_count == 0
+
 
 class TestPipelineRollups:
     def test_totals_sum_across_candidates(self) -> None:
@@ -178,3 +218,4 @@ def test_computed_rollups_serialize_into_the_dump() -> None:
     assert dumped["iterations_to_convergence"] == 3
     assert dumped["candidates"][0]["total_tokens"] == 700
     assert dumped["candidates"][0]["final_warning_count"] == 0
+    assert dumped["candidates"][0]["final_error_count"] == 0

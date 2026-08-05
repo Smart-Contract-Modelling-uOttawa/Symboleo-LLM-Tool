@@ -311,7 +311,8 @@ into the first.
   none). **`total_cost_usd: null` means unknown** — the pinned LiteLLM version
   had no pricing for the model — never "free".
 - **Per candidate** — `converged`, `iterations_used`, `final_code`,
-  `final_warning_count` (warnings lingering in the final draft), and
+  `final_error_count`/`final_warning_count` (blocking errors and warnings
+  lingering in the final draft — they partition its issues by severity), and
   `error_history`.
 - **Per iteration** (inside `error_history`) — the `code` at that point, every
   validator issue (`severity`, `line`, `column`, `message`), the call's token
@@ -335,8 +336,9 @@ and one subdirectory per experiment in the single-run layout above (minus
 ## What "converged" means — and does not
 
 `converged: true` means exactly one thing: **the final draft has zero
-ERROR-severity issues from the SymboleoAC validator.** Warnings may remain
-(`final_warning_count` shows them); they do not block.
+ERROR-severity issues from the SymboleoAC validator** — `final_error_count` is
+that count, nonzero exactly on a validated draft that failed. Warnings may
+remain (`final_warning_count` shows them); they do not block.
 
 It does **not** mean the SymboleoAC faithfully models the source contract.
 That is a second, separate question — and by an explicit scope decision this
