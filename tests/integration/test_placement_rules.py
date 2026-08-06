@@ -1,6 +1,7 @@
 """Pins the JAR-verified rules the prompt guidance asserts: the placement
-rules in `_output_format.j2`, and the reserved state-word boundary in
-`_reserved_names.j2`.
+rules in `_output_format.j2`, and the reserved-name boundaries in
+`_reserved_names.j2` (the state words, and the access-control keyword
+`Controller`).
 
 These rules are hand-written rather than derived from `Symboleo.xtext`, because
 the grammar is not the whole specification: a large share of what the JAR
@@ -408,7 +409,7 @@ def test_happens_of_obligation_state_is_legal(wrapper: SymboleoWrapper) -> None:
     assert errors(wrapper, contract(extra=extra)) == []
 
 
-# --- Reserved state words (## Reserved Names) ---------------------------------
+# --- Reserved names (## Reserved Names) ---------------------------------------
 
 
 def test_state_word_as_event_type_name_fails_opaquely(wrapper: SymboleoWrapper) -> None:
@@ -450,23 +451,29 @@ def test_suffixed_controller_role_name_is_legal(wrapper: SymboleoWrapper) -> Non
     assert errors(wrapper, code) == []
 
 
-# --- Type references and declaration form (2026-08-06 probe battery) ----------
+# --- Type references and declaration form -------------------------------------
+
+# Every word of `OntologyType` (Symboleo.xtext), so the prompt's list cannot
+# drift from the grammar's: a word added upstream fails here as an unpinned
+# legal form, and one dropped from the prompt fails as an untaught trap.
+ONTOLOGY_WORDS = ["Role", "Asset", "Event", "Contract", "DataTransfer"]
 
 
-def test_base_type_as_attribute_type_fails(wrapper: SymboleoWrapper) -> None:
-    # `performer: Role` — an ontology base word as an attribute type. Froze 2/3
-    # Cohere baseline runs for all 5 corrections; the base words are legal only
-    # to the right of isA/isAn (the legal side is BASE itself). Base-typed
-    # attributes like `qty: Number` stay legal — the rule is the four ontology
-    # words, not primitives.
-    assert errors(wrapper, sub(contract(), "performer: Seller;", "performer: Role;"))
+@pytest.mark.parametrize("word", ONTOLOGY_WORDS)
+def test_base_type_as_attribute_type_fails(wrapper: SymboleoWrapper, word: str) -> None:
+    # An ontology base word as an attribute type — `performer: Role` froze 2/3
+    # Cohere baseline runs for all 5 corrections. These words are legal only to
+    # the right of isA/isAn (the legal side is BASE itself). Primitive-typed
+    # attributes like `qty: Number` stay legal; the rule is these words only.
+    assert errors(wrapper, sub(contract(), "performer: Seller;", f"performer: {word};"))
 
 
-def test_base_type_as_parameter_type_fails(wrapper: SymboleoWrapper) -> None:
-    # Same word in a contract-parameter type position (`client: Role`), the
-    # form both CoT candidates wrote. `effDate: Date` in BASE pins that
-    # primitive-typed parameters remain legal.
-    assert errors(wrapper, sub(contract(), "sellerP: Seller,", "sellerP: Role,"))
+@pytest.mark.parametrize("word", ONTOLOGY_WORDS)
+def test_base_type_as_parameter_type_fails(wrapper: SymboleoWrapper, word: str) -> None:
+    # The same words in a contract-parameter type position, the shape both CoT
+    # candidates wrote. `effDate: Date` in BASE pins that primitive-typed
+    # parameters remain legal.
+    assert errors(wrapper, sub(contract(), "sellerP: Seller,", f"sellerP: {word},"))
 
 
 def test_wholesale_declaration_assignment_fails(wrapper: SymboleoWrapper) -> None:
@@ -513,18 +520,21 @@ def test_event_type_applied_to_instance_in_predicate_fails(wrapper: SymboleoWrap
 
 
 def test_bare_event_type_in_predicate_fails(wrapper: SymboleoWrapper) -> None:
-    # The other half of instance-vs-type confusion. Distinct from the case
-    # above: this one is *actionable*, so only the parenthesised form needs
-    # prompt space — pinned to keep that distinction honest if the JAR moves.
+    # The other half of instance-vs-type confusion, which the bullet names
+    # alongside the parenthesised form. Its message is actionable where the
+    # other's is opaque, and that asymmetry is what this pins: if the JAR ever
+    # made this one opaque too, the bullet would be under-warning about it.
     msgs = errors(wrapper, contract(consequent="Happens(Delivered)"))
     assert msgs
     assert any("cannot be used as an event here" in m for m in msgs)
 
 
 def test_state_word_applied_to_norm_stays_legal(wrapper: SymboleoWrapper) -> None:
-    # The exception the amended bullet carves out: state words DO take an
-    # argument inside a predicate. If this ever became illegal the bullet would
-    # be teaching a falsehood in the opposite direction.
+    # The norm form the bullet offers as the alternative to naming an instance
+    # (`Happens(Violated(obligations.<name>))`), in a *consequent* alongside a
+    # power — `test_happens_of_obligation_state_is_legal` pins the antecedent
+    # position with a different state word. If this became illegal the bullet
+    # would be prescribing an unparseable form.
     power = "Powers\n  p1: P(buyer, seller, true, Terminated(self));\n"
     code = contract(consequent="not Happens(Violated(obligations.o1))", extra=power)
     assert errors(wrapper, code) == []

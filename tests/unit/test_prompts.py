@@ -210,10 +210,10 @@ def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrat
 # --- Placement rules (## Output Format) ---------------------------------------
 
 # One phrase per JAR-pinned placement rule in _output_format.j2, so dropping a
-# pinned rule reds this test instead of passing on the others. The older
-# structural bullets (the top-level-structure skeleton, O-vs-Obligation, inline
-# propositions, the trigger prefix) carry no phrase by design — see the Jinja
-# comment in that template.
+# pinned rule reds this test instead of passing on the others. Three older
+# structural bullets (the top-level-structure skeleton, O-vs-Obligation, the
+# trigger prefix) carry no phrase by design — see the Jinja comment in that
+# template.
 #
 # Each phrase must be unique in the RENDERED prompt, not merely in the template:
 # `## Reserved Names` lists every grammar keyword, so a bare construct name is
