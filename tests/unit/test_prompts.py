@@ -157,6 +157,20 @@ def test_state_word_event_guidance_reaches_both_stages(any_strategy: PromptStrat
         assert prompt.count("Use a suffixed name") == 1
 
 
+def test_controller_guidance_reaches_both_stages(any_strategy: PromptStrategy) -> None:
+    # The AC keyword `Controller` is a DPA-shaped contract's natural vocabulary
+    # (GDPR Controller/Processor), and unlike the state words its collision
+    # froze uncorrected for 5 iterations in every 2026-08-06 occurrence — the
+    # generic list + rename permission did not trigger the rename; naming the
+    # word with a prescribed escape is the mechanism that did for state words.
+    gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
+    corr = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])
+    )
+    for prompt in (gen, corr):
+        assert prompt.count("never bare `Controller`") == 1
+
+
 def test_state_word_guidance_names_only_reserved_words() -> None:
     # The guidance hand-enumerates the state-word family for emphasis — the
     # pointer at the derived list demonstrably failed, with models colliding on
@@ -174,7 +188,7 @@ def test_state_word_guidance_names_only_reserved_words() -> None:
     reserved = grammar.reserved_names()
     named = re.findall(r"`(\w+)`", template.split("The state words collide most")[1])
     family = {w for w in named if w not in ("Conveyed", "Paid") and not w.endswith("Event")}
-    assert len(family) >= 13, f"family enumeration shrank: {sorted(family)}"
+    assert len(family) >= 15, f"family enumeration shrank: {sorted(family)}"
     for word in family:
         assert word in reserved, f"guidance names {word!r} but the grammar does not reserve it"
 
@@ -196,10 +210,10 @@ def test_correction_permits_reserved_identifier_rename(any_strategy: PromptStrat
 # --- Placement rules (## Output Format) ---------------------------------------
 
 # One phrase per JAR-pinned placement rule in _output_format.j2, so dropping a
-# pinned rule reds this test instead of passing on the others. The older
-# structural bullets (the top-level-structure skeleton, O-vs-Obligation, inline
-# propositions, the trigger prefix) carry no phrase by design — see the Jinja
-# comment in that template.
+# pinned rule reds this test instead of passing on the others. Three older
+# structural bullets (the top-level-structure skeleton, O-vs-Obligation, the
+# trigger prefix) carry no phrase by design — see the Jinja comment in that
+# template.
 #
 # Each phrase must be unique in the RENDERED prompt, not merely in the template:
 # `## Reserved Names` lists every grammar keyword, so a bare construct name is
@@ -225,6 +239,11 @@ _PLACEMENT_RULES = (
     "wraps the assignment",  # Assign(...) / HappensAssign(...) in an O
     "exactly two places in the whole language",  # where semicolons ARE used
     "Every other list is comma-separated",  # and where they are not
+    "never the base word itself",  # performer: Role / param: Role do not parse
+    "one attribute at a time",  # no wholesale `decl: Type := value`
+    "only in a declaration binding",  # a Date literal not in predicate positions
+    "never applies its type to it",  # Happens(Conveyed(conveyed)) / Happens(Conveyed)
+    'even though the validator calls it "Role-typed"',  # the induced performer: Role
 )
 
 

@@ -1,6 +1,7 @@
 """Pins the JAR-verified rules the prompt guidance asserts: the placement
-rules in `_output_format.j2`, and the reserved state-word boundary in
-`_reserved_names.j2`.
+rules in `_output_format.j2`, and the reserved-name boundaries in
+`_reserved_names.j2` (the state words, and the access-control keyword
+`Controller`).
 
 These rules are hand-written rather than derived from `Symboleo.xtext`, because
 the grammar is not the whole specification: a large share of what the JAR
@@ -408,7 +409,7 @@ def test_happens_of_obligation_state_is_legal(wrapper: SymboleoWrapper) -> None:
     assert errors(wrapper, contract(extra=extra)) == []
 
 
-# --- Reserved state words (## Reserved Names) ---------------------------------
+# --- Reserved names (## Reserved Names) ---------------------------------------
 
 
 def test_state_word_as_event_type_name_fails_opaquely(wrapper: SymboleoWrapper) -> None:
@@ -427,3 +428,139 @@ def test_suffixed_state_word_event_name_is_legal(wrapper: SymboleoWrapper) -> No
     code = sub(contract(), "Delivered isAn Event", "SuspensionEvent isAn Event")
     code = sub(code, "delivered: Delivered with", "delivered: SuspensionEvent with")
     assert errors(wrapper, code) == []
+
+
+def test_controller_as_role_type_name_fails_opaquely(wrapper: SymboleoWrapper) -> None:
+    # The AC keyword as a Role type name — the natural vocabulary of a
+    # data-processing contract (GDPR Controller/Processor). Froze three
+    # candidates for all five corrections on 2026-08-06; like the state words,
+    # the parse error quotes the token but never says the name is the problem.
+    code = sub(contract(), "Buyer isA Role", "Controller isA Role")
+    code = sub(code, "buyerP: Buyer,", "buyerP: Controller,")
+    code = sub(code, "buyer: Buyer with", "buyer: Controller with")
+    msgs = errors(wrapper, code)
+    assert msgs
+    assert any("'Controller'" in m for m in msgs)
+
+
+def test_suffixed_controller_role_name_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The escape the guidance prescribes: `ControllerRole isA Role`.
+    code = sub(contract(), "Buyer isA Role", "ControllerRole isA Role")
+    code = sub(code, "buyerP: Buyer,", "buyerP: ControllerRole,")
+    code = sub(code, "buyer: Buyer with", "buyer: ControllerRole with")
+    assert errors(wrapper, code) == []
+
+
+# --- Type references and declaration form -------------------------------------
+
+# Every word of `OntologyType` (Symboleo.xtext), so the prompt's list cannot
+# drift from the grammar's: a word added upstream fails here as an unpinned
+# legal form, and one dropped from the prompt fails as an untaught trap.
+ONTOLOGY_WORDS = ["Role", "Asset", "Event", "Contract", "DataTransfer"]
+
+
+@pytest.mark.parametrize("word", ONTOLOGY_WORDS)
+def test_base_type_as_attribute_type_fails(wrapper: SymboleoWrapper, word: str) -> None:
+    # An ontology base word as an attribute type — `performer: Role` froze 2/3
+    # Cohere baseline runs for all 5 corrections. These words are legal only to
+    # the right of isA/isAn (the legal side is BASE itself). Primitive-typed
+    # attributes like `qty: Number` stay legal; the rule is these words only.
+    assert errors(wrapper, sub(contract(), "performer: Seller;", f"performer: {word};"))
+
+
+@pytest.mark.parametrize("word", ONTOLOGY_WORDS)
+def test_base_type_as_parameter_type_fails(wrapper: SymboleoWrapper, word: str) -> None:
+    # The same words in a contract-parameter type position, the shape both CoT
+    # candidates wrote. `effDate: Date` in BASE pins that primitive-typed
+    # parameters remain legal.
+    assert errors(wrapper, sub(contract(), "sellerP: Seller,", f"sellerP: {word},"))
+
+
+def test_wholesale_declaration_assignment_fails(wrapper: SymboleoWrapper) -> None:
+    # `decl: Type := value` — written by 3/3 Cohere baseline runs and frozen to
+    # the end (`mismatched input ':=' expecting ';'`); the with-list is the
+    # only way values enter a declaration.
+    assert errors(
+        wrapper,
+        sub(
+            contract(),
+            "goods: Goods with qty := 1, owner := seller;",
+            "goods: Goods := sellerP;",
+        ),
+    )
+
+
+def test_date_literal_in_predicate_time_position_fails(wrapper: SymboleoWrapper) -> None:
+    # The asymmetry the 2026-08-06 battery found: Date.add is legal in this
+    # exact position (test_date_add_accepted_in_time_point_positions), a
+    # literal is not — it stalled 3 of 9 Atos candidates that day.
+    assert errors(
+        wrapper,
+        contract(consequent='WhappensBefore(delivered, Date("2026/10/01 00:00:00"))'),
+    )
+
+
+def test_date_literal_in_declaration_binding_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The literal's one legal home, and the form the amended bullet prescribes.
+    code = sub(contract(), "Date.add(effDate, delDays, days)", 'Date("2026/10/01 00:00:00")')
+    assert errors(wrapper, code) == []
+
+
+# --- Predicate arguments and the AC attribute requirements --------------------
+
+
+def test_event_type_applied_to_instance_in_predicate_fails(wrapper: SymboleoWrapper) -> None:
+    # `Happens(Delivered(delivered))` — the type applied to its own instance,
+    # as if a constructor. Opaque (`no viable alternative at input '('`) and it
+    # arrives in bulk: 12 instances in one 2026-08-06 candidate, frozen to the
+    # iteration cap. The legal form is BASE's bare `Happens(delivered)`.
+    msgs = errors(wrapper, contract(consequent="Happens(Delivered(delivered))"))
+    assert msgs
+    assert any("no viable alternative at input '('" in m for m in msgs)
+
+
+def test_bare_event_type_in_predicate_fails(wrapper: SymboleoWrapper) -> None:
+    # The other half of instance-vs-type confusion, which the bullet names
+    # alongside the parenthesised form. Its message is actionable where the
+    # other's is opaque, and that asymmetry is what this pins: if the JAR ever
+    # made this one opaque too, the bullet would be under-warning about it.
+    msgs = errors(wrapper, contract(consequent="Happens(Delivered)"))
+    assert msgs
+    assert any("cannot be used as an event here" in m for m in msgs)
+
+
+def test_state_word_applied_to_norm_stays_legal(wrapper: SymboleoWrapper) -> None:
+    # The norm form the bullet offers as the alternative to naming an instance
+    # (`Happens(Violated(obligations.<name>))`), in a *consequent* alongside a
+    # power — `test_happens_of_obligation_state_is_legal` pins the antecedent
+    # position with a different state word. If this became illegal the bullet
+    # would be prescribing an unparseable form.
+    power = "Powers\n  p1: P(buyer, seller, true, Terminated(self));\n"
+    code = contract(consequent="not Happens(Violated(obligations.o1))", extra=power)
+    assert errors(wrapper, code) == []
+
+
+def test_event_without_performer_fails(wrapper: SymboleoWrapper) -> None:
+    # The entry point of the worst 2026-08-06 trap chain: omitting `performer`
+    # yields a message reading "must declare a Role-typed 'performer'", the
+    # model writes the literal `performer: Role`, and that parse error masks
+    # the file. Prevention at generation is why the AC bullet exists despite
+    # the message itself being actionable.
+    code = sub(
+        contract(),
+        "Delivered isAn Event with delDueDate: Date, performer: Seller;",
+        "Delivered isAn Event with delDueDate: Date;",
+    )
+    msgs = errors(wrapper, code)
+    assert any("Role-typed 'performer'" in m for m in msgs)
+
+
+def test_role_without_ac_attributes_fails(wrapper: SymboleoWrapper) -> None:
+    # The other half of the same bullet: the access-control triple.
+    code = sub(
+        contract(),
+        "Buyer isA Role with name: String, org: String, dept: String;",
+        "Buyer isA Role with name: String;",
+    )
+    msgs = errors(wrapper, code)
+    assert any("access-control attribute" in m for m in msgs)

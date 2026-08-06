@@ -130,7 +130,7 @@ machine-checked twice: editors with the YAML extension validate against
 ```yaml
 pipeline:
   num_candidates: 1
-  max_iterations: 3
+  max_iterations: 5
   stop_on_first_convergence: false
 ```
 
