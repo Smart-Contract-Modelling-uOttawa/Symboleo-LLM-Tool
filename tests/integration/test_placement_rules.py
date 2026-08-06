@@ -427,3 +427,73 @@ def test_suffixed_state_word_event_name_is_legal(wrapper: SymboleoWrapper) -> No
     code = sub(contract(), "Delivered isAn Event", "SuspensionEvent isAn Event")
     code = sub(code, "delivered: Delivered with", "delivered: SuspensionEvent with")
     assert errors(wrapper, code) == []
+
+
+def test_controller_as_role_type_name_fails_opaquely(wrapper: SymboleoWrapper) -> None:
+    # The AC keyword as a Role type name — the natural vocabulary of a
+    # data-processing contract (GDPR Controller/Processor). Froze three
+    # candidates for all five corrections on 2026-08-06; like the state words,
+    # the parse error quotes the token but never says the name is the problem.
+    code = sub(contract(), "Buyer isA Role", "Controller isA Role")
+    code = sub(code, "buyerP: Buyer,", "buyerP: Controller,")
+    code = sub(code, "buyer: Buyer with", "buyer: Controller with")
+    msgs = errors(wrapper, code)
+    assert msgs
+    assert any("'Controller'" in m for m in msgs)
+
+
+def test_suffixed_controller_role_name_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The escape the guidance prescribes: `ControllerRole isA Role`.
+    code = sub(contract(), "Buyer isA Role", "ControllerRole isA Role")
+    code = sub(code, "buyerP: Buyer,", "buyerP: ControllerRole,")
+    code = sub(code, "buyer: Buyer with", "buyer: ControllerRole with")
+    assert errors(wrapper, code) == []
+
+
+# --- Type references and declaration form (2026-08-06 probe battery) ----------
+
+
+def test_base_type_as_attribute_type_fails(wrapper: SymboleoWrapper) -> None:
+    # `performer: Role` — an ontology base word as an attribute type. Froze 2/3
+    # Cohere baseline runs for all 5 corrections; the base words are legal only
+    # to the right of isA/isAn (the legal side is BASE itself). Base-typed
+    # attributes like `qty: Number` stay legal — the rule is the four ontology
+    # words, not primitives.
+    assert errors(wrapper, sub(contract(), "performer: Seller;", "performer: Role;"))
+
+
+def test_base_type_as_parameter_type_fails(wrapper: SymboleoWrapper) -> None:
+    # Same word in a contract-parameter type position (`client: Role`), the
+    # form both CoT candidates wrote. `effDate: Date` in BASE pins that
+    # primitive-typed parameters remain legal.
+    assert errors(wrapper, sub(contract(), "sellerP: Seller,", "sellerP: Role,"))
+
+
+def test_wholesale_declaration_assignment_fails(wrapper: SymboleoWrapper) -> None:
+    # `decl: Type := value` — written by 3/3 Cohere baseline runs and frozen to
+    # the end (`mismatched input ':=' expecting ';'`); the with-list is the
+    # only way values enter a declaration.
+    assert errors(
+        wrapper,
+        sub(
+            contract(),
+            "goods: Goods with qty := 1, owner := seller;",
+            "goods: Goods := sellerP;",
+        ),
+    )
+
+
+def test_date_literal_in_predicate_time_position_fails(wrapper: SymboleoWrapper) -> None:
+    # The asymmetry the 2026-08-06 battery found: Date.add is legal in this
+    # exact position (test_date_add_accepted_in_time_point_positions), a
+    # literal is not — it stalled 3 of 9 Atos candidates that day.
+    assert errors(
+        wrapper,
+        contract(consequent='WhappensBefore(delivered, Date("2026/10/01 00:00:00"))'),
+    )
+
+
+def test_date_literal_in_declaration_binding_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The literal's one legal home, and the form the amended bullet prescribes.
+    code = sub(contract(), "Date.add(effDate, delDays, days)", 'Date("2026/10/01 00:00:00")')
+    assert errors(wrapper, code) == []
