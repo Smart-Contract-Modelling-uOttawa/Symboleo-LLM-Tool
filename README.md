@@ -99,6 +99,14 @@ the contract is the CLI argument, not part of the file. See
 `configs/suite_example.yaml`, and [docs/architecture.md](docs/architecture.md)
 for what suites are for and what they write.
 
+To compare how *much* contract runs produced — convergence is blind to size:
+
+```bash
+# One row per candidate across every run/suite in output/; --csv PATH to export.
+# Read rows beside the converged column.
+uv run python scripts/richness_sweep.py
+```
+
 ## Configuration
 
 Config files live in `configs/`. Copy `configs/example.yaml` as a starting point:

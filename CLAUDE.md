@@ -47,7 +47,7 @@ symboleo_llm_tool/
 ├── prompts/        # PromptStrategy ABC + concrete strategies; PromptContext Pydantic model; examples.py (few-shot corpus); grammar.py (grammar resource + reserved-names derivation)
 ├── symboleo/       # Subprocess wrapper around the SymboleoAC headless CLI JAR
 ├── config/         # Pydantic config models + YAML loader (incl. SuiteConfig/Experiment)
-├── output/         # Result models (PipelineResult/CandidateResult/IterationRecord/SuiteResult) + metrics.py (computed-rollup derivation) + writer.py
+├── output/         # Result models (PipelineResult/CandidateResult/IterationRecord/SuiteResult) + metrics.py (computed-rollup derivation) + writer.py + richness.py (code-text richness counts, analysis-side)
 ├── concurrency.py  # CancellationToken (linked children) + RunCoordinator — shared cancellation/pool primitives
 └── resources/      # Bundled assets: Symboleo.xtext grammar file
 ```
@@ -188,6 +188,9 @@ A correction response is adopted only when it carries a contract; `_has_contract
 - Multi-candidate runs use a `_candidate_N` suffix consistently: `contract_candidate_0_final.symboleo`, `intermediates_candidate_0/`
 - `report.json` captures: success, iterations per candidate, full error history per iteration
 - Console prints a human-readable summary; full detail is in `report.json`
+
+### Richness Instrumentation (analysis-side)
+`converged` is blind to how *much* contract a run produced — a validator-clean 13-line file from a 47-line source counts as success — so richness counts sit beside it: non-blank LOC after comment/string stripping, plus obligation, surviving-obligation, and power clause counts. `output/richness.py` owns the counting (`measure(code) → RichnessCounts`, pure text→counts, fenced by `tests/unit/test_richness.py`; its docstring carries the accepted regex caveats); `scripts/richness_sweep.py` is the thin consumer, walking every `report.json` under `output/` (runs and suite subdirs alike) and printing per-candidate rows — generation-pass (`gen_*`) vs final (`final_*`) counts, `contract.txt` non-blank lines as denominator, and a `final_loc`-per-contract-line ratio where that denominator exists (absent before 2026-08-05). The sweep reads raw dicts, never `model_validate`: the archive spans schema eras and the auditor must not crash on what it audits. **Deliberately not a reported metric** — promotion to `@computed_field`s on `CandidateResult` (delegating via thin `metrics.py` wrappers, preserving that module's model-facing contract) is gated on the signal earning a suite-comparison column, and carries the schema-regen obligation. Endpoints only by design: two archive sweeps showed flat correction trajectories (smallness is born at generation, not amputated), so per-iteration rows wait for a trajectory question. Interpretation: counts on a non-converged candidate describe whatever text the run ended with, and the ratio is unitless prose-to-DSL — read rows beside `converged`, within one contract, and against the era boundaries in Known Issues (the pre-gate hollow-convergence stub is in the archive and the sweep finds it, 31→12 LOC).
 
 ### N×M Problem (Strategy × Provider)
 - LLM adapters and prompt strategies are **two independent hierarchies** — they compose, not inherit
