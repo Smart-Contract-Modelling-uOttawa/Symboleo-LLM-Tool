@@ -242,6 +242,8 @@ _PLACEMENT_RULES = (
     "never the base word itself",  # performer: Role / param: Role do not parse
     "one attribute at a time",  # no wholesale `decl: Type := value`
     "only in a declaration binding",  # a Date literal not in predicate positions
+    "never applies its type to it",  # Happens(Conveyed(conveyed)) / Happens(Conveyed)
+    'even though the validator calls it "Role-typed"',  # the induced performer: Role
 )
 
 

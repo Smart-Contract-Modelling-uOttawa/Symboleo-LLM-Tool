@@ -497,3 +497,60 @@ def test_date_literal_in_declaration_binding_is_legal(wrapper: SymboleoWrapper) 
     # The literal's one legal home, and the form the amended bullet prescribes.
     code = sub(contract(), "Date.add(effDate, delDays, days)", 'Date("2026/10/01 00:00:00")')
     assert errors(wrapper, code) == []
+
+
+# --- Predicate arguments and the AC attribute requirements --------------------
+
+
+def test_event_type_applied_to_instance_in_predicate_fails(wrapper: SymboleoWrapper) -> None:
+    # `Happens(Delivered(delivered))` — the type applied to its own instance,
+    # as if a constructor. Opaque (`no viable alternative at input '('`) and it
+    # arrives in bulk: 12 instances in one 2026-08-06 candidate, frozen to the
+    # iteration cap. The legal form is BASE's bare `Happens(delivered)`.
+    msgs = errors(wrapper, contract(consequent="Happens(Delivered(delivered))"))
+    assert msgs
+    assert any("no viable alternative at input '('" in m for m in msgs)
+
+
+def test_bare_event_type_in_predicate_fails(wrapper: SymboleoWrapper) -> None:
+    # The other half of instance-vs-type confusion. Distinct from the case
+    # above: this one is *actionable*, so only the parenthesised form needs
+    # prompt space — pinned to keep that distinction honest if the JAR moves.
+    msgs = errors(wrapper, contract(consequent="Happens(Delivered)"))
+    assert msgs
+    assert any("cannot be used as an event here" in m for m in msgs)
+
+
+def test_state_word_applied_to_norm_stays_legal(wrapper: SymboleoWrapper) -> None:
+    # The exception the amended bullet carves out: state words DO take an
+    # argument inside a predicate. If this ever became illegal the bullet would
+    # be teaching a falsehood in the opposite direction.
+    power = "Powers\n  p1: P(buyer, seller, true, Terminated(self));\n"
+    code = contract(consequent="not Happens(Violated(obligations.o1))", extra=power)
+    assert errors(wrapper, code) == []
+
+
+def test_event_without_performer_fails(wrapper: SymboleoWrapper) -> None:
+    # The entry point of the worst 2026-08-06 trap chain: omitting `performer`
+    # yields a message reading "must declare a Role-typed 'performer'", the
+    # model writes the literal `performer: Role`, and that parse error masks
+    # the file. Prevention at generation is why the AC bullet exists despite
+    # the message itself being actionable.
+    code = sub(
+        contract(),
+        "Delivered isAn Event with delDueDate: Date, performer: Seller;",
+        "Delivered isAn Event with delDueDate: Date;",
+    )
+    msgs = errors(wrapper, code)
+    assert any("Role-typed 'performer'" in m for m in msgs)
+
+
+def test_role_without_ac_attributes_fails(wrapper: SymboleoWrapper) -> None:
+    # The other half of the same bullet: the access-control triple.
+    code = sub(
+        contract(),
+        "Buyer isA Role with name: String, org: String, dept: String;",
+        "Buyer isA Role with name: String;",
+    )
+    msgs = errors(wrapper, code)
+    assert any("access-control attribute" in m for m in msgs)
