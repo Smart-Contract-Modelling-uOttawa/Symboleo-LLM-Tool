@@ -188,7 +188,7 @@ def test_state_word_guidance_names_only_reserved_words() -> None:
     reserved = grammar.reserved_names()
     named = re.findall(r"`(\w+)`", template.split("The state words collide most")[1])
     family = {w for w in named if w not in ("Conveyed", "Paid") and not w.endswith("Event")}
-    assert len(family) >= 13, f"family enumeration shrank: {sorted(family)}"
+    assert len(family) >= 15, f"family enumeration shrank: {sorted(family)}"
     for word in family:
         assert word in reserved, f"guidance names {word!r} but the grammar does not reserve it"
 
