@@ -4,7 +4,7 @@ from typing import Any
 import litellm
 
 from symboleo_llm_tool.config.models import LLMConfig
-from symboleo_llm_tool.llm.base import GenerationResult, LLMAdapter
+from symboleo_llm_tool.llm.base import GenerationResult, LLMAdapter, LLMCallError
 from symboleo_llm_tool.output.models import TokenUsage
 
 # LiteLLM's default `request_timeout` is 6000s (100 min) — effectively no bound.
@@ -44,10 +44,23 @@ class LiteLLMAdapter(LLMAdapter):
         # reject it, and omitting it is the version-independent fix.
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
-        response = litellm.completion(**kwargs)
-        content: str | None = response.choices[0].message.content
+        # The call AND the response destructuring are wrapped: a provider that
+        # returns an empty `choices` raises IndexError here, which is
+        # provider-shaped data rather than our bug, and unwrapped it would
+        # escape the pipeline's catch and destroy the run. The kwargs assembly
+        # above stays outside — a TypeError there is ours and must stay loud.
+        try:
+            response = litellm.completion(**kwargs)
+            content: str | None = response.choices[0].message.content
+        except Exception as exc:
+            # Name the type only when the message doesn't already carry it:
+            # LiteLLM's exceptions self-identify (and nest their own), so an
+            # unconditional prefix stutters in the artifact and the UI, while a
+            # bare `TimeoutError("...")` would otherwise arrive unattributed.
+            detail, name = str(exc), type(exc).__name__
+            raise LLMCallError(detail if name in detail else f"{name}: {detail}") from exc
         if content is None:
-            raise RuntimeError("LLM returned an empty response.")
+            raise LLMCallError("LLM returned an empty response.")
         return GenerationResult(generated_text=content, usage=_extract_usage(response))
 
 

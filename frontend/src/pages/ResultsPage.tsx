@@ -110,7 +110,10 @@ function ResultsView({ result }: { result: PipelineResult }) {
       <p className="text-sm text-muted-foreground">
         {result.success
           ? 'At least one candidate converged.'
-          : 'No candidates converged.'}
+          : // "No candidates converged" implies they tried and failed.
+            result.candidates.length > 0 && result.candidates.every(c => c.failure)
+            ? 'Every candidate was cut short by a failed call.'
+            : 'No candidates converged.'}
       </p>
       <Accordion type="multiple" defaultValue={defaultOpen} className="space-y-2">
         {result.candidates.map(candidate => (

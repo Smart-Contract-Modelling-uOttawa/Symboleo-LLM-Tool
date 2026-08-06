@@ -46,6 +46,11 @@ class CandidateResult(BaseModel):
     converged: bool
     iterations_used: int
     error_history: list[IterationRecord]
+    # Set when a transient external call (LLM or validator) failed and cut the
+    # loop short, carrying that call's message. ``None`` means the loop was not
+    # cut short — converged, out of iterations, or cancelled — and the
+    # distinction must stay recoverable from the artifact.
+    failure: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
     @property
@@ -92,6 +97,12 @@ class PipelineResult(BaseModel):
     @property
     def iterations_to_convergence(self) -> int | None:
         return metrics.iterations_to_convergence(self)
+
+    @computed_field  # type: ignore[prop-decorator]  # no pydantic mypy plugin configured
+    @property
+    def failed_candidate_count(self) -> int:
+        """Candidates cut short by a failed external call."""
+        return metrics.failed_candidate_count(self)
 
 
 class ExperimentResult(BaseModel):

@@ -81,6 +81,11 @@ def pipeline_total_cost_usd(result: PipelineResult) -> float | None:
     return _sum_optional_costs(c.total_cost_usd for c in result.candidates)
 
 
+def failed_candidate_count(result: PipelineResult) -> int:
+    """Candidates whose loop was cut short by a failed external call."""
+    return sum(1 for candidate in result.candidates if candidate.failure is not None)
+
+
 def iterations_to_convergence(result: PipelineResult) -> int | None:
     """Iterations used by the first converged candidate, or ``None`` if none converged."""
     for candidate in result.candidates:

@@ -218,3 +218,43 @@ def test_suite_command_errors_on_missing_contract(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "not found" in result.output
+
+
+def test_run_command_reports_a_candidate_provider_failure(tmp_path: Path) -> None:
+    # Without this the reason a candidate stopped exists only in report.json —
+    # the terminal shows "No / 0 iterations" and nothing else. The message is
+    # distinctive so it cannot pass on a neighbouring cell.
+    contract = tmp_path / "contract.txt"
+    contract.write_text("Seller shall deliver the goods.", encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    config.write_text(_RUN_YAML, encoding="utf-8")
+    failed = PipelineResult(
+        success=False,
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="contract.txt",
+        candidates=[
+            CandidateResult(
+                candidate_id=0,
+                final_code="",
+                converged=False,
+                iterations_used=0,
+                error_history=[],
+                failure="Timeout: CohereException - connection timed out",
+            )
+        ],
+    )
+
+    with (
+        patch("symboleo_llm_tool.cli.main.run_pipeline", return_value=failed),
+        patch(
+            "symboleo_llm_tool.cli.main.write_results",
+            return_value=tmp_path / "output" / "run_x",
+        ),
+    ):
+        result = runner.invoke(app, ["run", str(contract), "--config", str(config)])
+
+    # Exit 0: the run completed and produced an artifact, exactly as a
+    # non-convergence does.
+    assert result.exit_code == 0, result.output
+    assert "CohereException" in result.output
+    assert "cut short" in result.output.lower()

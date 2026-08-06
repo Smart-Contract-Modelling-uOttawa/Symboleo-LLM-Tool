@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from symboleo_llm_tool.config.models import LLMConfig
+from symboleo_llm_tool.llm.base import LLMCallError
 from symboleo_llm_tool.llm.litellm_adapter import _REQUEST_TIMEOUT_SECONDS, LiteLLMAdapter
 
 
@@ -61,8 +62,68 @@ def test_empty_content_raises_rather_than_returning_none() -> None:
         patch("litellm.completion", return_value=_response(content=None)),
         patch("litellm.completion_cost", return_value=0.0),
     ):
-        with pytest.raises(RuntimeError, match="empty response"):
+        # LLMCallError specifically, not any RuntimeError: the pipeline catches
+        # that type to record a failed candidate, so a widening here would let
+        # this escape and destroy the run.
+        with pytest.raises(LLMCallError, match="empty response"):
             _adapter().generate("prompt")
+
+
+def test_provider_exception_is_wrapped_in_llm_call_error() -> None:
+    # Provider knowledge stays in the adapter layer: the pipeline never imports
+    # litellm or openai, so anything the SDK raises has to arrive as LLMCallError
+    # or it will not be recognised as recoverable.
+    original = TimeoutError("Connection timed out after 120.0 seconds")
+    with patch("litellm.completion", side_effect=original):
+        with pytest.raises(LLMCallError) as exc_info:
+            _adapter().generate("prompt")
+
+    assert "TimeoutError" in str(exc_info.value)
+    assert exc_info.value.__cause__ is original
+
+
+def test_a_self_identifying_provider_error_is_not_double_prefixed() -> None:
+    # LiteLLM's exceptions name their own type (and nest it again), so an
+    # unconditional prefix produced "AuthenticationError: litellm.Authentication
+    # Error: AuthenticationError: ..." in report.json and the UI. Observed
+    # 2026-08-06 against a deliberately invalid key.
+    class AuthenticationError(Exception):
+        pass
+
+    original = AuthenticationError("litellm.AuthenticationError: bad key")
+    with patch("litellm.completion", side_effect=original):
+        with pytest.raises(LLMCallError) as exc_info:
+            _adapter().generate("prompt")
+
+    assert str(exc_info.value) == "litellm.AuthenticationError: bad key"
+    assert str(exc_info.value).count("AuthenticationError") == 1
+
+
+def test_a_response_with_no_choices_is_wrapped() -> None:
+    # Cohere's observed NO_VALID_RESPONSE_GENERATED shape. The destructuring is
+    # inside the try because this is provider-shaped data, not our bug — left
+    # outside, the IndexError escapes the pipeline's catch and destroys the run,
+    # which is the exact failure mode LLMCallError exists to prevent.
+    empty = SimpleNamespace(choices=[], usage=None)
+    with (
+        patch("litellm.completion", return_value=empty),
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        with pytest.raises(LLMCallError, match="IndexError"):
+            _adapter().generate("prompt")
+
+
+def test_a_bug_in_kwargs_assembly_is_not_wrapped() -> None:
+    # The try begins at the provider interaction. A failure building the request
+    # is our bug and must stay loud rather than be recorded as a provider fault.
+    adapter = _adapter()
+    with patch.object(type(adapter._config), "litellm_model", property(_raise_bug)):
+        with pytest.raises(AttributeError):
+            adapter.generate("prompt")
+
+
+def _raise_bug(_self: Any) -> str:
+    raise AttributeError("bug in our own code")
 
 
 def test_temperature_omitted_when_unset() -> None:

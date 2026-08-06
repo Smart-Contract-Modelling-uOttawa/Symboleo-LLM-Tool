@@ -31,6 +31,7 @@ const MOCK_RESULT: PipelineResult = {
   total_tokens: 2300,
   total_cost_usd: 0.003,
   iterations_to_convergence: 2,
+  failed_candidate_count: 0,
   candidates: [
     {
       candidate_id: 0,
@@ -423,5 +424,41 @@ describe('ResultsPage', () => {
     renderResultsPage()
     await user.click(screen.getByRole('button', { name: 'New Run' }))
     expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('shows why a candidate was cut short instead of "Failed to converge"', () => {
+    // A cut-short candidate has no code and no counts, so without the reason the
+    // page shows "0 iterations, — cost" and nothing explaining it.
+    mockUseStream.mockReturnValue({
+      status: 'complete',
+      progress: null,
+      result: {
+        ...MOCK_RESULT,
+        success: false,
+        candidates: [
+          {
+            candidate_id: 0,
+            final_code: '',
+            converged: false,
+            iterations_used: 0,
+            error_history: [],
+            total_tokens: 0,
+            total_cost_usd: null,
+            final_error_count: 0,
+            final_warning_count: 0,
+            failure: 'Timeout: CohereException - connection timed out',
+          },
+        ],
+      },
+      errorMessage: null,
+      outputDir: null,
+      writeError: null,
+    })
+    renderResultsPage()
+
+    expect(screen.getByText('Every candidate was cut short by a failed call.')).toBeInTheDocument()
+    expect(screen.getByText('Cut short')).toBeInTheDocument()
+    expect(screen.getByText(/CohereException - connection timed out/)).toBeInTheDocument()
+    expect(screen.queryByText('Failed to converge')).not.toBeInTheDocument()
   })
 })

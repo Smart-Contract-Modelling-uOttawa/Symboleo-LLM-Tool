@@ -39,7 +39,13 @@ export function CandidateItem({ candidate }: { candidate: CandidateResult }) {
             Candidate {candidate.candidate_id + 1}
           </span>
           <Badge variant={candidate.converged ? 'default' : 'destructive'}>
-            {candidate.converged ? 'Converged' : 'Failed to converge'}
+            {candidate.converged
+              ? 'Converged'
+              : // "Failed to converge" implies the loop ran its course; a
+                // candidate with a failure was cut short by a failed call.
+                candidate.failure
+                ? 'Cut short'
+                : 'Failed to converge'}
           </Badge>
           {candidate.final_error_count > 0 && (
             // Keyed on the count, not on !converged: a run cancelled before
@@ -68,13 +74,25 @@ export function CandidateItem({ candidate }: { candidate: CandidateResult }) {
         </div>
       </AccordionTrigger>
       <AccordionContent className="space-y-4 pb-4">
-        <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-auto max-h-96 whitespace-pre-wrap break-words">
-          {candidate.final_code}
-        </pre>
+        {candidate.failure && (
+          // The badge names the state; this line is the only place naming the cause.
+          <p className="text-sm text-destructive">
+            Cut short by a failed call: {candidate.failure}
+          </p>
+        )}
+        {candidate.final_code && (
+          <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-auto max-h-96 whitespace-pre-wrap break-words">
+            {candidate.final_code}
+          </pre>
+        )}
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={downloadSl}>
-            Download .symboleo
-          </Button>
+          {/* Same guard as the writer's: a cut-short candidate has no code, and
+              a 0-byte .symboleo in a folder of contracts reads as one. */}
+          {candidate.final_code && (
+            <Button size="sm" variant="outline" onClick={downloadSl}>
+              Download .symboleo
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={downloadReport}>
             Download report.json
           </Button>

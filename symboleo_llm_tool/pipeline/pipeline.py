@@ -6,7 +6,7 @@ from datetime import datetime
 
 from symboleo_llm_tool.concurrency import CancellationToken, RunCoordinator
 from symboleo_llm_tool.config.models import PipelineConfig
-from symboleo_llm_tool.llm.base import LLMAdapter
+from symboleo_llm_tool.llm.base import LLMAdapter, LLMCallError
 from symboleo_llm_tool.llm.factory import create_adapter
 from symboleo_llm_tool.output.models import (
     CandidateResult,
@@ -18,7 +18,7 @@ from symboleo_llm_tool.prompts.context import PromptContext
 from symboleo_llm_tool.prompts.grammar import load_grammar
 from symboleo_llm_tool.prompts.strategies import get_strategy
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
-from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
+from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper, ValidationCallError
 
 # Args: (candidate_id, iteration, errors, total_candidates, total_iterations).
 # `errors` carries ALL validator issues — blocking errors and warnings alike —
@@ -164,63 +164,102 @@ def _run_candidate(
     if ctx.cancel.cancelled:
         return None
 
-    gen_context = PromptContext(
-        contract_text=contract_text,
-        grammar_context=ctx.grammar_context if ctx.gen_include_grammar else None,
-    )
-    gen_prompt = ctx.gen_strategy.build_generation_prompt(gen_context)
-    gen_result = ctx.gen_llm.generate(gen_prompt)
-    code = _clean_response(gen_result.generated_text)
+    # Hoisted above the try so a failed external call can still be reported with
+    # whatever completed before it. A first-call failure leaves these at their
+    # empty defaults, which is the honest record: nothing was produced.
+    code = ""
+    errors: list[SymboleoIssue] = []
+    blocking: list[SymboleoIssue] = []
+    error_history: list[IterationRecord] = []
+    failure: str | None = None
 
-    errors = ctx.wrapper.validate(code)
-    blocking = _blocking(errors)
-    error_history = [IterationRecord(iteration=0, code=code, errors=errors, usage=gen_result.usage)]
-    if ctx.on_progress:
-        ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
-
-    for iteration in range(1, ctx.max_iterations + 1):
-        if not blocking:
-            break
-        if ctx.cancel.cancelled:  # cooperative checkpoint between iterations
-            break
-        corr_context = PromptContext(
-            current_code=code,
-            errors=blocking,
-            grammar_context=ctx.grammar_context if ctx.corr_include_grammar else None,
-            history=error_history,
+    try:
+        gen_context = PromptContext(
+            contract_text=contract_text,
+            grammar_context=ctx.grammar_context if ctx.gen_include_grammar else None,
         )
-        corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
-        corr_result = ctx.corr_llm.generate(corr_prompt)
-        cleaned = _clean_response(corr_result.generated_text)
-        rejected: str | None = None
-        if _has_contract_span(cleaned):
-            code = cleaned
+        gen_prompt = ctx.gen_strategy.build_generation_prompt(gen_context)
+        gen_result = ctx.gen_llm.generate(gen_prompt)
+        code = _clean_response(gen_result.generated_text)
+
+        try:
             errors = ctx.wrapper.validate(code)
             blocking = _blocking(errors)
-        else:
-            # Keep the previous iteration's code and its errors — unchanged by
-            # definition, so no second JAR run — and record the raw response we
-            # refused. `blocking` is non-empty here (the loop would have broken
-            # otherwise), so the next iteration retries.
-            rejected = corr_result.generated_text
-        error_history.append(
-            IterationRecord(
-                iteration=iteration,
-                code=code,
-                errors=errors,
-                usage=corr_result.usage,
-                rejected_response=rejected,
+        finally:
+            # Appended even if validate fails: the generation call was billed, so
+            # dropping the record would delete its tokens from every rollup, and
+            # `final_code` would describe code no iteration accounts for. An
+            # empty `errors` is the honest reading — the code was never validated.
+            error_history.append(
+                IterationRecord(iteration=0, code=code, errors=errors, usage=gen_result.usage)
             )
-        )
         if ctx.on_progress:
-            ctx.on_progress(candidate_id, iteration, errors, ctx.num_candidates, ctx.max_iterations)
+            ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
+
+        for iteration in range(1, ctx.max_iterations + 1):
+            if not blocking:
+                break
+            if ctx.cancel.cancelled:  # cooperative checkpoint between iterations
+                break
+            corr_context = PromptContext(
+                current_code=code,
+                errors=blocking,
+                grammar_context=ctx.grammar_context if ctx.corr_include_grammar else None,
+                history=error_history,
+            )
+            corr_prompt = ctx.corr_strategy.build_correction_prompt(corr_context)
+            corr_result = ctx.corr_llm.generate(corr_prompt)
+            cleaned = _clean_response(corr_result.generated_text)
+            rejected: str | None = None
+            try:
+                if _has_contract_span(cleaned):
+                    code = cleaned
+                    # Cleared before validating: until it returns, the new code has
+                    # no issues we know of, and keeping the previous iteration's
+                    # would attribute them to code they were never about.
+                    errors, blocking = [], []
+                    errors = ctx.wrapper.validate(code)
+                    blocking = _blocking(errors)
+                else:
+                    # Keep the previous iteration's code and its errors — unchanged by
+                    # definition, so no second JAR run — and record the raw response we
+                    # refused. `blocking` is non-empty here (the loop would have broken
+                    # otherwise), so the next iteration retries.
+                    rejected = corr_result.generated_text
+            finally:
+                # Same reason as the generation pass: the call was billed, and this
+                # record is what keeps `final_code` accounted for by an iteration.
+                error_history.append(
+                    IterationRecord(
+                        iteration=iteration,
+                        code=code,
+                        errors=errors,
+                        usage=corr_result.usage,
+                        rejected_response=rejected,
+                    )
+                )
+            if ctx.on_progress:
+                ctx.on_progress(
+                    candidate_id, iteration, errors, ctx.num_candidates, ctx.max_iterations
+                )
+    except (LLMCallError, ValidationCallError) as exc:
+        # Deliberately narrow: our own bugs must still abort loudly rather than
+        # being recorded here as an external failure. `or type(...)` because a
+        # zero-arg exception stringifies to "", which downstream truthiness
+        # checks would read as "no failure".
+        failure = str(exc) or type(exc).__name__
 
     return CandidateResult(
         candidate_id=candidate_id,
         final_code=code,
-        converged=not blocking,
-        iterations_used=len(error_history) - 1,
+        # `not blocking` alone is True before generation runs, so a candidate that
+        # produced nothing would claim convergence with empty code — and the run
+        # would report success.
+        converged=failure is None and not blocking,
+        # Empty history would give -1, which no Field(ge=0) would catch.
+        iterations_used=max(len(error_history) - 1, 0),
         error_history=error_history,
+        failure=failure,
     )
 
 

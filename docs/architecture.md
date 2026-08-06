@@ -289,7 +289,8 @@ completion); if a number matters, it comes from here.
 ```
 output/run_20260804_131453/
 ├── contract.txt              # the input contract, as submitted
-├── contract_final.symboleo   # the final draft (converged, or the last adopted attempt)
+├── contract_final.symboleo   # the final draft (converged, or the last adopted attempt);
+│                             # absent when a candidate produced no code at all
 ├── report.json               # everything below
 ├── config.yaml               # the config as loaded — rerunning replays the same
 │                             #   configuration (generation itself is stochastic)
@@ -306,14 +307,16 @@ into the first.
 `report.json`, top to bottom:
 
 - **Run level** — `success` (did any candidate converge), `input_file`,
-  `timestamp`, and rollups: `total_tokens`, `total_cost_usd`, and
+  `timestamp`, and rollups: `total_tokens`, `total_cost_usd`,
   `iterations_to_convergence` (from the first converged candidate; `null` if
-  none). **`total_cost_usd: null` means unknown** — the pinned LiteLLM version
-  had no pricing for the model — never "free".
+  none), and `failed_candidate_count` (candidates cut short by a failed
+  external call). **`total_cost_usd: null` means unknown** — the pinned
+  LiteLLM version had no pricing for the model — never "free".
 - **Per candidate** — `converged`, `iterations_used`, `final_code`,
   `final_error_count`/`final_warning_count` (blocking errors and warnings
-  lingering in the final draft — they partition its issues by severity), and
-  `error_history`.
+  lingering in the final draft — they partition its issues by severity),
+  `error_history`, and `failure` (`null` unless a failed LLM or validator call
+  cut the candidate short, in which case it holds that call's message).
 - **Per iteration** (inside `error_history`) — the `code` at that point, every
   validator issue (`severity`, `line`, `column`, `message`), the call's token
   `usage`, and — only when a correction was refused for containing no
@@ -329,7 +332,8 @@ A suite writes `output/suite_*/` rather than a single run directory: a
 suite-level `suite_report.json`, a reloadable `suite.yaml` beside the
 `contract.txt` it ran — the pair replays directly as
 `symboleo-tool suite contract.txt --config suite.yaml` — a `summary.csv`
-comparison (one row per experiment — convergence, iterations, tokens, cost),
+comparison (one row per experiment — convergence, iterations, failed
+candidates, tokens, cost),
 and one subdirectory per experiment in the single-run layout above (minus
 `contract.txt` — the suite keeps the one shared copy at the top level).
 
@@ -338,7 +342,9 @@ and one subdirectory per experiment in the single-run layout above (minus
 `converged: true` means exactly one thing: **the final draft has zero
 ERROR-severity issues from the SymboleoAC validator** — `final_error_count` is
 that count, nonzero exactly on a validated draft that failed. Warnings may
-remain (`final_warning_count` shows them); they do not block.
+remain (`final_warning_count` shows them); they do not block. A candidate with
+`failure` set is `converged: false` even when it shows zero recorded errors —
+its draft was cut short before validation, not validated clean.
 
 It does **not** mean the SymboleoAC faithfully models the source contract.
 That is a second, separate question — and by an explicit scope decision this
@@ -372,14 +378,13 @@ What happens when a stage does not come back clean:
 - **LLM calls are one attempt each.** There are no retries; every call has a
   total wall-clock timeout, and an empty provider response is an error rather
   than an empty draft. The validator subprocess has its own, shorter timeout.
-- **A provider or validator error mid-run aborts the whole run** — the output
-  directory is written only at the end, so completed iterations are lost and
-  their tokens are still billed. This is a known limitation with a recorded
-  fix direction (CLAUDE.md, *Known Issues*); until then, a crashed run leaves
-  no artifact.
+- **A provider or validator error mid-run fails that candidate, not the run** —
+  the candidate keeps its completed iterations and their tokens, records the
+  message that cut it short in `failure`, and the run completes and writes its
+  artifact. Only the tool's own bugs and a failed Java/JAR preflight abort the
+  run (CLAUDE.md, *Failed external calls*).
 - **A degenerate correction reply is not a failure** — the adoption gate
-  refuses it, records it, and retries (see the pipeline stages above). Only
-  transport-level errors abort.
+  refuses it, records it, and retries (see the pipeline stages above).
 - **Stopping a run is cooperative.** Cancelling (the UI's Stop, or the API's
   cancel endpoint) takes effect at the next checkpoint — before a candidate
   starts, or between correction iterations. An in-flight LLM call or validator

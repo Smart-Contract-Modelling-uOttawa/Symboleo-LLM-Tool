@@ -50,6 +50,7 @@ function pipelineResult(
     total_tokens: totals.tokens,
     total_cost_usd: totals.cost,
     iterations_to_convergence: converged ? iterations : null,
+    failed_candidate_count: 0,
     candidates: splits.map((split, index) => ({
       candidate_id: index,
       final_code: 'Contract C() {}',
@@ -229,13 +230,15 @@ describe('SuiteResultsPage', () => {
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
 
     const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
-    expect(rows[0]).toBe('experiment,converged,iterations_to_convergence,total_tokens,cost_usd')
+    expect(rows[0]).toBe(
+      'experiment,converged,iterations_to_convergence,failed_candidates,total_tokens,cost_usd'
+    )
     // Full rows, so the cost column and the column order are both pinned — a
     // trailing-comma prefix match left the cost cell free to be anything.
-    expect(rows[1]).toBe('zero-shot,true,2,1500,0.003')
+    expect(rows[1]).toBe('zero-shot,true,2,0,1500,0.003')
     // Not converged → empty iterations cell, and the experiment's own totals
     // (2000/0.004), not either candidate's.
-    expect(rows[2]).toBe('cot,false,,2000,0.004')
+    expect(rows[2]).toBe('cot,false,,0,2000,0.004')
   })
 
   it('shows where the server saved the suite', () => {
@@ -362,7 +365,7 @@ describe('SuiteResultsPage', () => {
     await user.click(screen.getByRole('button', { name: /Download CSV/ }))
 
     const rows = (mockTriggerDownload.mock.calls[0][0] as string).split('\n')
-    expect(rows[1]).toBe('"zero-shot, temp 0.2",true,2,1500,0.003')
+    expect(rows[1]).toBe('"zero-shot, temp 0.2",true,2,0,1500,0.003')
   })
 
   it('navigates to /experiments when New Suite is clicked', async () => {
