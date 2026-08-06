@@ -9,7 +9,7 @@
 
 ## Workflow
 1. Identify all parties and their roles.
-2. Identify all `<varName>` template placeholders — these represent parameterizable values (quantities, dates, amounts, addresses, etc.) and should become typed parameters in the `Contract(...)` declaration.
+2. Settle the contract's parameter list, including one for every `<varName>` placeholder.
 3. Identify all assets, events, and domain types required.
 4. Identify each obligation and each power (a right that changes contract state — to suspend, resume, or terminate) along with its antecedent conditions and trigger events; model a prohibition as an obligation not to do the thing.
 5. Map every element to the correct SymboleoAC construct.
