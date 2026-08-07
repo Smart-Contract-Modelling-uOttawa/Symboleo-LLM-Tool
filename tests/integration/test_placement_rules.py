@@ -620,10 +620,10 @@ def test_state_word_applied_to_norm_stays_legal(wrapper: SymboleoWrapper) -> Non
 
 def test_event_without_performer_fails(wrapper: SymboleoWrapper) -> None:
     # The entry point of the worst 2026-08-06 trap chain: omitting `performer`
-    # yields a message reading "must declare a Role-typed 'performer'", the
-    # model writes the literal `performer: Role`, and that parse error masks
-    # the file. Prevention at generation is why the AC bullet exists despite
-    # the message itself being actionable.
+    # yields a message reading "must declare a Role-typed 'performer'", models
+    # wrote the literal `performer: Role` in response, and that parse error
+    # masked the file. Prevention at generation is why the AC bullet exists
+    # despite the message itself being actionable.
     code = sub(
         contract(),
         "Delivered isAn Event with delDueDate: Date, performer: Seller;",

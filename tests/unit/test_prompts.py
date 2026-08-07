@@ -61,12 +61,13 @@ def test_grammar_omitted_when_none(any_strategy: PromptStrategy) -> None:
     assert "Grammar Reference" not in any_strategy.build_generation_prompt(ctx)
 
 
-# Names that reach the prompt ONLY through `reserved_names()`. `Asset` and
-# `Suspension` — the tokens models actually collided on — are unusable here:
-# both appear as static prose in _reserved_names.j2 (and `Asset` in
-# _output_format.j2), so asserting them passes even when the derived list is
-# empty, leaving the whole feature unfenced.
-_DERIVED_ONLY = ("`DataTransfer`", "`thirdParty`", "`UnsuccessfulTermination`")
+# Names that reach the prompt ONLY through `reserved_names()`. A token with any
+# static template occurrence is unusable here — `Asset` and `Suspension` (the
+# tokens models actually collided on) sit in _reserved_names.j2's prose, and
+# `Asset`/`DataTransfer` in _output_format.j2's ontology bullet — because
+# asserting one passes even when the derived list is empty, leaving the whole
+# feature unfenced.
+_DERIVED_ONLY = ("`thirdParty`", "`UnsuccessfulTermination`")
 
 
 def test_generation_includes_reserved_names(any_strategy: PromptStrategy) -> None:
@@ -304,14 +305,16 @@ _GENERIC_EXAMPLE_TOKENS = (
 
 def test_example_world_declares_the_attribute_it_assigns(any_strategy: PromptStrategy) -> None:
     # The Assign example uses `cargo.holder := recipient` — a use whose natural
-    # inferred declaration is the illegal base word (`holder: Role`), and that
-    # inference is immune to every downstream defense: written 6/6 times by
-    # Cohere at generation despite the bullet forbidding base-word types, and 0
-    # removals in 36 chances even with a validator hint naming the fix, because
-    # this prompt re-plants it every iteration. The declaration must therefore
-    # ship beside the use. Pinned in both stages (the correction prompt is
-    # where the re-planting happens), and against the concision rewrite
-    # planned in CLAUDE.md, whose trims must not include this clause.
+    # inferred declaration is the illegal base word (`holder: Role`). Before the
+    # example declared holder, that inference resisted every downstream defense:
+    # Cohere wrote it 6/6 times at generation despite the bullet forbidding
+    # base-word types, and survived 36 correction rounds unfixed even against an
+    # experimental jar whose appended hints named the remedy (hints the shipped
+    # lib/ jar does NOT carry) — because each correction prompt re-taught the
+    # undeclared use. So the declaration ships beside the use, in both stages
+    # (correction is where the re-teaching happened), pinned here against the
+    # concision rewrite planned in CLAUDE.md, whose trims must not include this
+    # clause.
     gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
     corr = any_strategy.build_correction_prompt(
         PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])

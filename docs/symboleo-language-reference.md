@@ -13,7 +13,7 @@ We had been discovering rules by watching the correction loop stall, writing a b
 Every claim below carries one:
 
 - **[S]** — *Sourced*: stated in a paper or official doc, with locus.
-- **[J]** — *JAR-verified*: executed against `lib/symboleo-cli.jar`. This is the shipped artifact, which is **newer than the public `SymboleoAC-IDE` clone** — the clone's `DOC.md` is stale and documents constructs the JAR rejects.
+- **[J]** — *JAR-verified*: executed against `lib/symboleo-cli.jar`, the shipped artifact, built from upstream `SymboleoAC-IDE` `main` at the SHA recorded in its refresh commit. Upstream's `DOC.md` lags its own implementation and documents constructs the JAR rejects — trust the JAR, not that document.
 - **[I]** — *Inferred*: our synthesis. Supporting evidence is named. Treat as a teaching device, not a citation.
 
 ---
