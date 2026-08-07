@@ -1,16 +1,39 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
 from symboleo_llm_tool.config.loader import load_config, load_suite_config
 
 # Every shipped config is load-checked below. `ui_config.yaml` is the only
 # exclusion: it is the frontend's model/parameter list, not a pipeline config.
 _UI_CONFIG = "ui_config.yaml"
-_SUITE_CONFIG = "suite_example.yaml"
-_SHIPPED_PIPELINE_CONFIGS = sorted(
-    p for p in Path("configs").glob("*.yaml") if p.name not in {_UI_CONFIG, _SUITE_CONFIG}
-)
+
+
+def _shipped_configs() -> tuple[list[Path], list[Path]]:
+    """Shipped configs split into (pipeline, suite) by shape, not by filename.
+
+    `experiments` is the key that decides which loader parses a file, so it is
+    the honest partition. A name list would need hand-editing for every new
+    suite file, and the failure is silent in the worse direction: the file gets
+    excluded from the pipeline list and load-checked by nothing.
+    """
+    pipeline, suite = [], []
+    for path in sorted(Path("configs").glob("*.yaml")):
+        if path.name == _UI_CONFIG:
+            continue
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        (suite if "experiments" in data else pipeline).append(path)
+    return pipeline, suite
+
+
+_SHIPPED_PIPELINE_CONFIGS, _SHIPPED_SUITE_CONFIGS = _shipped_configs()
+
+
+def test_both_shipped_kinds_are_present() -> None:
+    # An empty parametrize list passes vacuously, so a glob that stopped
+    # matching would silently retire every case below.
+    assert _SHIPPED_PIPELINE_CONFIGS and _SHIPPED_SUITE_CONFIGS
 
 
 @pytest.mark.parametrize("path", _SHIPPED_PIPELINE_CONFIGS, ids=lambda p: p.name)
@@ -21,11 +44,12 @@ def test_shipped_config_loads(path: Path) -> None:
     load_config(path)
 
 
-def test_shipped_suite_config_loads() -> None:
-    # Same guarantee for the one shipped SuiteConfig, which `load_config`
-    # cannot parse. The other suite tests below use an inline fixture, so
-    # nothing else reads this file.
-    load_suite_config(Path("configs") / _SUITE_CONFIG, "Seller shall deliver the goods.")
+@pytest.mark.parametrize("path", _SHIPPED_SUITE_CONFIGS, ids=lambda p: p.name)
+def test_shipped_suite_config_loads(path: Path) -> None:
+    # Same guarantee for the shipped SuiteConfigs, which `load_config` cannot
+    # parse. The other suite tests below use an inline fixture, so nothing else
+    # reads these files.
+    load_suite_config(path, "Seller shall deliver the goods.")
 
 
 _SUITE_YAML = """

@@ -1,6 +1,6 @@
-"""Reserved-name extraction from the bundled Symboleo grammar.
+"""Name extraction from the bundled Symboleo grammar.
 
-The list is derived, never hand-maintained: a name that stops or starts being
+Both lists are derived, never hand-maintained: a name that stops or starts being
 reserved must follow the grammar file automatically, because a stale hand list
 fails silently and in exactly the way the feature exists to prevent (an
 unrecoverable 1-ERROR plateau, see CLAUDE.md).
@@ -8,7 +8,9 @@ unrecoverable 1-ERROR plateau, see CLAUDE.md).
 
 import re
 
-from symboleo_llm_tool.prompts.grammar import load_grammar, reserved_names
+import pytest
+
+from symboleo_llm_tool.prompts.grammar import load_grammar, reserved_names, rule_literals
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -90,3 +92,55 @@ def test_reserved_names_nonempty_and_bounded() -> None:
 
 def test_reserved_names_is_cached() -> None:
     assert reserved_names() is reserved_names()
+
+
+def test_rule_literals_reads_one_rule_not_the_file() -> None:
+    assert set(rule_literals("OntologyType")) == {
+        "Asset",
+        "Event",
+        "Role",
+        "Contract",
+        "DataTransfer",
+    }
+    assert set(rule_literals("BaseType")) == {"Number", "String", "Date", "Boolean"}
+
+
+def test_rule_literals_separates_families_that_look_interchangeable() -> None:
+    # The property the trap detector depends on, and the one a hand-list gets
+    # wrong: these three overlap heavily without being equal. 'Violated' is an
+    # obligation event but not a PowerFunction, so it may not stand in a power's
+    # consequent; 'Exerted' is a power event only. Collapsing them either rejects
+    # valid contracts or accepts invalid ones, silently, in a research number.
+    power_functions = set(rule_literals("PowerFunction"))
+    assert "Violated" not in power_functions
+    assert {"Suspended", "Resumed", "Terminated", "Triggered", "Discharged"} <= power_functions
+    assert "Exerted" in set(rule_literals("PowerEventName"))
+    assert "Exerted" not in set(rule_literals("ObligationEventName"))
+
+
+def test_rule_literals_stops_at_the_rules_own_terminator() -> None:
+    # Rule bodies quote ';' as a literal, so a lazy `.*?;` regex would truncate
+    # at the first one and silently return a partial family.
+    assert "';'" in load_grammar(), "grammar no longer quotes a semicolon; this case is moot"
+    assert set(rule_literals("ContractEventName")) == {
+        "Activated",
+        "Suspended",
+        "Resumed",
+        "FulfilledObligations",
+        "RevokedParty",
+        "AssignedParty",
+        "Terminated",
+        "Rescinded",
+    }
+
+
+def test_rule_literals_rejects_an_unknown_rule() -> None:
+    # A refresh that renames a rule must fail loudly: an empty tuple would turn
+    # every use of that position into a match, or none of them.
+    with pytest.raises(ValueError, match="no rule named"):
+        rule_literals("NoSuchRule")
+
+
+def test_rule_literals_is_cached_per_rule() -> None:
+    assert rule_literals("BaseType") is rule_literals("BaseType")
+    assert rule_literals("BaseType") != rule_literals("OntologyType")
