@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper
+from symboleo_llm_tool.symboleo.wrapper import SymboleoWrapper, ValidationCallError
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def test_validate_parses_every_issue_preserving_order_and_severity(
 
 def test_validate_raises_when_the_cli_times_out(wrapper: SymboleoWrapper) -> None:
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="java", timeout=60)):
-        with pytest.raises(RuntimeError, match="timed out after 60 seconds"):
+        with pytest.raises(ValidationCallError, match="timed out after 60 seconds"):
             wrapper.validate("anything")
 
 
@@ -111,13 +111,13 @@ def test_validate_raises_when_errors_reported_without_output(wrapper: SymboleoWr
     # Exit code 1 promises an issue report; an empty stdout means the JAR broke
     # rather than "no issues", so it must not be read as a clean run.
     with patch("subprocess.run", return_value=_raw_result(1, "", stderr="boom")):
-        with pytest.raises(RuntimeError, match="produced no output"):
+        with pytest.raises(ValidationCallError, match="produced no output"):
             wrapper.validate("anything")
 
 
 def test_validate_raises_on_non_json_output(wrapper: SymboleoWrapper) -> None:
     with patch("subprocess.run", return_value=_raw_result(0, "Exception in thread main")):
-        with pytest.raises(RuntimeError, match="non-JSON output"):
+        with pytest.raises(ValidationCallError, match="non-JSON output"):
             wrapper.validate("anything")
 
 
@@ -126,7 +126,7 @@ def test_validate_raises_when_an_issue_is_missing_fields(wrapper: SymboleoWrappe
     # because swapping the JAR is a routine, documented operation.
     payload = {"summary": {}, "issues": [{"severity": "ERROR", "message": "no position fields"}]}
     with patch("subprocess.run", return_value=_mock_result(1, payload)):
-        with pytest.raises(RuntimeError, match="unexpected issue format"):
+        with pytest.raises(ValidationCallError, match="unexpected issue format"):
             wrapper.validate("anything")
 
 
@@ -141,7 +141,7 @@ def test_validate_raises_on_cli_failure(wrapper: SymboleoWrapper) -> None:
     m.stdout = ""
     m.stderr = "usage error"
     with patch("subprocess.run", return_value=m):
-        with pytest.raises(RuntimeError, match="SymboleoAC CLI error"):
+        with pytest.raises(ValidationCallError, match="SymboleoAC CLI error"):
             wrapper.validate("anything")
 
 
@@ -157,3 +157,24 @@ def test_preflight_raises_when_jar_missing(tmp_path: Path) -> None:
     with patch("shutil.which", return_value="/usr/bin/java"):
         with pytest.raises(RuntimeError, match="JAR not found"):
             SymboleoWrapper(jar_path=tmp_path / "missing.jar")
+
+
+def test_validate_raises_when_the_cli_cannot_be_spawned(wrapper: SymboleoWrapper) -> None:
+    # Preflight passed at construction, so a later OSError is transient and
+    # external — a full temp dir, a file lock, memory pressure under a
+    # concurrent suite — and must degrade the candidate, not the run.
+    with patch("subprocess.run", side_effect=OSError("cannot allocate memory")):
+        with pytest.raises(ValidationCallError, match="Could not invoke"):
+            wrapper.validate("code")
+
+
+def test_preflight_failure_stays_a_plain_runtime_error(tmp_path: Path) -> None:
+    # Pins the split's classification: ValidationCallError means *transient*,
+    # and a missing JAR is not. Preflight runs at construction in
+    # pipeline.run(), outside the candidate boundary, so it aborts regardless
+    # of type today — the plain RuntimeError is what keeps that abort if
+    # wrapper construction ever moves inside the boundary.
+    with patch("shutil.which", return_value="/usr/bin/java"):
+        with pytest.raises(RuntimeError) as exc_info:
+            SymboleoWrapper(jar_path=tmp_path / "missing.jar")
+    assert not isinstance(exc_info.value, ValidationCallError)

@@ -139,8 +139,17 @@ function SuiteView({ result }: { result: SuiteResult }) {
 }
 
 function ExperimentRow({ index, experiment }: { index: number; experiment: ExperimentResult }) {
-  const { success, total_tokens, total_cost_usd, iterations_to_convergence } = experiment.result
+  const {
+    success,
+    total_tokens,
+    total_cost_usd,
+    iterations_to_convergence,
+    failed_candidate_count,
+  } = experiment.result
   const candidates = experiment.result.candidates
+  // This table IS the comparison artifact, so an all-cut-short experiment must
+  // not read as a measured non-convergence here either.
+  const cutShort = candidates.length > 0 && failed_candidate_count === candidates.length
 
   return (
     <AccordionItem value={`experiment-${index}`} className="border rounded-lg px-4">
@@ -148,7 +157,7 @@ function ExperimentRow({ index, experiment }: { index: number; experiment: Exper
         <div className="flex items-center gap-3">
           <span className="font-medium">{experiment.name}</span>
           <Badge variant={success ? 'default' : 'destructive'}>
-            {success ? 'Converged' : 'Failed to converge'}
+            {success ? 'Converged' : cutShort ? 'Cut short' : 'Failed to converge'}
           </Badge>
           <span className="text-xs text-muted-foreground">
             {iterations_to_convergence !== null
@@ -176,13 +185,21 @@ function ExperimentRow({ index, experiment }: { index: number; experiment: Exper
 // ---------------------------------------------------------------------------
 
 function buildSummaryCsv(result: SuiteResult): string {
-  const header = 'experiment,converged,iterations_to_convergence,total_tokens,cost_usd'
+  const header =
+    'experiment,converged,iterations_to_convergence,failed_candidates,total_tokens,cost_usd'
   const rows = result.experiments.map(exp => {
-    const { success, iterations_to_convergence, total_tokens, total_cost_usd } = exp.result
+    const {
+      success,
+      iterations_to_convergence,
+      failed_candidate_count,
+      total_tokens,
+      total_cost_usd,
+    } = exp.result
     return [
       csvCell(exp.name),
       success,
       iterations_to_convergence ?? '',
+      failed_candidate_count,
       total_tokens,
       total_cost_usd ?? '',
     ].join(',')

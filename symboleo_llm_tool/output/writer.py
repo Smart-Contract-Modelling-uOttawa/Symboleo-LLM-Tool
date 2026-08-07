@@ -27,9 +27,13 @@ def _write_run(result: PipelineResult, config: PipelineConfig, dest_dir: Path) -
     multi = len(result.candidates) > 1
     for candidate in result.candidates:
         suffix = f"_candidate_{candidate.candidate_id}" if multi else ""
-        (dest_dir / f"contract{suffix}_final.symboleo").write_text(
-            candidate.final_code, encoding="utf-8"
-        )
+        # A candidate whose first call failed has no code; writing the empty
+        # string would leave a file a downstream `*.symboleo` glob reads as a
+        # contract. Same reasoning as the `_rejected.txt` extension below.
+        if candidate.final_code:
+            (dest_dir / f"contract{suffix}_final.symboleo").write_text(
+                candidate.final_code, encoding="utf-8"
+            )
 
         if config.output.save_intermediates and candidate.error_history:
             inter_dir = dest_dir / f"intermediates{suffix}"
@@ -118,7 +122,14 @@ def _summary_csv(result: SuiteResult) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(
-        ["experiment", "converged", "iterations_to_convergence", "total_tokens", "cost_usd"]
+        [
+            "experiment",
+            "converged",
+            "iterations_to_convergence",
+            "failed_candidates",
+            "total_tokens",
+            "cost_usd",
+        ]
     )
     for exp in result.experiments:
         r = exp.result
@@ -127,6 +138,7 @@ def _summary_csv(result: SuiteResult) -> str:
                 exp.name,
                 "true" if r.success else "false",
                 "" if r.iterations_to_convergence is None else r.iterations_to_convergence,
+                r.failed_candidate_count,
                 r.total_tokens,
                 "" if r.total_cost_usd is None else r.total_cost_usd,
             ]

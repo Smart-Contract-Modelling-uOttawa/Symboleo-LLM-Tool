@@ -296,11 +296,43 @@ def test_write_suite_summary_csv_mirrors_frontend_columns(tmp_path: Path) -> Non
     suite_dir = write_suite_results(_suite_result(), _suite(tmp_path))
 
     lines = (suite_dir / "summary.csv").read_text(encoding="utf-8").strip().split("\n")
-    assert lines[0] == "experiment,converged,iterations_to_convergence,total_tokens,cost_usd"
+    assert (
+        lines[0]
+        == "experiment,converged,iterations_to_convergence,failed_candidates,total_tokens,cost_usd"
+    )
     # Derived from the fixture: converged → "true" and the candidate's
-    # iterations_used (2); tokens are prompt + completion (30 + 12).
-    assert lines[1] == "zero-shot,true,2,42,0.005"
+    # iterations_used (2); no candidate was cut short, so 0; tokens are prompt +
+    # completion (30 + 12).
+    assert lines[1] == "zero-shot,true,2,0,42,0.005"
     # Not converged → "false", an empty iterations cell, and an empty cost cell
-    # (None means "not reported", which is distinct from 0.0).
-    assert lines[2] == "cot run,false,,87,"
+    # (None means "not reported", which is distinct from 0.0). The 0 in
+    # failed_candidates is what separates this from an experiment whose
+    # candidates all died on a provider timeout.
+    assert lines[2] == "cot run,false,,0,87,"
     assert len(lines) == 3  # header + 2 experiments
+
+
+def test_failed_candidate_with_no_code_writes_no_symboleo_file(tmp_path: Path) -> None:
+    # An empty final_code means the first call died before producing anything.
+    # Writing it would leave a 0-byte file that a `*.symboleo` glob reads as a
+    # contract — the same hazard the rejected-response `.txt` extension avoids.
+    result = PipelineResult(
+        success=False,
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="test.txt",
+        candidates=[
+            CandidateResult(
+                candidate_id=0,
+                final_code="",
+                converged=False,
+                iterations_used=0,
+                error_history=[],
+                failure="Timeout: provider died",
+            )
+        ],
+    )
+    run_dir = write_results(result, _config(tmp_path))
+
+    assert not (run_dir / "contract_final.symboleo").exists()
+    report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["candidates"][0]["failure"] == "Timeout: provider died"

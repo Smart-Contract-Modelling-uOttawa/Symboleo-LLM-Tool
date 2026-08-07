@@ -124,7 +124,13 @@ def run(
     except Exception as e:
         _fatal(f"Could not write results: {e}")
 
-    status = "[green]Success[/green]" if result.success else "[red]Failed to converge[/red]"
+    if result.success:
+        status = "[green]Success[/green]"
+    elif result.candidates and all(c.failure for c in result.candidates):
+        # "Failed to converge" would misdescribe a run that never got to try.
+        status = "[red]Failed — every candidate was cut short[/red]"
+    else:
+        status = "[red]Failed to converge[/red]"
     console.print(f"\n[bold]Result:[/bold] {status}")
 
     table = Table(show_header=True, header_style="bold")
@@ -142,6 +148,12 @@ def run(
         )
 
     console.print(table)
+
+    # Below the table rather than as a fifth column: a column would be blank in
+    # almost every run, and the message is too long for one.
+    for c in result.candidates:
+        if c.failure:
+            console.print(f"Candidate {c.candidate_id + 1} failed: {c.failure}", style="red")
 
     num_candidates = config.pipeline.num_candidates
     if config.pipeline.stop_on_first_convergence and len(result.candidates) < num_candidates:

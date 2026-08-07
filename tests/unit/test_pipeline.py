@@ -11,7 +11,9 @@ from symboleo_llm_tool.config.models import (
     RunConfig,
     StageConfig,
 )
+from symboleo_llm_tool.llm.base import LLMCallError
 from symboleo_llm_tool.pipeline import pipeline
+from symboleo_llm_tool.symboleo.wrapper import ValidationCallError
 from tests.helpers import make_generation, make_issue, make_usage
 
 # A stand-in for "the model returned a contract". Corrections are adopted only
@@ -581,3 +583,175 @@ def test_generation_without_a_contract_is_adopted_and_reported(mock_deps):
     assert candidate.final_code == "I cannot produce a contract."
     assert candidate.converged is False
     assert candidate.error_history[0].rejected_response is None
+
+
+# --- Failed external calls (provider / validator) ------------------------------
+
+
+def test_provider_error_mid_loop_records_a_failed_candidate_with_prior_iterations(mock_deps):
+    # The whole point: an exception on correction 1 used to destroy the run
+    # directory, the report, and the generation pass that had already succeeded.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [make_generation(_CODE), LLMCallError("Timeout: boom")]
+    mock_wrapper.validate.return_value = [make_issue()]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    candidate = result.candidates[0]
+    assert candidate.failure is not None and "boom" in candidate.failure
+    assert candidate.final_code == _CODE
+    assert len(candidate.error_history) == 1
+    assert candidate.iterations_used == 0
+    assert candidate.converged is False
+
+
+def test_provider_error_on_generation_records_an_empty_failed_candidate(mock_deps):
+    # Both traps at once. `converged=not blocking` is True here because nothing
+    # ever populated `blocking`, which would report a candidate that produced no
+    # code as converged; and `len(error_history) - 1` is -1 with no history, a
+    # value no Field(ge=0) guards.
+    _, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = LLMCallError("Timeout: boom")
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    candidate = result.candidates[0]
+    assert candidate.converged is False
+    assert candidate.iterations_used == 0
+    assert candidate.final_code == ""
+    assert candidate.error_history == []
+    assert candidate.failure is not None
+
+
+def test_failed_candidate_does_not_make_the_run_successful(mock_deps):
+    _, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = LLMCallError("Timeout: boom")
+
+    result = pipeline.run("contract text", _make_config(num_candidates=1, max_iterations=3))
+
+    assert result.success is False
+    assert result.failed_candidate_count == 1
+
+
+def test_a_sibling_converges_when_another_candidate_fails(mock_deps):
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [LLMCallError("Timeout: boom"), make_generation(_CODE)]
+    mock_wrapper.validate.return_value = []
+
+    result = pipeline.run("contract text", _make_config(num_candidates=2, max_iterations=3))
+
+    assert result.success is True
+    assert result.candidates[0].failure is not None
+    assert result.candidates[1].failure is None
+    assert result.candidates[1].converged is True
+    assert result.failed_candidate_count == 1
+
+
+def test_failed_candidate_keeps_the_tokens_it_spent(mock_deps):
+    # The calls that succeeded were billed; dropping them would understate cost
+    # in exactly the runs that waste the most of it.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE, usage=make_usage(prompt_tokens=100, completion_tokens=50)),
+        LLMCallError("Timeout: boom"),
+    ]
+    mock_wrapper.validate.return_value = [make_issue()]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    assert result.candidates[0].total_tokens == 150
+
+
+def test_a_non_provider_exception_still_aborts_the_run(mock_deps):
+    # The fence on the catch's narrowness. Widening it to `except Exception`
+    # would write this bug into report.json as an external failure — quiet
+    # corruption in place of a loud crash.
+    _, mock_llm, _ = mock_deps
+    mock_llm.generate.side_effect = AttributeError("bug in our own code")
+
+    with pytest.raises(AttributeError):
+        pipeline.run("contract text", _make_config(max_iterations=3))
+
+
+def test_exhausted_candidate_has_no_failure(mock_deps):
+    # Negative control: running out of iterations is not a failed call, and the
+    # two must stay distinguishable or the artifact cannot tell them apart.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation(_CODE)
+    mock_wrapper.validate.return_value = [make_issue()]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=2))
+
+    candidate = result.candidates[0]
+    assert candidate.converged is False
+    assert candidate.failure is None
+    assert result.failed_candidate_count == 0
+
+
+def test_validator_failure_mid_loop_records_a_failed_candidate(mock_deps):
+    # The JAR is the other external call in the loop; a transient validate
+    # failure must degrade the same way a provider one does.
+    mock_wrapper, mock_llm, _ = mock_deps
+    # The two stages return DIFFERENT contracts, or the desync assertion below
+    # could not fail: with one shared code, iteration 0's record already agrees
+    # with final_code.
+    corrected = _CODE.replace("Contract C", "Contract C2")
+    usage = make_usage(prompt_tokens=100, completion_tokens=10)
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE, usage=usage),
+        make_generation(corrected, usage=usage),
+    ]
+    mock_wrapper.validate.side_effect = [
+        [make_issue()],
+        ValidationCallError("SymboleoAC CLI timed out after 60 seconds"),
+    ]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    candidate = result.candidates[0]
+    assert candidate.failure is not None and "timed out" in candidate.failure
+    assert candidate.converged is False
+    # The correction call was billed and its adopted code is what `final_code`
+    # holds, so its record must exist: without the `finally` around validate,
+    # the history ends at iteration 0 and disagrees with final_code.
+    assert len(candidate.error_history) == 2
+    assert candidate.final_code == corrected
+    assert candidate.error_history[-1].code == candidate.final_code
+    assert candidate.total_tokens == 220
+
+
+def test_validator_failure_on_the_generation_pass_still_records_its_call(mock_deps):
+    # The generation call succeeded and was billed before the JAR died. Dropping
+    # its record would zero the tokens AND leave `final_code` — a real contract,
+    # written to disk — accounted for by no iteration at all.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation(
+        _CODE, usage=make_usage(prompt_tokens=100, completion_tokens=10)
+    )
+    mock_wrapper.validate.side_effect = ValidationCallError("CLI returned non-JSON output")
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3))
+
+    candidate = result.candidates[0]
+    assert candidate.converged is False
+    assert candidate.iterations_used == 0
+    assert candidate.final_code == _CODE
+    assert len(candidate.error_history) == 1
+    assert candidate.error_history[0].code == _CODE
+    assert candidate.error_history[0].errors == []  # never validated
+    assert candidate.total_tokens == 110
+
+
+def test_cancelled_candidate_is_not_recorded_as_failed(mock_deps):
+    # Cancellation returns None rather than raising, so it can never enter the
+    # except; this pins that a cancelled run yields no candidates at all.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation(_CODE)
+    mock_wrapper.validate.return_value = []
+    token = CancellationToken()
+    token.cancel()
+
+    result = pipeline.run("contract text", _make_config(max_iterations=3), cancel=token)
+
+    assert result.candidates == []
+    assert result.failed_candidate_count == 0

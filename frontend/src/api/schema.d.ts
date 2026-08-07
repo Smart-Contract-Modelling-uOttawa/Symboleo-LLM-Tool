@@ -160,6 +160,8 @@ export interface components {
             iterations_used: number;
             /** Error History */
             error_history: components["schemas"]["IterationRecord"][];
+            /** Failure */
+            failure?: string | null;
             /** Total Tokens */
             readonly total_tokens: number;
             /** Total Cost Usd */
@@ -301,6 +303,16 @@ export interface components {
             readonly total_cost_usd: number | null;
             /** Iterations To Convergence */
             readonly iterations_to_convergence: number | null;
+            /**
+             * Failed Candidate Count
+             * @description Candidates cut short by a failed external call.
+             *
+             *     Exists for ``summary.csv``: without it an experiment whose candidates all
+             *     timed out is byte-identical there to one that legitimately failed to
+             *     converge, which would reinstate inside the comparison artifact the very
+             *     survivorship bias the failure field removes.
+             */
+            readonly failed_candidate_count: number;
         };
         /** ProgressEvent */
         ProgressEvent: {

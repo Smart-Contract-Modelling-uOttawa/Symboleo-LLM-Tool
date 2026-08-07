@@ -13,6 +13,18 @@ _EXIT_CODE_VALIDATION_ERRORS = 1
 _EXIT_CODE_USAGE_ERROR = 2
 
 
+class ValidationCallError(RuntimeError):
+    """A validator invocation failed, as opposed to reporting issues.
+
+    Raised by ``validate`` only, never by ``_preflight``. The pipeline records a
+    failed candidate for this and keeps the iterations already completed.
+    Preflight failures (no Java, no JAR) abort regardless of type — they happen
+    at construction in ``pipeline.run()``, outside the candidate boundary — and
+    their plain ``RuntimeError`` keeps the classification honest: this class
+    means *transient*, and a missing JAR is not.
+    """
+
+
 class SymboleoWrapper:
     def __init__(self, jar_path: Path, java_executable: str = "java") -> None:
         self._jar = jar_path
@@ -46,19 +58,24 @@ class SymboleoWrapper:
                 text=True,
                 timeout=_SUBPROCESS_TIMEOUT_SECONDS,
             )
+        except OSError as e:
+            # Spawn failure after a successful preflight — memory pressure, a
+            # file lock, a full temp dir. Transient and external, so it degrades
+            # the candidate rather than the run.
+            raise ValidationCallError(f"Could not invoke the SymboleoAC CLI: {e}") from e
         except subprocess.TimeoutExpired as e:
-            raise RuntimeError(
+            raise ValidationCallError(
                 f"SymboleoAC CLI timed out after {_SUBPROCESS_TIMEOUT_SECONDS} seconds"
             ) from e
         finally:
             tmp_path.unlink(missing_ok=True)
 
         if result.returncode == _EXIT_CODE_USAGE_ERROR:
-            raise RuntimeError(f"SymboleoAC CLI error: {result.stderr.strip()}")
+            raise ValidationCallError(f"SymboleoAC CLI error: {result.stderr.strip()}")
 
         stdout = result.stdout.strip()
         if result.returncode == _EXIT_CODE_VALIDATION_ERRORS and not stdout:
-            raise RuntimeError(
+            raise ValidationCallError(
                 f"SymboleoAC CLI exited with errors but produced no output. "
                 f"stderr: {result.stderr.strip()}"
             )
@@ -68,8 +85,10 @@ class SymboleoWrapper:
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"SymboleoAC CLI returned non-JSON output: {stdout!r}") from e
+            raise ValidationCallError(f"SymboleoAC CLI returned non-JSON output: {stdout!r}") from e
         try:
             return [SymboleoIssue(**issue) for issue in data.get("issues", [])]
         except (ValidationError, TypeError) as e:
-            raise RuntimeError(f"SymboleoAC CLI returned unexpected issue format: {e}") from e
+            raise ValidationCallError(
+                f"SymboleoAC CLI returned unexpected issue format: {e}"
+            ) from e

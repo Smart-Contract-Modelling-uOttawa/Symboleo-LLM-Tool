@@ -219,3 +219,33 @@ def test_computed_rollups_serialize_into_the_dump() -> None:
     assert dumped["candidates"][0]["total_tokens"] == 700
     assert dumped["candidates"][0]["final_warning_count"] == 0
     assert dumped["candidates"][0]["final_error_count"] == 0
+
+
+def test_failed_candidate_count_counts_only_failures() -> None:
+    # The separation the summary CSV depends on: an exhausted candidate and a
+    # cut-short one both report converged=False, and only the latter counts.
+    result = PipelineResult(
+        success=False,
+        timestamp=datetime(2026, 1, 1),
+        input_file="c.txt",
+        candidates=[
+            CandidateResult(
+                candidate_id=0,
+                final_code="x",
+                converged=False,
+                iterations_used=3,
+                error_history=[],
+            ),
+            CandidateResult(
+                candidate_id=1,
+                final_code="",
+                converged=False,
+                iterations_used=0,
+                error_history=[],
+                failure="Timeout: boom",
+            ),
+        ],
+    )
+
+    assert result.failed_candidate_count == 1
+    assert result.model_dump()["failed_candidate_count"] == 1
