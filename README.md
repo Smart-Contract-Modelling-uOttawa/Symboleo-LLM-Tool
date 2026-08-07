@@ -107,6 +107,28 @@ To compare how *much* contract runs produced — convergence is blind to size:
 uv run python scripts/richness_sweep.py
 ```
 
+After changing a prompt template, check the change reached the models — one
+suite per contract (both provider arms, three candidates each), then a census of
+how each candidate's error count moved:
+
+```bash
+# One contract. Costs contracts x arms x candidates x (1 + max_iterations) LLM
+# calls, so name them deliberately. Arms live in configs/prompt_probe.yaml.
+uv run python scripts/prompt_probe.py contracts/equipment_loan.txt
+
+# Several — each gets its own suite directory, run one after another.
+uv run python scripts/prompt_probe.py contracts/Vaccine.txt contracts/Energy.txt --csv probe.csv
+
+# Re-read finished runs instead, spending nothing. Takes run_* dirs too.
+uv run python scripts/prompt_probe.py --census output/suite_<timestamp>
+```
+
+The `errors` cell is the ERROR count at each iteration (`20>8>4>0` converged;
+`20>20>20>20` never moved), and `stalled` marks a candidate whose last
+correction reduced nothing. Every non-converged candidate then prints its final
+blocking errors with their source lines — that output is the analysis, and the
+census deliberately does not try to classify it for you.
+
 ## Configuration
 
 Config files live in `configs/`. Copy `configs/example.yaml` as a starting point:

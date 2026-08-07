@@ -229,6 +229,7 @@ _PLACEMENT_RULES = (
     "qualifies it with the type name",  # Quality(PRIME) at every use site
     "never legal in any position",  # the Type.MEMBER dot form, anywhere
     "there are no standalone values",  # no `x: Date := ...` / `x := ...`
+    "belongs to no instance",  # ...and the parameter list is where it goes instead
     "only date-arithmetic construct",  # Date.add form + no infix `d + N days`
     "expects a time point",  # where Date.add IS allowed
     "may NOT appear in a comparison",  # where it is not
@@ -244,6 +245,8 @@ _PLACEMENT_RULES = (
     "only in a declaration binding",  # a Date literal not in predicate positions
     "never applies its type to it",  # Happens(Conveyed(conveyed)) / Happens(Conveyed)
     'even though the validator calls it "Role-typed"',  # the induced performer: Role
+    "a state change is all it can be",  # Assign/Happens/propositions illegal in a P consequent
+    "the alias only renames",  # no `with` list on a base-type alias
 )
 
 

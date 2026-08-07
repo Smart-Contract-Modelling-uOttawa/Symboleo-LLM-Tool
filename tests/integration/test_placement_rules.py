@@ -235,13 +235,44 @@ def test_enum_dot_form_rejected_at_a_use_site(wrapper: SymboleoWrapper) -> None:
     [
         "  delDue: Date := Date.add(effDate, delDays, days);\n",
         "  delDue := Date.add(effDate, delDays, days);\n",
+        # The `with` forms. Models reach for these once the `:=` form is
+        # refused, and the earlier version of this case pinned only the two
+        # above — the same blind spot the bullet had, so the fence agreed with
+        # the prompt instead of checking it. All four base types, since the
+        # bullet now generalises across them rather than naming Date.
+        "  fee: Number;\n",
+        "  fee: Number with := 5;\n",
+        "  fee: Number with fee := 5;\n",
+        '  note: String with note := "";\n',
+        "  flag: Boolean with flag := false;\n",
+        '  due: Date with due := Date("2026/01/31 00:00:00");\n',
     ],
 )
 def test_standalone_value_declaration_rejected(wrapper: SymboleoWrapper, declaration: str) -> None:
-    # No base-typed or untyped variables: a date must be an attribute of a
-    # domain type. Both forms the prompt calls out are covered.
+    # No base-typed or untyped variables: the value must be an attribute of a
+    # domain type, or a contract parameter.
     code = sub(contract(), "Obligations", declaration + "Obligations")
     assert errors(wrapper, code)
+
+
+def test_a_value_that_belongs_to_no_instance_is_a_contract_parameter(
+    wrapper: SymboleoWrapper,
+) -> None:
+    # The legal home the bullet now names, and the half that makes the rule
+    # actionable: without it the prompt refuses every form a model can write
+    # and offers nothing in their place. `delDays: Number` in BASE already
+    # proves base-typed parameters parse; this pins that a proposition may use
+    # one directly, with no declaration standing between.
+    code = sub(
+        sub(
+            contract(consequent="goods.qty == lateFee"),
+            "delDays: Number)",
+            "delDays: Number, lateFee: Number)",
+        ),
+        "",
+        "",
+    )
+    assert errors(wrapper, code) == []
 
 
 @pytest.mark.parametrize(
@@ -503,6 +534,53 @@ def test_date_literal_in_predicate_time_position_fails(wrapper: SymboleoWrapper)
 def test_date_literal_in_declaration_binding_is_legal(wrapper: SymboleoWrapper) -> None:
     # The literal's one legal home, and the form the amended bullet prescribes.
     code = sub(contract(), "Date.add(effDate, delDays, days)", 'Date("2026/10/01 00:00:00")')
+    assert errors(wrapper, code) == []
+
+
+# --- Power consequents and base-type aliases (2026-08-07 sweep) ---------------
+
+# The legal side of the power-consequent boundary — P(..., Terminated(self)) —
+# is already pinned by test_state_word_applied_to_norm_stays_legal's fixture.
+
+
+def test_assign_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # Both models over-applied the O-side Assign teaching here in the
+    # cross-contract sweep and froze on the opaque message. The Power rule's
+    # consequent is PowerFunction, which admits only the state-change forms.
+    power = "Powers\n  p1: P(buyer, seller, true, Assign(goods.qty := 2));\n"
+    msgs = errors(wrapper, contract(extra=power))
+    assert msgs
+    assert any("no viable alternative at input 'Assign'" in m for m in msgs)
+
+
+def test_happens_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # The other over-application observed: an awaited event as a P consequent.
+    power = "Powers\n  p1: P(buyer, seller, true, Happens(delivered));\n"
+    assert errors(wrapper, contract(extra=power))
+
+
+def test_proposition_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # A full proposition fares no better than a lone predicate.
+    power = "Powers\n  p1: P(buyer, seller, true, Happens(delivered) and goods.qty == 1);\n"
+    assert errors(wrapper, contract(extra=power))
+
+
+def test_alias_with_attributes_fails(wrapper: SymboleoWrapper) -> None:
+    # `Quantity isA Number with amount: Number` froze a Vaccine run for all
+    # five corrections; an alias renames a base type and takes no with-list.
+    code = sub(
+        contract(),
+        "Goods isAn Asset",
+        "Amount isA Number with x: Number;\n  Goods isAn Asset",
+    )
+    msgs = errors(wrapper, code)
+    assert msgs
+    assert any("mismatched input 'with'" in m for m in msgs)
+
+
+def test_bare_alias_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The form the bullet prescribes, pinned so the pair brackets the boundary.
+    code = sub(contract(), "Goods isAn Asset", "Amount isA Number;\n  Goods isAn Asset")
     assert errors(wrapper, code) == []
 
 

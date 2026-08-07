@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=schemas/suite.schema.json
+# Prompt-regression probe — does a prompt change actually change what models do?
+#
+# One contract, both provider families, three independent candidates each:
+#   symboleo-tool suite contracts/equipment_loan.txt --config configs/prompt_probe.yaml
+#
+# For the whole matrix in one command (several contracts, plus the trap census):
+#   uv run python scripts/prompt_probe.py contracts/equipment_loan.txt contracts/Vaccine.txt
+#
+# Two arms because the same trap rarely survives in both — a rule that lands on
+# one model and not the other is the common outcome, and a single-arm probe
+# reports it as a clean pass or a clean failure.
+#
+# Three candidates because generation error counts swing hard at this
+# temperature: an unchanged control cell moved 42 -> 13 errors between two runs
+# on 2026-08-07, which is more than most prompt effects. One reading per cell
+# cannot separate the two.
+#
+# Cost: candidates x arms x (1 + max_iterations) calls per contract, worst case
+# 36. Lower `num_candidates` before adding contracts if that matters.
+
+# 2 arms x 3 candidates, so every cell of one contract runs at once.
+max_concurrency: 6
+
+experiments:
+  - name: gpt
+    config:
+      pipeline:
+        num_candidates: 3
+        max_iterations: 5
+        # Must stay false: convergence would truncate the replicates this
+        # config exists to collect.
+        stop_on_first_convergence: false
+      generation:
+        # Temperature 0.2, not the 0.7 seed: at 0.7 run-to-run variance swamps
+        # prompt effects, so a comparison measures sampling noise. See CLAUDE.md,
+        # "compare prompts at low temperature".
+        llm: &gpt
+          provider: openai
+          model: gpt-4o-mini
+          temperature: 0.2
+        # zero_shot on both stages: few_shot would show the model worked
+        # examples, and an example is a stronger signal than any rule text —
+        # the probe would then measure the corpus, not the prompt.
+        strategy: zero_shot
+      correction:
+        llm: *gpt
+        strategy: zero_shot
+      output:
+        save_intermediates: true
+
+  - name: cohere
+    config:
+      pipeline:
+        num_candidates: 3
+        max_iterations: 5
+        stop_on_first_convergence: false
+      generation:
+        llm: &cohere
+          provider: cohere
+          model: command-a-03-2025
+          temperature: 0.2
+        strategy: zero_shot
+      correction:
+        llm: *cohere
+        strategy: zero_shot
+      output:
+        save_intermediates: true
