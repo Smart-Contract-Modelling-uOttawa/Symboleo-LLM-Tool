@@ -59,8 +59,6 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("base_type_reference", re.compile(rf":\s*(?:{_ONTOLOGY})\b\s*[,;)]")),
     # "the alias only renames, so `isA Number with <attrs>` does not parse"
     ("alias_with_attributes", re.compile(rf"\bisA\s+(?:{_BASE_TYPES})\s+with\b")),
-    # "`<name>: <Type> := <value>` does not parse"
-    ("wholesale_assignment", re.compile(r"^\s*\w+\s*:\s*\w+\s*:=", re.MULTILINE)),
     # "a literal in a predicate is a parse error"
     (
         "date_literal_in_predicate",
@@ -76,6 +74,31 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # "the dot form `CargoGrade.PREMIUM` is never legal in any position"
     ("dotted_enum_member", re.compile(r"\b[A-Z]\w*\.[A-Z][A-Z0-9_]+\b")),
 ]
+
+# Applied to the Declarations block alone, because the identical text is legal
+# elsewhere: `delDays: Number` is a valid contract parameter and a valid domain
+# attribute, and both can sit on their own line when a model wraps a long list.
+# A whole-text pattern cannot tell those from a declaration.
+_DECLARATION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # "`<name>: <Type> := <value>` does not parse"
+    ("wholesale_assignment", re.compile(r"^\s*\w+\s*:\s*\w+\s*:=", re.MULTILINE)),
+    # "every declared variable is an instance of a domain type, so there are no
+    # standalone values" — the *type* is what makes it illegal, not the
+    # assignment, so this covers every shape a model reaches for (bare, `:= v`,
+    # `with := v`, `with <attr> := v`), where the wholesale pattern sees one.
+    ("base_type_declaration", re.compile(rf"^\s*\w+\s*:\s*(?:{_BASE_TYPES})\b", re.MULTILINE)),
+]
+
+# Everything the Declarations block can be followed by. `Declarations` is
+# optional in the grammar; when it is absent there is nothing to scope to and
+# these two labels simply do not fire — under-reporting, like the module's
+# other caveats.
+_NEXT_SECTION = re.compile(
+    r"^\s*(?:Preconditions|Postconditions|Obligations|Surviving\s+Obligations"
+    r"|Powers|ACPolicy|Constraints|endContract)\b",
+    re.MULTILINE,
+)
+_DECLARATIONS_HEADER = re.compile(r"^\s*Declarations\s*$", re.MULTILINE)
 
 # "a predicate takes that instance and never applies its type to it"
 _HAPPENS_ARGUMENT = re.compile(r"Happens\(\s*([A-Z]\w*)\s*\(")
@@ -122,9 +145,21 @@ def _consequents(code: str, clause: re.Pattern[str]) -> list[str]:
     return consequents
 
 
+def _declarations(code: str) -> str:
+    """The Declarations block, or empty when the contract has no such section."""
+    header = _DECLARATIONS_HEADER.search(code)
+    if header is None:
+        return ""
+    rest = code[header.end() :]
+    end = _NEXT_SECTION.search(rest)
+    return rest[: end.start()] if end else rest
+
+
 def scan(code: str) -> list[str]:
     """Labels of every taught rule ``code`` breaks, sorted and deduplicated."""
     found = {label for label, pattern in _PATTERNS if pattern.search(code)}
+    block = _declarations(code)
+    found |= {label for label, pattern in _DECLARATION_PATTERNS if pattern.search(block)}
 
     if any(name not in _NORM_EVENTS for name in _HAPPENS_ARGUMENT.findall(code)):
         found.add("type_applied_to_instance")

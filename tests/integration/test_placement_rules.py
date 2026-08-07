@@ -235,13 +235,44 @@ def test_enum_dot_form_rejected_at_a_use_site(wrapper: SymboleoWrapper) -> None:
     [
         "  delDue: Date := Date.add(effDate, delDays, days);\n",
         "  delDue := Date.add(effDate, delDays, days);\n",
+        # The `with` forms. Models reach for these once the `:=` form is
+        # refused, and the earlier version of this case pinned only the two
+        # above — the same blind spot the bullet had, so the fence agreed with
+        # the prompt instead of checking it. All four base types, since the
+        # bullet now generalises across them rather than naming Date.
+        "  fee: Number;\n",
+        "  fee: Number with := 5;\n",
+        "  fee: Number with fee := 5;\n",
+        '  note: String with note := "";\n',
+        "  flag: Boolean with flag := false;\n",
+        '  due: Date with due := Date("2026/01/31 00:00:00");\n',
     ],
 )
 def test_standalone_value_declaration_rejected(wrapper: SymboleoWrapper, declaration: str) -> None:
-    # No base-typed or untyped variables: a date must be an attribute of a
-    # domain type. Both forms the prompt calls out are covered.
+    # No base-typed or untyped variables: the value must be an attribute of a
+    # domain type, or a contract parameter.
     code = sub(contract(), "Obligations", declaration + "Obligations")
     assert errors(wrapper, code)
+
+
+def test_a_value_that_belongs_to_no_instance_is_a_contract_parameter(
+    wrapper: SymboleoWrapper,
+) -> None:
+    # The legal home the bullet now names, and the half that makes the rule
+    # actionable: without it the prompt refuses every form a model can write
+    # and offers nothing in their place. `delDays: Number` in BASE already
+    # proves base-typed parameters parse; this pins that a proposition may use
+    # one directly, with no declaration standing between.
+    code = sub(
+        sub(
+            contract(consequent="goods.qty == lateFee"),
+            "delDays: Number)",
+            "delDays: Number, lateFee: Number)",
+        ),
+        "",
+        "",
+    )
+    assert errors(wrapper, code) == []
 
 
 @pytest.mark.parametrize(

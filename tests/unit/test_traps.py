@@ -48,8 +48,25 @@ PAIRS = [
     ),
     (
         "wholesale_assignment",
-        "  dueDate: Date := Date.add(effDate, delDays, days);",
-        "  delivered: Delivered with dueDate := Date.add(effDate, delDays, days);",
+        "Declarations\n  dueDate: Delivered := someDelivery;\nObligations\n",
+        "Declarations\n  delivered: Delivered with dueDate := effDate;\nObligations\n",
+    ),
+    (
+        "base_type_declaration",
+        "Declarations\n  fee: Number := 5;\nObligations\n",
+        "Declarations\n  goods: Goods with fee := 5;\nObligations\n",
+    ),
+    (
+        # The two shapes that froze the Atos gpt arm and that the wholesale
+        # pattern does not match: `with` intervenes before the `:=`.
+        "base_type_declaration",
+        'Declarations\n  note: String with := "";\nObligations\n',
+        'Declarations\n  goods: Goods with note := "";\nObligations\n',
+    ),
+    (
+        "base_type_declaration",
+        'Declarations\n  note: String with note := "";\nObligations\n',
+        'Declarations\n  goods: Goods with note := "", qty := 1;\nObligations\n',
     ),
     (
         "date_literal_in_predicate",
@@ -132,10 +149,28 @@ def test_every_label_has_a_pair() -> None:
     a case here reds immediately, which is the only moment the omission is
     cheap to notice.
     """
-    from symboleo_llm_tool.output.traps import _PATTERNS
+    from symboleo_llm_tool.output.traps import _DECLARATION_PATTERNS, _PATTERNS
 
-    labels = {label for label, _ in _PATTERNS} | DERIVED_LABELS
+    labels = {label for label, _ in _PATTERNS + _DECLARATION_PATTERNS} | DERIVED_LABELS
     assert labels == {label for label, _, _ in PAIRS}
+
+
+def test_declaration_rules_do_not_fire_outside_declarations() -> None:
+    """The same text is legal as a parameter and as a domain attribute.
+
+    Both are routinely wrapped onto their own line in real output, so a
+    whole-text pattern reports a correct contract as broken — and this label
+    exists to measure a failure that is already the dominant one.
+    """
+    legal = (
+        "Contract C (\n  sellerP: Seller,\n  delDays: Number)\n"
+        "Declarations\n  goods: Goods with qty := 1;\nObligations\n"
+    )
+    assert scan(legal) == []
+    attributes = (
+        "Domain D\n  Goods isAn Asset with\n    qty: Number,\n    note: String;\nendDomain\n"
+    )
+    assert scan(attributes) == []
 
 
 def test_clean_code_scans_clean() -> None:

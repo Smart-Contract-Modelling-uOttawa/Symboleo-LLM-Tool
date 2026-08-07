@@ -229,6 +229,7 @@ _PLACEMENT_RULES = (
     "qualifies it with the type name",  # Quality(PRIME) at every use site
     "never legal in any position",  # the Type.MEMBER dot form, anywhere
     "there are no standalone values",  # no `x: Date := ...` / `x := ...`
+    "belongs to no instance",  # ...and the parameter list is where it goes instead
     "only date-arithmetic construct",  # Date.add form + no infix `d + N days`
     "expects a time point",  # where Date.add IS allowed
     "may NOT appear in a comparison",  # where it is not
