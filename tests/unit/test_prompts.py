@@ -244,6 +244,8 @@ _PLACEMENT_RULES = (
     "only in a declaration binding",  # a Date literal not in predicate positions
     "never applies its type to it",  # Happens(Conveyed(conveyed)) / Happens(Conveyed)
     'even though the validator calls it "Role-typed"',  # the induced performer: Role
+    "a state change is all it can be",  # Assign/Happens/propositions illegal in a P consequent
+    "the alias only renames",  # no `with` list on a base-type alias
 )
 
 

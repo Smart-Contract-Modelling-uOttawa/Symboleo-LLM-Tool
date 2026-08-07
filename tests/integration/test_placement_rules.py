@@ -506,6 +506,53 @@ def test_date_literal_in_declaration_binding_is_legal(wrapper: SymboleoWrapper) 
     assert errors(wrapper, code) == []
 
 
+# --- Power consequents and base-type aliases (2026-08-07 sweep) ---------------
+
+# The legal side of the power-consequent boundary — P(..., Terminated(self)) —
+# is already pinned by test_state_word_applied_to_norm_stays_legal's fixture.
+
+
+def test_assign_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # Both models over-applied the O-side Assign teaching here in the
+    # cross-contract sweep and froze on the opaque message. The Power rule's
+    # consequent is PowerFunction, which admits only the state-change forms.
+    power = "Powers\n  p1: P(buyer, seller, true, Assign(goods.qty := 2));\n"
+    msgs = errors(wrapper, contract(extra=power))
+    assert msgs
+    assert any("no viable alternative at input 'Assign'" in m for m in msgs)
+
+
+def test_happens_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # The other over-application observed: an awaited event as a P consequent.
+    power = "Powers\n  p1: P(buyer, seller, true, Happens(delivered));\n"
+    assert errors(wrapper, contract(extra=power))
+
+
+def test_proposition_in_power_consequent_fails(wrapper: SymboleoWrapper) -> None:
+    # A full proposition fares no better than a lone predicate.
+    power = "Powers\n  p1: P(buyer, seller, true, Happens(delivered) and goods.qty == 1);\n"
+    assert errors(wrapper, contract(extra=power))
+
+
+def test_alias_with_attributes_fails(wrapper: SymboleoWrapper) -> None:
+    # `Quantity isA Number with amount: Number` froze a Vaccine run for all
+    # five corrections; an alias renames a base type and takes no with-list.
+    code = sub(
+        contract(),
+        "Goods isAn Asset",
+        "Amount isA Number with x: Number;\n  Goods isAn Asset",
+    )
+    msgs = errors(wrapper, code)
+    assert msgs
+    assert any("mismatched input 'with'" in m for m in msgs)
+
+
+def test_bare_alias_is_legal(wrapper: SymboleoWrapper) -> None:
+    # The form the bullet prescribes, pinned so the pair brackets the boundary.
+    code = sub(contract(), "Goods isAn Asset", "Amount isA Number;\n  Goods isAn Asset")
+    assert errors(wrapper, code) == []
+
+
 # --- Predicate arguments and the AC attribute requirements --------------------
 
 
