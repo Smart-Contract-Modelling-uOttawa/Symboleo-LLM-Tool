@@ -109,7 +109,7 @@ uv run python scripts/richness_sweep.py
 
 After changing a prompt template, check the change reached the models — one
 suite per contract (both provider arms, three candidates each), then a census of
-which taught rules the output still breaks:
+how each candidate's error count moved:
 
 ```bash
 # One contract. Costs contracts x arms x candidates x (1 + max_iterations) LLM
@@ -123,9 +123,11 @@ uv run python scripts/prompt_probe.py contracts/Vaccine.txt contracts/Energy.txt
 uv run python scripts/prompt_probe.py --census output/suite_<timestamp>
 ```
 
-A `traps` cell names the taught rules that candidate broke at *any* iteration,
-so a trap on a converged candidate means the correction loop recovered from it.
-Non-converged candidates also print their final blocking errors.
+The `errors` cell is the ERROR count at each iteration (`20>8>4>0` converged;
+`20>20>20>20` never moved), and `stalled` marks a candidate whose last
+correction reduced nothing. Every non-converged candidate then prints its final
+blocking errors with their source lines — that output is the analysis, and the
+census deliberately does not try to classify it for you.
 
 ## Configuration
 

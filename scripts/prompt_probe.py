@@ -14,12 +14,16 @@ The table is read back from the persisted run directories rather than from the
 in-memory results, so what it reports and what the archive holds cannot
 disagree, and ``--census`` can re-read any past run without spending a token.
 
-Columns: ``genE``/``finE`` are ERROR-severity counts at the generation pass and
-at the end; ``traps`` lists the taught rules the candidate broke at any
-iteration (see ``output/traps.py``) -- present at generation or introduced by a
-correction, since both happen and the endpoints alone hide the second. A
-non-converged candidate then gets its final blocking errors printed, so a stall
-class is visible without a second pass.
+**It classifies nothing.** ``errors`` is the ERROR-severity count at each
+iteration and ``stalled`` says only that the last correction reduced nothing;
+every non-converged candidate then prints its final blocking errors verbatim,
+and reading those is the analysis. An earlier version scored each candidate
+against a hand-written catalog of known traps, and that was a mistake twice
+over: it missed the dominant failure of the very next run it was used on --
+reported as a clean ``-`` -- and having categories to slice on invited a
+convergence-rate comparison that turned out to measure contract difficulty.
+The validator's own output is complete by construction and needs no upkeep;
+a catalog is neither.
 """
 
 from __future__ import annotations
@@ -33,11 +37,10 @@ from typing import Any
 
 from symboleo_llm_tool.config.loader import load_suite_config
 from symboleo_llm_tool.experiments.runner import run_suite
-from symboleo_llm_tool.output.traps import scan
 from symboleo_llm_tool.output.writer import write_suite_results
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
 
-COLUMNS = ["run", "contract", "candidate", "converged", "iters", "genE", "finE", "traps"]
+COLUMNS = ["run", "contract", "candidate", "converged", "iters", "errors", "stalled"]
 DEFAULT_CONFIG = Path("configs/prompt_probe.yaml")
 _STALL_LINES = 6
 
@@ -82,11 +85,8 @@ def _rows_for_report(report_path: Path) -> tuple[list[dict[str, Any]], list[str]
     stalls: list[str] = []
     for candidate in report.get("candidates", []):
         history = candidate.get("error_history") or []
-        first, last = (history[0], history[-1]) if history else ({}, {})
-        # Every iteration, not just the endpoints: a trap the correction stage
-        # introduces and then removes is still a trap the prompt failed to
-        # prevent, and reading endpoints alone hides exactly that.
-        traps = sorted({t for record in history for t in scan(record.get("code") or "")})
+        last = history[-1] if history else {}
+        counts = [_error_count(record) for record in history]
         rows.append(
             {
                 "run": run,
@@ -94,9 +94,12 @@ def _rows_for_report(report_path: Path) -> tuple[list[dict[str, Any]], list[str]
                 "candidate": candidate.get("candidate_id", ""),
                 "converged": "yes" if candidate.get("converged") else "no",
                 "iters": candidate.get("iterations_used", ""),
-                "genE": _error_count(first),
-                "finE": _error_count(last),
-                "traps": ",".join(traps) if traps else "-",
+                # The whole series, because its shape is the finding: a steady
+                # descent that ran out of budget and a file frozen behind a
+                # masking parse error are both "did not converge" and want
+                # opposite responses.
+                "errors": ">".join(str(count) for count in counts) or "-",
+                "stalled": "yes" if _stalled(candidate, counts) else "-",
             }
         )
         if not candidate.get("converged"):
@@ -104,10 +107,20 @@ def _rows_for_report(report_path: Path) -> tuple[list[dict[str, Any]], list[str]
     return rows, stalls
 
 
-def _error_count(record: dict[str, Any]) -> int | str:
-    if not record:
-        return ""
+def _error_count(record: dict[str, Any]) -> int:
     return sum(1 for issue in record.get("errors", []) if issue.get("severity") == "ERROR")
+
+
+def _stalled(candidate: dict[str, Any], counts: list[int]) -> bool:
+    """Did the last correction reduce nothing?
+
+    Deliberately the narrowest claim the data supports, and no attempt to say
+    why. A candidate cut short by a provider failure is not stalled -- it never
+    got to try.
+    """
+    if candidate.get("converged") or candidate.get("failure") or len(counts) < 2:
+        return False
+    return counts[-1] >= counts[-2]
 
 
 def _stall(run: str, contract: str, candidate: dict[str, Any], last: dict[str, Any]) -> str:
