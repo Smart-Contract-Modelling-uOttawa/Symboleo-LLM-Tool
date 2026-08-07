@@ -307,6 +307,17 @@ The JAR probe and the phrase fence prove a rule is *true* and *present*; neither
 
 Do not compare convergence rates across any of these boundaries. The correction-adoption gate is also detectable after the fact: a **correction** entry (iteration ≥ 1) whose `code` carries no `Domain` line is an adopted contract-less response. The iteration-0 restriction is load-bearing — generation is ungated in both eras, so a contract-less iteration-0 entry is legitimate and not evidence of this bug.
 
+### A rate that slices candidates by a property of their own output is confounded by contract difficulty
+The boundaries above are temporal. This one bites inside a single era, and it looked like the strongest result of the day that produced it. Splitting candidates on some property their output has — a construct they wrote, a trap they hit, a richness threshold — and comparing convergence across the split is confounded **by construction**: a hard contract both provokes the property and fails, so the property and the failure share a cause and the split reports difficulty.
+
+**The exhibit (2026-08-07, 30 candidates, five suites, one prompt version).** Candidates whose history contained a base-type declaration converged 2/11 (18%) against 12/19 (63%) for those without — an apparently decisive effect, reported and committed. It survived no slicing: **within `equipment_loan` it reverses** (2/7 with, 0/5 without), on Atos the split coincides exactly with the gpt/cohere arms, Vaccine's trap side is n=1, and `sample_contract` has no trap cases at all. What the headline measured was that easy contracts neither provoke the trap nor fail.
+
+**The procedure:** before believing any such rate, slice within contract *and* within model, and state the per-cell n. If the split coincides with an arm, or a cell is n<3, there is no signal — say so rather than reporting the pooled figure with a hedge attached. A hedge on a confounded number still travels as the number.
+
+**What to use instead**, and what survived here: a mechanistic argument from the artifacts. Every base-type declaration is a parse error at the top of `Declarations`, so it masks the file below; the three Atos gpt candidates that wrote one froze at constant error counts (`20>20>20>20>20>20`) for all five corrections. That reasoning needs no comparison group and is checkable line by line.
+
+**Note where the property came from.** It was supplied by a trap-label detector built for the purpose — the taxonomy is what made the cross-tab easy to compute and tempting to believe. See *Prompt-Probe Harness*, where that detector's removal is recorded; it classifies nothing now, deliberately.
+
 ### CLI suite validation is late — tokens can be spent before a bad experiment is caught
 In a CLI suite, an invalid strategy name or `strategy_params` key in experiment N surfaces only when that experiment *starts* running — after experiments 1..N-1 have already spent LLM tokens. The API does not have this gap: `build_pipeline_config` (in `api/config_builder.py`) instantiates each stage's strategy up front for every experiment before any job starts, so a bad one is a 422 before the first token. **Planned fix (deferred):** extract a `validate_experiments(config)` the CLI `suite` command calls right after `load_suite_config`, mirroring the API's fail-fast. This is a pre-existing *class* of late detection (an unknown strategy name and a missing few-shot example already behave this way), so the fix should cover the class, not just `strategy_params`.
 
