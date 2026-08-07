@@ -301,6 +301,26 @@ _GENERIC_EXAMPLE_TOKENS = (
     "conveyed",
 )
 
+
+def test_example_world_declares_the_attribute_it_assigns(any_strategy: PromptStrategy) -> None:
+    # The Assign example uses `cargo.holder := recipient` — a use whose natural
+    # inferred declaration is the illegal base word (`holder: Role`), and that
+    # inference is immune to every downstream defense: written 6/6 times by
+    # Cohere at generation despite the bullet forbidding base-word types, and 0
+    # removals in 36 chances even with a validator hint naming the fix, because
+    # this prompt re-plants it every iteration. The declaration must therefore
+    # ship beside the use. Pinned in both stages (the correction prompt is
+    # where the re-planting happens), and against the concision rewrite
+    # planned in CLAUDE.md, whose trims must not include this clause.
+    gen = any_strategy.build_generation_prompt(PromptContext(contract_text="contract text"))
+    corr = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[make_issue(message="bad token")])
+    )
+    for prompt in (gen, corr):
+        assert "holder: Recipient" in prompt
+        assert "never `holder: Role`" in prompt
+
+
 # MeatSale's identifier ensemble. Some are ordinary words on their own, but
 # each is an identifier in the default benchmark's gold solution, so any one
 # reappearing in a template signals MeatSale-flavored editing drifting back in.
