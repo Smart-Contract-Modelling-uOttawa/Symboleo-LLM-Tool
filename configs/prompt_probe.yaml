@@ -4,7 +4,7 @@
 # One contract, both provider families, three independent candidates each:
 #   symboleo-tool suite contracts/equipment_loan.txt --config configs/prompt_probe.yaml
 #
-# For the whole matrix in one command (several contracts, plus the trap census):
+# For the whole matrix in one command (several contracts, then the error-count census):
 #   uv run python scripts/prompt_probe.py contracts/equipment_loan.txt contracts/Vaccine.txt
 #
 # Two arms because the same trap rarely survives in both — a rule that lands on

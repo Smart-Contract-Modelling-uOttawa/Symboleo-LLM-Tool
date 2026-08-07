@@ -251,13 +251,18 @@ call can't be interrupted without abandoning the thread model.
 
 ### 5.5 Exceptions
 
-A raising candidate propagates out of `pipeline.run` (`future.result()`
-re-raises; the gather aborts). Suite
+A candidate raising an *unexpected* exception propagates out of `pipeline.run`
+(`future.result()` re-raises; the gather aborts). Suite
 level keeps today's semantics (a hard failure surfaces as an `ErrorEvent`).
 **Decided: fail-fast** on an unexpected exception — `request_token.cancel()` to
 stop siblings and surface the error — while **continuing** on ordinary
-non-convergence (that's a result, not an error). Fail-fast avoids paying for `K-1`
-more doomed experiments after a config/credential/JAR error that will hit them all.
+non-convergence (that's a result, not an error). Provider and validator *call*
+failures (`LLMCallError`/`ValidationCallError`) are not in this class: they are
+caught inside `_run_candidate` and recorded as `CandidateResult.failure`, costing
+that candidate and never the run (see CLAUDE.md, *Failed external calls*). So
+fail-fast covers the tool's own defects and preflight-class errors that would hit
+every experiment identically (a config error, no Java/JAR) — not a flaky provider
+or a bad credential, which surface per-candidate.
 
 ### 5.6 Pool lifecycle
 
