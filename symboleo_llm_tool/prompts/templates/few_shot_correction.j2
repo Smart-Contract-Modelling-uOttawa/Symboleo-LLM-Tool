@@ -33,4 +33,7 @@ The pairs below show valid SymboleoAC idiom for reference only — your task is 
 
 {% for error in errors %}
 - Line {{ error.line }}, Column {{ error.column }}: {{ error.message }}
+{%- if error.hint %}
+  Hint: {{ error.hint }}
+{%- endif %}
 {% endfor %}

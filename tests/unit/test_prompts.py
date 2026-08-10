@@ -483,6 +483,25 @@ def test_correction_includes_output_format(any_strategy: PromptStrategy) -> None
     assert "## Output Format" in any_strategy.build_correction_prompt(ctx)
 
 
+def test_correction_renders_a_hint_beside_its_error(any_strategy: PromptStrategy) -> None:
+    # A JAR may attach guidance out of band (SymboleoIssue.data). It reaches the
+    # model only if the template renders it, and nothing else in the suite would
+    # notice its absence: the message renders either way, so a dropped
+    # `{% if error.hint %}` block would silently halve what the correction stage
+    # is told while every other assertion stays green.
+    hinted = make_issue(
+        message="no viable alternative at input 'Assign'", data=["move it to a power"]
+    )
+    plain = make_issue(message="extraneous input ')'")
+    prompt = any_strategy.build_correction_prompt(
+        PromptContext(current_code="some symboleo code", errors=[hinted, plain])
+    )
+    assert "no viable alternative at input 'Assign'" in prompt
+    assert "Hint: move it to a power" in prompt
+    # An issue without guidance must not gain an empty hint line.
+    assert prompt.count("Hint:") == 1
+
+
 def test_correction_includes_error_details(any_strategy: PromptStrategy) -> None:
     ctx = PromptContext(
         current_code="code",

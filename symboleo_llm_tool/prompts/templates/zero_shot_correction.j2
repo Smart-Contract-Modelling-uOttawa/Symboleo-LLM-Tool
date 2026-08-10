@@ -17,4 +17,7 @@
 
 {% for error in errors %}
 - Line {{ error.line }}, Column {{ error.column }}: {{ error.message }}
+{%- if error.hint %}
+  Hint: {{ error.hint }}
+{%- endif %}
 {% endfor %}

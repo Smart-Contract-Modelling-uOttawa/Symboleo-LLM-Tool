@@ -306,11 +306,6 @@ export interface components {
             /**
              * Failed Candidate Count
              * @description Candidates cut short by a failed external call.
-             *
-             *     Exists for ``summary.csv``: without it an experiment whose candidates all
-             *     timed out is byte-identical there to one that legitimately failed to
-             *     converge, which would reinstate inside the comparison artifact the very
-             *     survivorship bias the failure field removes.
              */
             readonly failed_candidate_count: number;
         };
@@ -423,6 +418,8 @@ export interface components {
             length: number;
             /** Message */
             message: string;
+            /** Data */
+            data?: string[] | null;
         };
         /**
          * TokenUsage

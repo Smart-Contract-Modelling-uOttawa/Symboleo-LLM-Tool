@@ -76,6 +76,71 @@ def test_validate_returns_issues_when_errors_present(wrapper: SymboleoWrapper) -
     assert issues[0].message == "missing ';'"
 
 
+def test_validate_carries_the_hint_a_jar_attaches_out_of_band(wrapper: SymboleoWrapper) -> None:
+    """The `data` array survives parsing and surfaces through `.hint`.
+
+    Guidance travels beside the message rather than inside it, so nothing here
+    can be recovered by string-matching `message` — if this parsing regresses,
+    hints silently stop reaching the correction prompt while every other
+    assertion in the suite stays green.
+    """
+    hint = "'Number' is a base type and cannot be the type of a declared variable"
+    payload = {
+        "summary": {"total": 2, "warnings": 0, "errors": 2},
+        "issues": [
+            {
+                "severity": "ERROR",
+                "code": "ca.uottawa.csmlab.symboleo.syntaxHint",
+                "offset": 10,
+                "line": 2,
+                "column": 5,
+                "length": 3,
+                "message": "mismatched input 'Number' expecting RULE_ID",
+                "data": [hint],
+            },
+            {
+                "severity": "ERROR",
+                "code": None,
+                "offset": 20,
+                "line": 3,
+                "column": 1,
+                "length": 1,
+                "message": "extraneous input ')'",
+                "data": None,
+            },
+        ],
+    }
+    with patch("subprocess.run", return_value=_mock_result(1, payload)):
+        issues = wrapper.validate("invalid code")
+    assert issues[0].hint == hint
+    assert issues[0].message == "mismatched input 'Number' expecting RULE_ID"
+    assert issues[1].hint is None
+
+
+def test_validate_tolerates_a_jar_that_emits_no_data_field(wrapper: SymboleoWrapper) -> None:
+    # Every JAR before hint support omits `data` entirely. The field must
+    # default rather than raise, or adopting the plumbing ahead of the jar
+    # would break every run against the shipped one.
+    payload = {
+        "summary": {"total": 1, "warnings": 0, "errors": 1},
+        "issues": [
+            {
+                "severity": "ERROR",
+                "code": None,
+                "offset": 0,
+                "line": 1,
+                "column": 1,
+                "length": 1,
+                "message": "no viable alternative at input 'Assign'",
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=_mock_result(1, payload)):
+        issues = wrapper.validate("invalid code")
+    assert issues[0].data is None
+    assert issues[0].hint is None
+
+
 def test_validate_parses_every_issue_preserving_order_and_severity(
     wrapper: SymboleoWrapper,
 ) -> None:
