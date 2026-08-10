@@ -194,6 +194,15 @@ def test_options_returns_models_from_config(client: TestClient) -> None:
     assert "claude-haiku-4-5" in models["anthropic"]
 
 
+def test_options_flags_reasoning_models(client: TestClient) -> None:
+    # The form gates its temperature seed on this list — a reasoning model
+    # missing from it gets the 0.2 seed and a provider 400 at run time.
+    response = client.get("/api/options")
+    flagged = response.json()["reasoning_models"]
+    assert "claude-haiku-4-5" in flagged
+    assert "gpt-4o-mini" not in flagged
+
+
 def test_options_examples_empty_when_no_examples_dir(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

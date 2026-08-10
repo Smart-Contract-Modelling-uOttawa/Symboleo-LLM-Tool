@@ -80,6 +80,38 @@ export function getParamConstraint(
   return undefined
 }
 
+// Reasoning models reject sampling params outright, so the temperature seed
+// must never reach one. The server computes the flag (GET /options,
+// `reasoning_models`) because only it can ask LiteLLM; an absent field or an
+// unknown model reads as not-reasoning — fails open to today's behavior
+// (enabled field, advisory warning, 400 contained by the failed-call gate).
+export function isReasoningModel(options: OptionsResponse, model: string): boolean {
+  return options.reasoning_models?.includes(model) ?? false
+}
+
+function seededTemperature(options: OptionsResponse): string {
+  return String(getParamDefault(options.parameters, 'temperature', DEFAULTS.temperature))
+}
+
+// Selecting a model owns the temperature transition: switching TO a reasoning
+// model blanks the field (a blank request omits the key, so the backend keeps
+// None and the param is never sent — the load-bearing guard), and switching
+// back OFF one restores the seed so ordinary models keep the low-variance 0.2.
+// A non-reasoning → non-reasoning switch preserves whatever the user typed.
+export function withModel(
+  prev: StageFormValues,
+  model: string,
+  options: OptionsResponse,
+): StageFormValues {
+  let temperature = prev.temperature
+  if (isReasoningModel(options, model)) {
+    temperature = ''
+  } else if (isReasoningModel(options, prev.model)) {
+    temperature = seededTemperature(options)
+  }
+  return { ...prev, model, temperature }
+}
+
 export function makeDefaultStage(options: OptionsResponse): StageFormValues {
   const firstProvider = Object.keys(options.models)[0]
   const firstModel = (firstProvider && options.models[firstProvider]?.[0]) ?? ''
@@ -87,7 +119,7 @@ export function makeDefaultStage(options: OptionsResponse): StageFormValues {
   return {
     model: firstModel,
     strategy: firstStrategy,
-    temperature: String(getParamDefault(options.parameters, 'temperature', DEFAULTS.temperature)),
+    temperature: isReasoningModel(options, firstModel) ? '' : seededTemperature(options),
     include_grammar: getParamDefault(options.parameters, 'include_grammar', DEFAULTS.include_grammar),
     example_files: [],
   }

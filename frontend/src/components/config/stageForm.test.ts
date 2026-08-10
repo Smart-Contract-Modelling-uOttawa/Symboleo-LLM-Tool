@@ -5,7 +5,9 @@ import {
   buildStageRequest,
   getParamConstraint,
   getParamDefault,
+  isReasoningModel,
   makeDefaultStage,
+  withModel,
   type StageFormValues,
 } from './stageForm'
 
@@ -163,5 +165,63 @@ describe('makeDefaultStage', () => {
   it('prefers a server-supplied parameter default over the local seed', () => {
     const options = { ...OPTIONS, parameters: { temperature: { default: 0.5 } } }
     expect(makeDefaultStage(options).temperature).toBe('0.5')
+  })
+
+  it('leaves temperature blank when the first model is a reasoning model', () => {
+    // If the config ever leads with a reasoning model, seeding 0.2 would 400
+    // the very first run a user submits untouched.
+    const options = {
+      ...OPTIONS,
+      models: { openai: ['gpt-5-nano', 'gpt-4o-mini'] },
+      reasoning_models: ['gpt-5-nano'],
+    }
+    expect(makeDefaultStage(options).temperature).toBe('')
+  })
+})
+
+describe('withModel / isReasoningModel', () => {
+  // The seed-side guard: the 0.2 form seed must never ride into a request for
+  // a model that rejects the param (observed live: gpt-5.6-luna, 2026-08-10 —
+  // OpenAI 400, because litellm's drop_params table wrongly lists temperature
+  // as supported for current reasoning models).
+  const OPTIONS: OptionsResponse = {
+    strategies: ['zero_shot'],
+    models: { openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-5-nano'] },
+    parameters: {},
+    examples: [],
+    reasoning_models: ['gpt-5-nano'],
+  }
+
+  it('blanks temperature when switching to a reasoning model', () => {
+    const next = withModel(STAGE, 'gpt-5-nano', OPTIONS)
+    expect(next.model).toBe('gpt-5-nano')
+    expect(next.temperature).toBe('')
+  })
+
+  it('restores the seed when switching back off a reasoning model', () => {
+    const onReasoning = withModel(STAGE, 'gpt-5-nano', OPTIONS)
+    expect(withModel(onReasoning, 'gpt-4o-mini', OPTIONS).temperature).toBe(
+      String(DEFAULTS.temperature),
+    )
+  })
+
+  it('preserves a user-typed temperature across a non-reasoning switch', () => {
+    const typed = { ...STAGE, temperature: '0.7' }
+    expect(withModel(typed, 'gpt-4o', OPTIONS).temperature).toBe('0.7')
+  })
+
+  it('treats a model absent from the flag list as non-reasoning', () => {
+    // Fails open by design: an unknown model keeps an enabled field; the
+    // worst case is today's contained 400, never a silently blocked option.
+    expect(isReasoningModel(OPTIONS, 'model-not-in-any-list')).toBe(false)
+    expect(withModel(STAGE, 'gpt-4o', OPTIONS).temperature).toBe('0.2')
+  })
+
+  it('treats every model as non-reasoning when the server omits the field', () => {
+    // Version skew: an older backend without reasoning_models must behave
+    // exactly as before this field existed.
+    const legacy = { ...OPTIONS, reasoning_models: undefined }
+    expect(isReasoningModel(legacy, 'gpt-5-nano')).toBe(false)
+    expect(withModel(STAGE, 'gpt-5-nano', legacy).temperature).toBe('0.2')
   })
 })

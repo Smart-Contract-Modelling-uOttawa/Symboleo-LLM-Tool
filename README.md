@@ -261,8 +261,9 @@ uv run ruff check .
 # Type check (mypy is run live, not pinned in the lock — see CLAUDE.md)
 uv run --with mypy mypy symboleo_llm_tool
 
-# End-to-end smoke test — not in CI, run before a release (needs Java 17)
+# End-to-end smoke tests — not in CI, run both before a release (needs Java 17)
 uv run python scripts/smoke_rejection.py
+uv run python scripts/smoke_provider_failure.py
 ```
 
 **Frontend:**
