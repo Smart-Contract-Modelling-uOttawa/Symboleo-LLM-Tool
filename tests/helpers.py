@@ -43,6 +43,7 @@ def make_issue(
     column: int = 1,
     length: int = 1,
     message: str = "syntax error",
+    data: list[str] | None = None,
 ) -> SymboleoIssue:
     return SymboleoIssue(
         severity=severity,
@@ -52,4 +53,5 @@ def make_issue(
         column=column,
         length=length,
         message=message,
+        data=data,
     )
