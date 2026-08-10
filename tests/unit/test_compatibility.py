@@ -14,6 +14,7 @@ from symboleo_llm_tool.llm.compatibility import (
     _TEMPERATURE_RANGES,
     llm_param_warnings,
     pipeline_param_warnings,
+    reasoning_models,
     reasoning_param_warnings,
     suite_param_warnings,
     temperature_range_warnings,
@@ -200,6 +201,45 @@ def test_shipped_ui_config_lists_openai_first() -> None:
     # provider, so provider order is behaviour, not formatting.
     data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
     assert next(iter(data["models"])) == "openai"
+
+
+def test_reasoning_models_flags_only_the_reasoning_entries() -> None:
+    # Against the real pinned map: the per-provider dict flattens to the names
+    # a form must gate, and an unknown model is silently not flagged — the
+    # fail-quiet contract, where a missed flag costs an enabled field and a
+    # contained 400, never a blocked run.
+    flagged = reasoning_models(
+        {
+            "openai": ["gpt-4o-mini", "gpt-5-nano"],
+            "anthropic": ["claude-opus-4-8"],
+            "nosuch": ["model-that-does-not-exist"],
+        }
+    )
+    assert "gpt-5-nano" in flagged
+    assert "claude-opus-4-8" in flagged
+    assert "gpt-4o-mini" not in flagged
+    assert "model-that-does-not-exist" not in flagged
+
+
+def test_reasoning_models_survives_a_litellm_failure() -> None:
+    # Advisory contract: a freak LiteLLM error degrades to "not flagged",
+    # never a crashed options request.
+    with patch(_TARGET, side_effect=RuntimeError("boom")):
+        assert reasoning_models({"openai": ["gpt-5-nano"]}) == []
+
+
+def test_shipped_ui_config_gpt5_entries_are_flagged_reasoning() -> None:
+    # The form gates its temperature seed on this flag, so the shipped gpt-5*
+    # entries MUST be flagged or the seed rides into a request the provider
+    # 400s (observed live on gpt-5.6-luna, 2026-08-10). The non-reasoning
+    # entries must stay unflagged or their seed disappears for no reason.
+    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    flagged = set(reasoning_models(data["models"]))
+    openai_names = set(data["models"]["openai"])
+    gpt5 = {name for name in openai_names if name.startswith("gpt-5")}
+    assert gpt5, "shipped config lost its gpt-5 entries — update this fence"
+    assert gpt5 <= flagged
+    assert not {"gpt-4o", "gpt-4o-mini", "gpt-4.1-mini"} & flagged
 
 
 def test_cohere_is_deliberately_absent_from_the_range_table() -> None:

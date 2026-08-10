@@ -93,6 +93,32 @@ def temperature_range_warnings(config: LLMConfig) -> list[str]:
     ]
 
 
+def reasoning_models(models_by_provider: dict[str, list[str]]) -> list[str]:
+    """The subset of offered model names that are reasoning models.
+
+    Serves ``GET /options`` so the form can blank and disable its temperature
+    field for models that reject one — the seed-side counterpart of the
+    None-default guard. The form otherwise seeds 0.2 into every request, and
+    ``drop_params`` cannot be trusted to strip it: LiteLLM's supported-params
+    table wrongly lists ``temperature`` for current reasoning models (the same
+    class of table error as BerriAI/litellm#26444), so the seed reaches the
+    provider and returns a 400.
+
+    Same signal and same fail-quiet contract as ``reasoning_param_warnings``:
+    an unknown model is simply not flagged, which costs an enabled field and a
+    contained 400 — never a blocked run.
+    """
+    flagged: list[str] = []
+    for provider, names in models_by_provider.items():
+        for name in names:
+            try:
+                if litellm.supports_reasoning(model=f"{provider}/{name}"):
+                    flagged.append(name)
+            except Exception:
+                continue
+    return flagged
+
+
 def llm_param_warnings(config: LLMConfig) -> list[str]:
     """All per-``LLMConfig`` advisories — the seam future checks join."""
     return [*reasoning_param_warnings(config), *temperature_range_warnings(config)]

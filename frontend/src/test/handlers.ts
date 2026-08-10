@@ -4,9 +4,10 @@ export const TEST_RUN_ID = 'test-run-id'
 
 export const MOCK_OPTIONS = {
   strategies: ['zero_shot', 'few_shot', 'cot'],
-  models: { openai: ['gpt-4o-mini', 'gpt-4o'] },
+  models: { openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-5-nano'] },
   parameters: {},
   examples: [],
+  reasoning_models: ['gpt-5-nano'],
 }
 
 export const handlers = [

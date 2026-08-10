@@ -283,6 +283,8 @@ export interface components {
             };
             /** Examples */
             examples: string[];
+            /** Reasoning Models */
+            reasoning_models?: string[];
         };
         /** PipelineResult */
         PipelineResult: {

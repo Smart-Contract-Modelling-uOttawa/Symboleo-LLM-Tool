@@ -18,7 +18,13 @@ import {
 } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import type { OptionsResponse } from '@/api/types'
-import { FEW_SHOT, getParamConstraint, type StageFormValues } from './stageForm'
+import {
+  FEW_SHOT,
+  getParamConstraint,
+  isReasoningModel,
+  withModel,
+  type StageFormValues,
+} from './stageForm'
 
 interface StageSectionProps {
   title: string
@@ -60,7 +66,7 @@ export function StageSection({
               <Label>Model</Label>
               <Select
                 value={state.model}
-                onValueChange={v => onChange(prev => ({ ...prev, model: v }))}
+                onValueChange={v => onChange(prev => withModel(prev, v, options))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select model" />
@@ -134,7 +140,8 @@ export function StageSection({
               </div>
             )}
 
-            {/* Temperature */}
+            {/* Temperature — disabled for reasoning models, which reject the
+                param; a blank field is what keeps it out of the request. */}
             <div className="space-y-1.5">
               <Label htmlFor={`${titleId}-temp`}>Temperature</Label>
               <Input
@@ -144,7 +151,12 @@ export function StageSection({
                 max={getParamConstraint(options.parameters, 'temperature', 'max') ?? 2}
                 step={0.1}
                 value={state.temperature}
-                placeholder="Unset (model default)"
+                disabled={isReasoningModel(options, state.model)}
+                placeholder={
+                  isReasoningModel(options, state.model)
+                    ? 'Not accepted by this model'
+                    : 'Unset (model default)'
+                }
                 onChange={e => onChange(prev => ({ ...prev, temperature: e.target.value }))}
               />
             </div>

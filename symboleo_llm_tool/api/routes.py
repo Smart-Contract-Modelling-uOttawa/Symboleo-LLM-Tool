@@ -41,7 +41,11 @@ from symboleo_llm_tool.api.models import (
 from symboleo_llm_tool.config.loader import dump_suite_file
 from symboleo_llm_tool.config.models import PipelineConfig, SuiteConfig
 from symboleo_llm_tool.experiments import run_suite
-from symboleo_llm_tool.llm.compatibility import pipeline_param_warnings, suite_param_warnings
+from symboleo_llm_tool.llm.compatibility import (
+    pipeline_param_warnings,
+    reasoning_models,
+    suite_param_warnings,
+)
 from symboleo_llm_tool.output.models import PipelineResult, SuiteResult
 from symboleo_llm_tool.output.writer import write_results, write_suite_results
 from symboleo_llm_tool.prompts.examples import list_example_names
@@ -391,4 +395,5 @@ async def get_options() -> OptionsResponse:
         models=_ui_config.get("models", {}),
         parameters=parameters,
         examples=list_example_names(),
+        reasoning_models=reasoning_models(_ui_config.get("models", {})),
     )

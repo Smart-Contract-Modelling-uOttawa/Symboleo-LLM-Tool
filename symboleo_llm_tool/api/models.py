@@ -141,3 +141,8 @@ class OptionsResponse(BaseModel):
     models: dict[str, list[str]]
     parameters: dict[str, Any]
     examples: list[str]
+    # Names from `models` that reject sampling params. The form blanks and
+    # disables temperature for these instead of seeding 0.2 — a blank field is
+    # the only shape whose request omits the key, which is the load-bearing
+    # guard (backend None → param never sent).
+    reasoning_models: list[str] = Field(default_factory=list)
