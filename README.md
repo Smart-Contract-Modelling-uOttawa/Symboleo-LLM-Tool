@@ -88,7 +88,7 @@ uv run python scripts/smoke_rejection.py
 
 ```bash
 # Single run — sample contracts ship in contracts/
-uv run symboleo-tool run contracts/equipment_loan.txt --config configs/openai.yaml
+uv run symboleo-tool run contracts/equipment_loan.txt --config configs/luna.yaml
 
 # Experiment suite — one contract against several named configs, compared
 uv run symboleo-tool suite contracts/equipment_loan.txt --config configs/suite_example.yaml
@@ -105,6 +105,16 @@ To compare how *much* contract runs produced — convergence is blind to size:
 # One row per candidate across every run/suite in output/; --csv PATH to export.
 # Read rows beside the converged column.
 uv run python scripts/richness_sweep.py
+```
+
+To judge how *faithfully* runs modeled their source text — an LLM judge scores
+each candidate against the contract's curated clause inventory
+(`contracts/inventories/`; contracts without one are skipped). Judge calls
+cost money; results cache under `output/fidelity_cache/`, so re-runs and
+`--score-only` are free:
+
+```bash
+uv run python scripts/fidelity_sweep.py output/suite_<timestamp> --csv fidelity.csv
 ```
 
 After changing a prompt template, check the change reached the models — one
@@ -136,13 +146,14 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 | File | Purpose |
 |---|---|
 | `example.yaml` | Reference template — documents all available fields |
-| `openai.yaml` | OpenAI `gpt-4o-mini`, zero-shot — the usual starting point |
-| `gpt4o.yaml` | OpenAI `gpt-4o`, otherwise matching `openai.yaml` |
+| `luna.yaml` | OpenAI `gpt-5.6-luna`, zero-shot — **the usual starting point** (best convergence *and* fidelity) |
+| `gpt4o.yaml` | OpenAI `gpt-4o`, zero-shot |
 | `cohere.yaml` | Cohere, zero-shot |
 | `cohere_fewshot.yaml` | Cohere, few-shot with the `vaccine_procurement` example |
 | `suite_example.yaml` | Suite: zero-shot vs CoT, for `symboleo-tool suite` |
+| `prompt_probe.yaml` | Suite: the prompt-regression probe's arms (budget models on purpose — see its comments) |
 | `mock.yaml` | No API key — a canned response, for checking plumbing only |
-| `ui_config.yaml` | Not a run config: the model/parameter lists the web UI offers |
+| `app/ui_config.yaml` | Not a run config: the model/parameter lists the web UI offers |
 
 `example.yaml` annotates every field in place, and editors with a YAML language
 server (VS Code: the Red Hat "YAML" extension) validate configs as you type,
@@ -194,7 +205,7 @@ of the config used. Layout and how to read the report:
 ## Web UI
 
 A React/Vite + Tailwind + shadcn/ui interface over the same pipeline, served by a
-FastAPI backend. The API reads `configs/ui_config.yaml` at startup for its model
+FastAPI backend. The API reads `configs/app/ui_config.yaml` at startup for its model
 list and parameter constraints, so models can be added or removed without a code
 change.
 
@@ -260,6 +271,10 @@ uv run ruff check .
 
 # Type check (mypy is run live, not pinned in the lock — see CLAUDE.md)
 uv run --with mypy mypy symboleo_llm_tool
+
+# After changing any config model: regenerate the committed editor schemas
+# (tests compare committed against live generation, so CI is red until you do)
+uv run python scripts/generate_config_schemas.py
 
 # End-to-end smoke tests — not in CI, run both before a release (needs Java 17)
 uv run python scripts/smoke_rejection.py

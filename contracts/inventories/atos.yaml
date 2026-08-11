@@ -1,0 +1,90 @@
+# Clause inventory: contracts/Atos.txt (curated 2026-08-11).
+# Two audit traps live here: the suspension in 2(c) is MANDATORY ("shall
+# suspend" — an obligation, not a discretionary power), and termination 3(a)
+# requires BOTH mutual agreement AND payments-due paid (the conjunct the
+# corpus sibling dropped).
+contract: atos
+source: contracts/Atos.txt
+items:
+  - id: roles
+    kind: state
+    clause: "1(a)"
+    expects: >
+      Client is the Data Controller and Atos is the Processor for personal
+      data processed under the Agreement.
+  - id: pay_services
+    kind: obligation
+    clause: "1(b)"
+    expects: >
+      Client is obliged to pay Atos for providing the data processing
+      services.
+  - id: legal_ground
+    kind: state
+    clause: "1(c)"
+    expects: >
+      Personal data is processed only on an adequate legal ground (region,
+      processing-activity categories, origin of data) — a condition on
+      processing.
+  - id: instructions
+    kind: obligation
+    clause: "1(d)"
+    expects: >
+      Client (as Controller) is obliged to provide Atos with documented
+      processing instructions.
+  - id: adapt_instructions
+    kind: obligation
+    clause: "1(e)"
+    expects: >
+      Client is obliged to adapt its instructions when Atos gives an
+      infringement notice — triggered by the notice.
+  - id: process_per_instructions
+    kind: obligation
+    clause: "2(a)"
+    expects: >
+      Atos is obliged to process personal data exclusively in accordance
+      with the Client's instructions.
+  - id: deliver_services
+    kind: obligation
+    clause: "2(b)"
+    expects: >
+      Atos is obliged to deliver the data processing services to the Client.
+  - id: infringement_inform
+    kind: obligation
+    clause: "2(c)"
+    expects: >
+      If Atos becomes aware an instruction may infringe data protection law,
+      Atos is obliged to inform the Client of the potential infringement.
+  - id: mandatory_suspend
+    kind: obligation
+    clause: "2(c)"
+    expects: >
+      Atos SHALL suspend the processing service if the Client has failed to
+      adapt its instructions — mandatory, so an obligation (modeling this as
+      a discretionary power is a modality error), triggered by the Client's
+      failure to adapt after notice.
+  - id: resumption_request
+    kind: obligation
+    clause: "2(c)"
+    expects: >
+      The Client requests resumption of the processing service after
+      adapting its instructions — the resumption path is conditioned on the
+      adaptation.
+  - id: record_keeping
+    kind: obligation
+    clause: "2(d)"
+    expects: >
+      Atos is obliged to maintain a record of processing activities.
+  - id: record_copy
+    kind: power
+    clause: "2(e)"
+    expects: >
+      The Client is ENTITLED to request a copy of the processing record —
+      discretionary entitlement — and Atos is then obliged to communicate
+      the copy.
+  - id: termination
+    kind: state
+    clause: "3(a)"
+    expects: >
+      Termination requires BOTH parties agreeing AND the payments due being
+      paid by the Client — both conjuncts; dropping the payments-paid
+      condition is a miss.

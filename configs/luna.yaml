@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=schemas/config.schema.json
+# The de-facto standard config (2026-08-11): gpt-5.6-luna on both stages.
+# Evidence: 54/54 convergence across three passes, and the only model with
+# high semantic coverage (fidelity sweep: 0.69-1.00 on four of six contracts)
+# -- see CLAUDE.md, "Convergence != fidelity". ~\$0.12 per 3-candidate run.
+#
+# Reasoning model: temperature stays UNSET (it rejects one; omission is the
+# load-bearing guard), and max_tokens is raised because reasoning tokens bill
+# as output and count toward the cap -- the 4096 default can swallow the whole
+# budget thinking and truncate the contract.
+pipeline:
+  num_candidates: 3
+  max_iterations: 5
+  stop_on_first_convergence: false
+
+generation:
+  llm:
+    provider: openai
+    model: gpt-5.6-luna
+    max_tokens: 16000
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+correction:
+  llm:
+    provider: openai
+    model: gpt-5.6-luna
+    max_tokens: 16000
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+symboleo:
+  jar_path: ./lib/symboleo-cli.jar
+  java_executable: java
+
+output:
+  directory: ./output
+  save_intermediates: true
+
+observability:
+  langsmith:
+    enabled: false
+    project: symboleo-research

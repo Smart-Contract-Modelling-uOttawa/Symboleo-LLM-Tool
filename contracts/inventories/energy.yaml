@@ -1,0 +1,52 @@
+# Clause inventory: contracts/Energy.txt (curated 2026-08-11).
+# The two windows (30-day cure, 90-day notice) are the clauses the 2026-07
+# audit found encoded only in event NAMES in the corpus sibling — here they
+# must be enforced by temporal predicates to count as present.
+contract: energy
+source: contracts/Energy.txt
+items:
+  - id: payment_timing
+    kind: obligation
+    clause: "2(a)"
+    expects: >
+      Payments for each trading day are due four business days after the
+      invoice is issued — a payment obligation with the deadline anchored to
+      the invoice issuance event by a temporal predicate. The text's 2(a)
+      names no payer; 3(a) establishes the DERP as the party that pays
+      invoices, so a DERP-pays encoding is correct and must not be marked
+      wrong-direction.
+  - id: supply
+    kind: obligation
+    clause: "2(b)"
+    expects: >
+      When a Bid comes into effect, the DERP is obliged to supply and deliver
+      energy per the Bid and the Dispatch Instruction — triggered by the Bid
+      taking effect.
+  - id: penalty_power
+    kind: power
+    clause: "2(c)"
+    expects: >
+      If the DERP fails its supply commitment, CAISO is ENTITLED to impose
+      penalties — a discretionary power triggered by the supply failure.
+  - id: termination_power
+    kind: power
+    clause: "3(a)"
+    expects: >
+      CAISO may terminate by written notice when the DERP fails to pay an
+      invoice by its due date OR fails to provide energy per the Dispatch
+      Instruction — a power with either failure as trigger.
+  - id: cure_window
+    kind: power
+    clause: "3(a)"
+    expects: >
+      After a payment-failure termination notice, the DERP can revoke the
+      termination by paying the invoice within 30 days of the notice;
+      otherwise the termination takes effect — the 30-day window enforced by
+      a temporal predicate relative to the notice, not merely named.
+  - id: voluntary_termination
+    kind: power
+    clause: "3(b)"
+    expects: >
+      The DERP may terminate if it no longer wishes to submit Bids, on not
+      less than 90 days' written notice to CAISO — the 90-day notice period
+      enforced by a temporal predicate, not merely named.

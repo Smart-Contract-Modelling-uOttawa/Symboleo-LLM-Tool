@@ -5,9 +5,11 @@ import yaml
 
 from symboleo_llm_tool.config.loader import load_config, load_suite_config
 
-# Every shipped config is load-checked below. `ui_config.yaml` is the only
-# exclusion: it is the frontend's model/parameter list, not a pipeline config.
-_UI_CONFIG = "ui_config.yaml"
+# Every shipped run config is load-checked below. The glob is deliberately
+# non-recursive: configs/*.yaml at the top level are pipeline/suite configs by
+# directory contract, while subdirectories hold other kinds — configs/app/ is
+# the deployment's (ui_config.yaml, fenced by test_compatibility.py's shipped
+# ui-config tests) and configs/schemas/ is generated JSON.
 
 
 def _shipped_configs() -> tuple[list[Path], list[Path]]:
@@ -20,8 +22,6 @@ def _shipped_configs() -> tuple[list[Path], list[Path]]:
     """
     pipeline, suite = [], []
     for path in sorted(Path("configs").glob("*.yaml")):
-        if path.name == _UI_CONFIG:
-            continue
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         (suite if "experiments" in data else pipeline).append(path)
     return pipeline, suite

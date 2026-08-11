@@ -21,9 +21,11 @@ _CONFIGS = Path("configs")
 _SCHEMAS_DIR = _CONFIGS / "schemas"
 _SCHEMA_FILES = sorted(render_config_schemas())
 
-# ui_config.yaml is the frontend's model/parameter list, not a pipeline config —
-# the one shipped YAML that correctly declares no schema.
-_NO_MODELINE = {"ui_config.yaml"}
+# The modeline check covers configs/*.yaml at the top level only — that
+# directory level is pipeline/suite configs by contract, and every one carries
+# a schema modeline. Subdirectories are other kinds by design (configs/app/ is
+# the deployment's ui_config, which correctly declares no schema; schemas/ is
+# the generated JSON itself) and are excluded by the non-recursive glob.
 _MODELINE = re.compile(r"^#\s*yaml-language-server:\s*\$schema=(\S+)")
 
 
@@ -131,10 +133,6 @@ def test_shipped_config_validates_against_its_modeline_schema(yaml_path: Path) -
     """
     first_line = yaml_path.read_text(encoding="utf-8").splitlines()[0]
     match = _MODELINE.match(first_line)
-
-    if yaml_path.name in _NO_MODELINE:
-        assert match is None, f"{yaml_path.name} should not declare a schema"
-        return
     assert match, f"{yaml_path.name} has no yaml-language-server modeline"
 
     # Resolve the modeline the way an editor does: relative to the YAML file.

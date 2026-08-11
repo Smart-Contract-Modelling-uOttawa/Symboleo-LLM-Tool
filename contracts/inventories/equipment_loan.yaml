@@ -1,0 +1,46 @@
+# Clause inventory: contracts/equipment_loan.txt (curated 2026-08-11).
+# Complete by construction FOR THIS CONTRACT: every normative clause below,
+# nothing else. The judge fills a verdict per item.
+contract: equipment_loan
+source: contracts/equipment_loan.txt
+items:
+  - id: handover
+    kind: obligation
+    clause: "1"
+    expects: >
+      Lender is obliged to hand over one calibration kit (bearing the recorded
+      serial number) to the Borrower.
+  - id: ownership
+    kind: state
+    clause: "1"
+    expects: >
+      The kit remains the Lender's property for the duration of the loan
+      (ownership does NOT transfer on handover).
+  - id: return
+    kind: obligation
+    clause: "2"
+    expects: >
+      Borrower is obliged to return the kit on or before the Return Date,
+      which is the Start Date plus the specified number of loan days — the
+      deadline must be enforced by a temporal predicate over a computed date,
+      not merely named.
+  - id: late_fee
+    kind: obligation
+    clause: "3"
+    expects: >
+      If the Borrower fails to return by the Return Date, the Borrower is
+      obliged to pay the specified late fee to the Lender (triggered by the
+      return failure, not unconditional).
+  - id: termination
+    kind: power
+    clause: "4"
+    expects: >
+      If the Borrower fails to pay the late fee, the Lender MAY terminate the
+      agreement — discretionary, so a power (not an obligation), held by the
+      Lender, triggered by the late-fee failure.
+  - id: depot_access
+    kind: access_grant
+    clause: "5"
+    expects: >
+      The depot operator is granted read permission by the Lender on BOTH the
+      kit's serial number AND the status of the Borrower's return obligation.
