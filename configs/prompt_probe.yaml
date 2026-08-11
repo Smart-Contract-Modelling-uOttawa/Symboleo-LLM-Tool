@@ -11,6 +11,13 @@
 # one model and not the other is the common outcome, and a single-arm probe
 # reports it as a clean pass or a clean failure.
 #
+# The arms are BUDGET models on purpose, and must stay below the ceiling even
+# though gpt-5.6-luna is the de-facto run config (configs/luna.yaml): luna
+# converges 54/54, and a probe at the ceiling has zero resolution — both
+# prompt variants score 18/18 and the comparison measures nothing. Prompt
+# effects are only visible on models that still exhibit the failure modes the
+# prompts target. Do not "upgrade" these arms.
+#
 # Three candidates because generation error counts swing hard at this
 # temperature: an unchanged control cell moved 42 -> 13 errors between two runs
 # on 2026-08-07, which is more than most prompt effects. One reading per cell
