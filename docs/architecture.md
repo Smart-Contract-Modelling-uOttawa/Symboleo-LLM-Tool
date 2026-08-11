@@ -158,7 +158,7 @@ say, generate with an expensive model and correct with a cheap one. The
 
 **What may `provider:` and `model:` be?** Anything
 [LiteLLM supports](https://docs.litellm.ai/docs/providers) — the tool passes
-them through as `provider/model`. The model list in `configs/ui_config.yaml` is
+them through as `provider/model`. The model list in `configs/app/ui_config.yaml` is
 only the *web UI's* menu, not a limit on config files. Whether a model name is
 real is checked by the provider itself at the first call, which fails fast;
 pricing and parameter advisories come from the tool's pinned LiteLLM version,
@@ -347,13 +347,16 @@ remain (`final_warning_count` shows them); they do not block. A candidate with
 its draft was cut short before validation, not validated clean.
 
 It does **not** mean the SymboleoAC faithfully models the source contract.
-That is a second, separate question — and by an explicit scope decision this
-project measures only the first. A contract can invent obligations the text
-never states, or encode a deadline in an event's *name* rather than an
-enforceable predicate, and still validate clean. Nothing in `report.json` can
-see that. The scope decision, the audit behind it, and the caveats that follow
-for interpreting results are in CLAUDE.md (*Convergence ≠ fidelity* and *Known
-Issues*).
+That is a second, separate question. A contract can invent obligations the
+text never states, or encode a deadline in an event's *name* rather than an
+enforceable predicate, and still validate clean — nothing in `report.json`
+can see that. Fidelity is measured separately, analysis-side: an LLM judge
+scores each candidate against the contract's curated clause inventory
+(`contracts/inventories/`, run via `scripts/fidelity_sweep.py`), reporting
+clause coverage and inventions per candidate. Coverage is comparable within
+one contract only, never averaged across contracts. The instrument's
+calibration, the audit lineage behind it, and the interpretation caveats are
+in CLAUDE.md (*Convergence ≠ fidelity*).
 
 ## The two interfaces
 

@@ -2,7 +2,7 @@
 
 Run from the repo root:
     uv run python scripts/prompt_probe.py CONTRACT [CONTRACT ...] [--config PATH] [--csv PATH]
-    uv run python scripts/prompt_probe.py --census output/suite_20260807_101500
+    uv run python scripts/prompt_probe.py --census output/suite_<timestamp>
 
 One suite per contract, so every arm and candidate of that contract runs
 concurrently; the suite file (default ``configs/prompt_probe.yaml``) owns the
