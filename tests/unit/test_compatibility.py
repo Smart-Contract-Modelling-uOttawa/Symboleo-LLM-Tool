@@ -189,7 +189,7 @@ def test_shipped_ui_config_models_block_maps_providers_to_name_lists() -> None:
     # routes.py builds model->provider with `for model in models`, so a scalar
     # instead of a list iterates the string's characters and silently yields a
     # corrupted map rather than failing. Nothing else parses this block.
-    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load(Path("configs/app/ui_config.yaml").read_text(encoding="utf-8"))
     assert data["models"]
     for provider, names in data["models"].items():
         assert isinstance(names, list) and names, f"{provider} must map to a non-empty list"
@@ -199,7 +199,7 @@ def test_shipped_ui_config_models_block_maps_providers_to_name_lists() -> None:
 def test_shipped_ui_config_lists_openai_first() -> None:
     # The frontend seeds its default model from the first model of the first
     # provider, so provider order is behaviour, not formatting.
-    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load(Path("configs/app/ui_config.yaml").read_text(encoding="utf-8"))
     assert next(iter(data["models"])) == "openai"
 
 
@@ -233,7 +233,7 @@ def test_shipped_ui_config_gpt5_entries_are_flagged_reasoning() -> None:
     # entries MUST be flagged or the seed rides into a request the provider
     # 400s (observed live on gpt-5.6-luna, 2026-08-10). The non-reasoning
     # entries must stay unflagged or their seed disappears for no reason.
-    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load(Path("configs/app/ui_config.yaml").read_text(encoding="utf-8"))
     flagged = set(reasoning_models(data["models"]))
     openai_names = set(data["models"]["openai"])
     gpt5 = {name for name in openai_names if name.startswith("gpt-5")}
@@ -255,7 +255,7 @@ def test_shipped_ui_config_temperature_bounds_fit_the_hard_envelope() -> None:
     # bound outside the validator's envelope would let the form submit a value
     # the backend 422s. Same construct-oracle as the table fence, applied to
     # the repo's shipped copy (the file is deployment-mutable by design).
-    data = yaml.safe_load(Path("configs/ui_config.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load(Path("configs/app/ui_config.yaml").read_text(encoding="utf-8"))
     bounds = data["parameters"]["temperature"]
     LLMConfig(provider="openai", model="any", temperature=bounds["min"])
     LLMConfig(provider="openai", model="any", temperature=bounds["max"])

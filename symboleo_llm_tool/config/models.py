@@ -38,7 +38,7 @@ class _StrictModel(BaseModel):
 class LLMConfig(_StrictModel):
     # ``provider``/``model`` are open strings on purpose: the CLI passes them
     # straight to LiteLLM, so any model a provider serves works without a repo
-    # change. ``configs/ui_config.yaml`` is only the web form's curated menu.
+    # change. ``configs/app/ui_config.yaml`` is only the web form's curated menu.
     provider: str
     model: str
     # Optional so it is only sent when explicitly set. Reasoning models (OpenAI

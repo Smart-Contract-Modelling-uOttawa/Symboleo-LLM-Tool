@@ -13,8 +13,8 @@ pipeline:
 
 generation:                         # the stage that writes the first draft
   llm:
-    # Any provider/model LiteLLM supports works here — ui_config.yaml is only
-    # the web UI's menu. Prefixes and names: https://docs.litellm.ai/docs/providers
+    # Any provider/model LiteLLM supports works here — configs/app/ui_config.yaml
+    # is only the web UI's menu. Prefixes and names: https://docs.litellm.ai/docs/providers
     # (brand-new models run fine but may report cost as unknown — see
     # docs/architecture.md)
     provider: anthropic
