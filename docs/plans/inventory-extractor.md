@@ -8,6 +8,9 @@ still load-bearing into CLAUDE.md).
 **Branch:** `feat/inventory-extractor` (this file's branch; implementation
 stacks on it). **Classification: ARCHITECTURAL** — see §7.
 **Written:** 2026-08-12, validated against the code at `cf5bcfa`.
+**Revised:** 2026-08-12 (design-review pass — added the pre-committed
+calibration exit bar (§6a), the verdict-stability and draw-stability probes,
+the metadata stamp conventions, and the optional-`clause` decision).
 
 ---
 
@@ -38,10 +41,16 @@ Decided in discussion (2026-08-12):
   no result-model changes, no schema regen, no `fidelity_sweep.py` changes.
 - **First use of the built code is the calibration run** (§6): extract the six
   inventoried contracts, compare against curated on recall / precision /
-  granularity. Until that passes, coverage computed from an extracted
-  checklist is **provisional** — the judge was calibrated against the curated
-  `expects` register, and an extracted register may steer verdicts
-  differently. Surfacing covers denominator *visibility*, not this.
+  granularity / draw-stability, and run the verdict-stability probe.
+  "Passes" means the pre-committed bar in §6a — fixed before any extraction
+  runs, so the verdict cannot bend toward the data. Until it passes, coverage
+  computed from an extracted checklist is **provisional** — the judge was
+  calibrated against the curated `expects` register, and an extracted register
+  may steer verdicts differently (the curated `expects` embed
+  calibration-derived judge tolerances no extractor can recover from the
+  source text alone; the verdict-stability probe is the direct measurement,
+  which item-level alignment cannot see). Surfacing covers denominator
+  *visibility*, not this.
 - **An extracted checklist is always surfaced** — written to a visible file
   and printed, never silently consumed. A wrong denominator is invisible
   inside a coverage number.
@@ -67,28 +76,50 @@ item shape `build_payload` serializes and `test_fidelity.py` fences. A
 inventory is" across two homes. Accommodation required: the module docstring's
 "editing `INSTRUCTIONS` invalidates the judge calibration" warning must be
 **scoped to the judge string**, with one sentence marking
-`EXTRACTION_INSTRUCTIONS` as not-yet-calibrated (see R1).
+`EXTRACTION_INSTRUCTIONS` as not-yet-calibrated.
 
 **D2 — LLM emits JSON; the script stamps metadata and writes YAML.** The model
-returns `{"items": [{"id", "kind", "clause", "expects"}]}` only. The *script*
-stamps top-level `contract` and `source` — it knows the real path, and the
-sweep keys inventories by `Path(inventory["source"]).stem.lower()`, so a
-model-guessed path is a wrong join key. Rejected: YAML directly from the LLM
-(fragile multiline scalars; bypasses the existing tested parse tolerance);
-model-emitted `contract`/`source`.
+returns `{"items": [{"id", "kind", "clause", "expects"}]}` only. The metadata
+is stamped by `assemble_inventory(items, source)` in `output/fidelity.py`
+(pure, no LLM — the stamp conventions are part of "what an inventory is" per
+D1, and putting them in the package makes them testable) — the script knows
+the real path, and the sweep keys inventories by
+`Path(inventory["source"]).stem.lower()`, so a model-guessed path is a wrong
+join key. **The stamp values are load-bearing conventions:** `contract` =
+`stem.lower()` and the output file is `<stem.lower()>.yaml` — curated files
+are lowercase (`energy.yaml`, `contract: energy`) while four of the six
+contract files are capitalized (`Energy.txt`), so an un-lowered stem breaks
+the `--compare` join on four of six contracts. `source` is stamped
+**repo-relative** when the input lies under the CWD (the sweep resolves
+`source` bare from the repo root, and an absolute path makes the file
+non-portable — same reasoning as `PortablePath`); an input outside it gets
+its absolute path plus a header-comment warning that the file cannot feed the
+sweep as-is. Rejected: YAML directly from the LLM (fragile multiline scalars;
+bypasses the existing tested parse tolerance); model-emitted
+`contract`/`source`.
 
-**D3 — Parse/validate split.** `parse_extraction(text)` does structural
-extraction only — reuse `parse_judge_json` internally (it is content-generic:
-fence-strip + outermost-brace + `json.loads`; do **not** rename it, its tests
-are pinned) and check the envelope (an `items` list of dicts carrying the four
-string keys). `inventory_errors(inventory)` is the **single semantic
-validator** — top-level keys present, items non-empty, per-item fields
-non-empty strings, ids unique — used by *both* the curated-fixture fence
-(refactored onto it) and the script before writing. Script flow: parse →
-assemble (stamp `contract`/`source`) → validate → write, or on any failure
-write `<stem>.error.txt` carrying the errors and the raw response — never
-silent. Id uniqueness is load-bearing beyond hygiene: the judge joins verdicts
-to items by `id`, so collisions corrupt verdict matching.
+**D3 — Parse/validate split, one home for item semantics.**
+`parse_extraction(text)` is *structure only* — reuse `parse_judge_json`
+internally (it is content-generic: fence-strip + outermost-brace +
+`json.loads`; do **not** rename it, its tests are pinned) and check just the
+envelope shape: a dict whose `items` is a list of dicts. It knows nothing
+about field names — a field check there would define the item schema twice
+and let the two definitions drift. `inventory_errors(inventory)` is the
+**single semantic validator** and owns *all* field rules — top-level keys
+present; items non-empty; per-item `id`, `kind`, `expects` non-empty strings;
+`clause` optional but a non-empty string when present (unnumbered contracts
+have nothing honest to put there — see §5); ids unique — with each failure
+naming its item, so an error file says which item is wrong instead of only
+dumping the raw response. Used by *both* the curated-fixture fence
+(refactored onto it; the fence keeps two curated-only assertions beside it —
+every curated item carries `clause`, and `source` exists on disk, the latter
+also covered by the Counter fence) and the script before writing. Script
+flow: parse → assemble (D2) → validate → write (deleting any stale
+`<stem>.error.txt` from a prior failed run — a success/failure pair must
+never sit side by side), or on any failure write `<stem>.error.txt` carrying
+the per-item errors and the raw response — never silent. Id uniqueness is
+load-bearing beyond hygiene: the judge joins verdicts to items by `id`, so
+collisions corrupt verdict matching.
 
 **D4 — Kind vocabulary: guide, don't hard-validate.** The instructions list
 the observed vocabulary (`obligation`, `power`, `state`, `access_grant`) but
@@ -146,6 +177,8 @@ reds it (duplicate `source`), so shadowing is double-fenced.
     uncalibrated;
   - `build_extraction_payload(source_text: str) -> str`;
   - `parse_extraction(text: str) -> list[dict[str, Any]] | None` (per D3);
+  - `assemble_inventory(items: list[dict[str, Any]], source: Path) ->
+    dict[str, Any]` — the stamp conventions of D2 (pure, no LLM);
   - `inventory_errors(inventory: dict[str, Any]) -> list[str]` (per D3/D4);
   - docstring: scope the calibration warning to the judge `INSTRUCTIONS`.
 - `scripts/inventory_extract.py` (new): `main()` per D6; helpers approx.
@@ -157,11 +190,13 @@ reds it (duplicate `source`), so shadowing is double-fenced.
   `_source_text` injection).
 - `tests/unit/test_fidelity.py` (edit): fences per §8; refactor
   `test_inventories_are_well_formed` onto `inventory_errors` so curated
-  fixtures and extracted output share one well-formedness definition.
+  fixtures and extracted output share one well-formedness definition —
+  keeping the curated-only assertions (`clause` present on every item,
+  `source` exists — D3).
 - CLAUDE.md (edit, same change): update the *Convergence ≠ fidelity* open-path
   paragraph — extractor built, seat = luna with the shared-blind-spot channel
   and its calibration-recall detector, extracted-checklist coverage
-  provisional pending calibration.
+  provisional pending calibration against the pre-committed §6a bar.
 - Delete this plan file.
 - **No changes:** `scripts/fidelity_sweep.py`, `contracts/inventories/*`,
   pipeline/API/frontend, config/result models, generated schemas (⇒ no
@@ -178,26 +213,84 @@ and enforcement expectations where the text demands them (e.g. "the deadline
 must be enforced by a temporal predicate, not merely named in an identifier")
 — because the judge was calibrated against that register (see §1,
 provisional-coverage constraint). `id`: unique snake_case slug. `clause`: the
-source clause reference where one exists. Output: the JSON envelope of D2
-only, no prose (parse tolerates fences/prose anyway). The file-wide E501
+source clause/section reference where the text numbers one; otherwise a
+paragraph ordinal (`"para 3"`) or a ≤10-word anchoring quote — never invented
+numbering, and omission is legal (the validator treats `clause` as optional,
+D3), so the model is never forced to fabricate metadata to satisfy a schema.
+Output: the JSON envelope of D2 only, no prose (parse tolerates fences/prose
+anyway). The file-wide E501
 ignore already covers long instruction lines. **No phrase pins yet** (§8).
 
 ## 6. Calibration protocol (session work, after the code lands)
 
 1. Run the extractor over the six curated contracts
-   (`python scripts/inventory_extract.py contracts --compare`).
-2. Manually align extracted↔curated per contract from the `--compare` output.
+   (`uv run python scripts/inventory_extract.py contracts --compare`).
+2. **Draw-stability check:** extract each contract a second time (`--out` to
+   a sibling dir, or `--force` after archiving the first draw) and diff the
+   two item lists. One draw is a hypothesis, not a measurement (Prompt-Probe
+   Harness: two draws of one identical config disagreed completely), and the
+   skip-if-exists cache would otherwise hide instability forever. An
+   extractor whose item list is not stable across draws makes every
+   downstream score irreproducible regardless of register quality.
+3. Manually align extracted↔curated per contract from the `--compare` output.
    Record per contract: **recall** (curated items with no extracted
    counterpart — each missed item silently inflates every candidate's
    coverage), **precision** (extracted items with no textual basis — these
    deflate it), **granularity** (split/merge divergences — these shift the
    denominator, so extracted-inventory scores are comparable only against
    scores from the *same* inventory).
-3. Read the bias probe: are missed items disproportionately the clause types
+4. **Verdict-stability probe:** judge a handful of already-archived
+   candidates per contract against the curated *and* the extracted inventory
+   and compare per-item verdicts. Item-level alignment cannot see register
+   divergence, and the curated `expects` embed calibration-derived judge
+   tolerances (energy.yaml's `payment_timing` carries "must not be marked
+   wrong-direction") that no extractor can recover from the source text —
+   this probe is the only direct measurement of the §1 provisional-coverage
+   risk. The curated side is already cached; the extracted side MUST use a
+   separate `--cache` dir — the sweep's cache key
+   (`{parent}_{arm}_{candidate_id}`) carries no inventory identity, so
+   reusing the default dir silently serves curated-judged results.
+5. Read the bias probe: are missed items disproportionately the clause types
    luna-generated contracts also fumble (temporal predicates,
    direction-sensitive payment/consequence clauses)?
-4. Iterate wording if needed (the instructions are unpinned precisely so this
-   loop is cheap), re-extract with `--force`, re-align.
+6. Iterate wording if needed (the instructions are unpinned precisely so this
+   loop is cheap), re-extract with `--force`, re-align, and re-read against
+   the **same** §6a bar. **Few-shot rule, pre-committed:** if an iteration
+   adds a worked example to the instructions, the example must be
+   out-of-corpus, or its contract drops out of the calibration metrics — a
+   curated inventory used as the example is the answer key for that
+   contract's cell (the same leave-one-out discipline as `few_shot`).
+
+## 6a. Exit criterion (pre-committed — fixed before any extraction runs)
+
+"Calibrated" is a manual verdict read against this bar and recorded in
+CLAUDE.md (§9.2). The bar is written now so the decision cannot bend toward
+the data after the fact (the same discipline as the reserved-words
+two-round exit condition). The human alignment reading stays — someone still
+decides what counts as a miss versus a granularity split — but not the
+freedom to decide post hoc that the misses were fine.
+
+- **Recall:** at most 1 missed curated item per contract (the judge's own ±1
+  noise floor is the natural width), and zero misses concentrated in the
+  bias-probe classes — a temporal-predicate or direction-sensitive clause
+  missed on ≥2 contracts fails regardless of totals (that is the
+  shared-blind-spot channel, §1).
+- **Precision:** at most 1 extracted item per contract with no textual basis.
+- **Draw stability:** the two draws' item lists agree up to granularity —
+  split/merge of the same content is tolerated; clauses appearing in one
+  draw and not the other are not.
+- **Verdict stability:** per-item verdict agreement between curated- and
+  extracted-checklist judgments at or above the judge's own calibration rate
+  (39/42 ≈ 93%).
+- **Granularity:** recorded, not gated — divergence doesn't make an inventory
+  wrong, it makes its scores non-comparable with curated-inventory scores (a
+  caveat that travels with the numbers).
+
+Consequences: **pass** → provisional status lifts; numbers + verdict recorded
+per §9.2. **Fail** → one §6.6 wording iteration, re-run, re-read against this
+same bar. **Fail twice** → provisional stays and the standing policy becomes
+"extracted inventories require human review before use" — a recorded
+decision, not indefinite limbo.
 
 ## 7. Classification: ARCHITECTURAL
 
@@ -205,38 +298,52 @@ The script and validator are recipe work, but the risk concentrates exactly
 where a cheap fresh context does damage: `EXTRACTION_INSTRUCTIONS` is
 judge-adjacent prose whose quality decides the calibration outcome and is
 **not fenceable by tests pre-calibration**, and the edit sits beside a
-calibrated artifact whose phrase pins must not be disturbed (R1). Implement
-high-tier; do not tier down.
+calibrated artifact whose phrase pins must not be disturbed (the D1 docstring
+accommodation). Implement high-tier; do not tier down.
 
 ## 8. Tests
 
 Ship with the implementation (all in `tests/unit/test_fidelity.py`):
 
 - `inventory_errors`: happy path against a minimal valid inventory; missing
-  top-level key; missing/empty item field; duplicate id; empty items list.
-- Curated-fixture fence refactored to assert `inventory_errors(inv) == []`.
+  top-level key; missing/empty item field; `clause` absent is legal while
+  `clause` present-but-empty is not; duplicate id; empty items list; error
+  strings name the offending item.
+- Curated-fixture fence refactored to assert `inventory_errors(inv) == []`,
+  plus the curated-only assertions (every item carries `clause`; `source`
+  exists on disk — D3).
 - `parse_extraction`: fenced/prose-wrapped envelope parses; garbage → `None`;
-  valid envelope → items; item missing a key → structural rejection.
+  valid envelope → items; non-list `items` / non-dict item → structural
+  rejection. Field-level cases live with `inventory_errors`, not here (D3:
+  one home for item semantics).
+- `assemble_inventory`: `contract` and filename stem lowercased (pin against
+  a capitalized-stem input like `Energy.txt`); `source` repo-relative for an
+  input under the CWD; absolute + flagged for one outside it (D2).
 - Existing judge pins untouched.
 
 **Deferred to the post-calibration change, deliberately:** phrase pins on
 `EXTRACTION_INSTRUCTIONS` *and* a payload-layout pin for
 `build_extraction_payload` — the judge's layout pin exists because the layout
 was part of what was calibrated; pinning pre-calibration wording would fence
-prose the calibration loop (§6.4) is expected to rewrite.
+prose the calibration loop (§6.6) is expected to rewrite.
 
 ## 9. Post-calibration obligations (recorded here so they survive the session)
 
 1. Add the extraction phrase pins + payload-layout pin in the same change that
    records the calibration outcome (mirroring how the judge's pins landed).
 2. CLAUDE.md: the calibration record — per-contract recall/precision/
-   granularity, the bias-probe reading, and whether provisional status lifts.
+   granularity, draw-stability, the verdict-stability numbers, the bias-probe
+   reading, and the §6a verdict (lift / iterate / human-review policy).
    `output/` is gitignored, so the durable home for the numbers is CLAUDE.md,
-   not the artifacts.
+   not the artifacts — record them the same session they are read.
 3. Only then consider follow-ons: feeding extracted inventories to
-   `fidelity_sweep.py` (needs a correct `source` for stem keying), promotion
-   of reviewed extractions into `contracts/inventories/`, and the product
-   surface (the UI coverage chip), each a separate decision.
+   `fidelity_sweep.py` — which needs a correct `source` for stem keying *and*
+   an inventory-aware cache: the cache key carries no inventory identity
+   (§6.4), so mixing registers in one cache dir silently serves stale
+   judgments; extending the tag with an inventory hash is the durable fix if
+   this follow-on lands. Then promotion of reviewed extractions into
+   `contracts/inventories/`, and the product surface (the UI coverage chip),
+   each a separate decision.
 
 ## 10. Considered and rejected (roll-up)
 
@@ -247,4 +354,11 @@ subcommand interface (D6); any extracted-output location under `contracts/`
 instead); promoting an LLM-call helper into `output/fidelity.py` (breaks its
 purity contract — D7); retry/concurrency in the script (six sequential calls;
 failure philosophy per D6); closed kind vocabulary (D4); phrase-pinning the
-uncalibrated instructions (§8).
+uncalibrated instructions (§8); a required `clause` field (forces fabricated
+metadata on unnumbered contracts — D3/§5); an automated calibration pass/fail
+(the human alignment reading *is* the calibration — §6a pre-commits the bar
+instead, which is the part that keeps the manual verdict honest); a holistic
+single-scalar judge replacing the checklist (uncalibratable — no per-item gold
+to measure a judge against, no fixed denominator, folds coverage and
+inventions into one number; the Cohere disqualification was only visible
+because verdicts are per-item).
