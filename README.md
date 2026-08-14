@@ -147,7 +147,6 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 |---|---|
 | `example.yaml` | Reference template — documents all available fields |
 | `luna.yaml` | OpenAI `gpt-5.6-luna`, zero-shot — **the usual starting point** (best convergence *and* fidelity) |
-| `gpt4o.yaml` | OpenAI `gpt-4o`, zero-shot |
 | `cohere.yaml` | Cohere, zero-shot |
 | `cohere_fewshot.yaml` | Cohere, few-shot with the `vaccine_procurement` example |
 | `suite_example.yaml` | Suite: zero-shot vs CoT, for `symboleo-tool suite` |
