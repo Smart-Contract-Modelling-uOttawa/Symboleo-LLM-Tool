@@ -149,6 +149,34 @@ def test_temperature_sent_when_configured() -> None:
     assert mock_completion.call_args.kwargs["temperature"] == 0.2
 
 
+def test_effort_omitted_when_unset() -> None:
+    # Same only-send-when-set contract as temperature: an effort nobody
+    # configured must not reach the provider (non-reasoning models would have
+    # it silently dropped, reasoning models would get an unchosen depth).
+    with (
+        patch("litellm.completion", return_value=_response()) as mock_completion,
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        _adapter().generate("prompt")
+
+    assert "reasoning_effort" not in mock_completion.call_args.kwargs
+
+
+def test_effort_sent_as_reasoning_effort_when_configured() -> None:
+    # The config field is `effort`; the wire name is LiteLLM's unified
+    # `reasoning_effort`, which its transformations map per provider.
+    adapter = LiteLLMAdapter(
+        LLMConfig(provider="anthropic", model="claude-opus-4-8", effort="xhigh")
+    )
+    with (
+        patch("litellm.completion", return_value=_response()) as mock_completion,
+        patch("litellm.completion_cost", return_value=0.0),
+    ):
+        adapter.generate("prompt")
+
+    assert mock_completion.call_args.kwargs["reasoning_effort"] == "xhigh"
+
+
 def test_request_timeout_is_always_sent() -> None:
     # Two asserts, two different properties: the equality pins that the module
     # constant is what actually reaches the provider, and the range pins that

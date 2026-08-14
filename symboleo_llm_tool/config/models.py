@@ -47,6 +47,11 @@ class LLMConfig(_StrictModel):
     # (imperfect) param-support table to drop it. See CLAUDE.md Known Issues.
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int = Field(default=4096, ge=1)
+    # Reasoning depth (Anthropic output_config.effort / OpenAI reasoning_effort);
+    # only sent when set, like temperature. An open string like provider/model —
+    # the valid ladder is provider- and model-dependent. See CLAUDE.md,
+    # Reasoning-Model Parameter & Cost Compatibility.
+    effort: str | None = None
 
     @property
     def litellm_model(self) -> str:
