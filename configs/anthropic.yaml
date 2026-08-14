@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=schemas/config.schema.json
+# The standard Anthropic run config: claude-sonnet-4-6 (the balanced tier) on
+# both stages, mirroring luna.yaml's shape. No convergence or fidelity numbers
+# are on record for this arm yet -- treat early runs as baseline-building.
+#
+# temperature 0.2 is deliberate and verified accepted (live check, 2026-08-14):
+# LiteLLM flags Anthropic's hybrid-thinking models as reasoning models, so the
+# compatibility advisory fires on this file -- a known false positive. The API
+# accepts temperature when thinking is off, and the pipeline never enables
+# thinking. See CLAUDE.md, Reasoning-Model Parameter & Cost Compatibility.
+pipeline:
+  num_candidates: 3
+  max_iterations: 5
+  stop_on_first_convergence: false
+
+generation:
+  llm:
+    provider: anthropic
+    model: claude-sonnet-4-6
+    temperature: 0.2
+    max_tokens: 4096
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+correction:
+  llm:
+    provider: anthropic
+    model: claude-sonnet-4-6
+    temperature: 0.2
+    max_tokens: 4096
+  strategy: zero_shot
+  strategy_params: {}
+  include_grammar: true
+
+symboleo:
+  jar_path: ./lib/symboleo-cli.jar
+  java_executable: java
+
+output:
+  directory: ./output
+  save_intermediates: true
+
+observability:
+  langsmith:
+    enabled: false
+    project: symboleo-research

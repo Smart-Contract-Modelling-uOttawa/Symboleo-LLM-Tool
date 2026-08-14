@@ -1,15 +1,17 @@
 # yaml-language-server: $schema=schemas/suite.schema.json
 # Prompt-regression probe — does a prompt change actually change what models do?
 #
-# One contract, both provider families, three independent candidates each:
+# One contract, three provider families, three independent candidates each:
 #   symboleo-tool suite contracts/equipment_loan.txt --config configs/prompt_probe.yaml
 #
 # For the whole matrix in one command (several contracts, then the error-count census):
 #   uv run python scripts/prompt_probe.py contracts/equipment_loan.txt contracts/Vaccine.txt
 #
-# Two arms because the same trap rarely survives in both — a rule that lands on
-# one model and not the other is the common outcome, and a single-arm probe
-# reports it as a clean pass or a clean failure.
+# Multiple provider arms because the same trap rarely survives across families —
+# a rule that lands on one model and not another is the common outcome, and a
+# single-arm probe reports it as a clean pass or a clean failure. The anthropic
+# arm joined 2026-08-14; census tables list arms per run directory, so earlier
+# two-arm probe runs read back unchanged.
 #
 # The arms are BUDGET models on purpose, and must stay below the ceiling even
 # though gpt-5.6-luna is the de-facto run config (configs/luna.yaml): luna
@@ -24,10 +26,11 @@
 # cannot separate the two.
 #
 # Cost: candidates x arms x (1 + max_iterations) calls per contract, worst case
-# 36. Lower `num_candidates` before adding contracts if that matters.
+# 54. Lower `num_candidates` before adding contracts if that matters.
 
-# 2 arms x 3 candidates, so every cell of one contract runs at once.
-max_concurrency: 6
+# 3 arms x 3 candidates is 9 cells; the suite pool clamps at 8 (see CLAUDE.md,
+# Experiment Suites), so one cell queues briefly — harmless.
+max_concurrency: 8
 
 experiments:
   - name: gpt
@@ -70,6 +73,28 @@ experiments:
         strategy: zero_shot
       correction:
         llm: *cohere
+        strategy: zero_shot
+      output:
+        save_intermediates: true
+
+  - name: anthropic
+    config:
+      pipeline:
+        num_candidates: 3
+        max_iterations: 5
+        stop_on_first_convergence: false
+      generation:
+        # Haiku, not Sonnet: the budget-models-only rule above applies to this
+        # arm too. Temperature 0.2 draws the compatibility advisory (LiteLLM
+        # flags Anthropic hybrid-thinking models as reasoning models) but is
+        # verified accepted — see configs/anthropic.yaml's header.
+        llm: &anthropic
+          provider: anthropic
+          model: claude-haiku-4-5-20251001
+          temperature: 0.2
+        strategy: zero_shot
+      correction:
+        llm: *anthropic
         strategy: zero_shot
       output:
         save_intermediates: true

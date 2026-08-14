@@ -149,6 +149,7 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 | `luna.yaml` | OpenAI `gpt-5.6-luna`, zero-shot — **the usual starting point** (best convergence *and* fidelity) |
 | `cohere.yaml` | Cohere, zero-shot |
 | `cohere_fewshot.yaml` | Cohere, few-shot with the `vaccine_procurement` example |
+| `anthropic.yaml` | Anthropic `claude-sonnet-4-6`, zero-shot |
 | `suite_example.yaml` | Suite: zero-shot vs CoT, for `symboleo-tool suite` |
 | `prompt_probe.yaml` | Suite: the prompt-regression probe's arms (budget models on purpose — see its comments) |
 | `mock.yaml` | No API key — a canned response, for checking plumbing only |
