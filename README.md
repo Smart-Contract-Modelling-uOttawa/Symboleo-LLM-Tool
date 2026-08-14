@@ -147,7 +147,6 @@ Config files live in `configs/`. Copy `configs/example.yaml` as a starting point
 |---|---|
 | `example.yaml` | Reference template — documents all available fields |
 | `luna.yaml` | OpenAI `gpt-5.6-luna`, zero-shot — **the usual starting point** (best convergence *and* fidelity) |
-| `gpt4o.yaml` | OpenAI `gpt-4o`, zero-shot |
 | `cohere.yaml` | Cohere, zero-shot |
 | `cohere_fewshot.yaml` | Cohere, few-shot with the `vaccine_procurement` example |
 | `suite_example.yaml` | Suite: zero-shot vs CoT, for `symboleo-tool suite` |
@@ -253,6 +252,20 @@ the container.
 The UI's **Experiment Suite** page (`/experiments`) runs one contract against several named configurations at once and shows a side-by-side comparison — convergence, iterations-to-convergence, and token/cost totals per experiment, plus a suite-wide total — with a downloadable summary CSV. Use it to compare strategies, models, or temperatures on the same contract. To build a comparison quickly, the **Generate variants** control expands one axis (strategy or model) into auto-named experiment cards, holding everything else constant. It maps to `POST /api/suites`, streaming progress over a single multiplexed SSE connection; the **Concurrency** control caps how many experiments and candidates run at once.
 
 **Download suite config** saves the experiments you have configured as a `suite.yaml` — the same format `symboleo-tool suite` reads — so a comparison assembled in the browser can be re-run headlessly, checked into version control, or edited by hand. It needs no contract, since the contract is a CLI argument.
+
+## Supporting scripts
+
+Everything in `scripts/` at a glance. Each is documented in the section where
+you would actually reach for it — this table is just the index.
+
+| Script | What it does | LLM calls? |
+|---|---|---|
+| `richness_sweep.py` | How *much* contract each archived candidate produced ([Usage](#usage)) | Free |
+| `fidelity_sweep.py` | How *faithfully* candidates model their source text — the calibrated LLM judge ([Usage](#usage)) | Paid; judgments cache |
+| `prompt_probe.py` | Whether a prompt change measurably reached the models ([Usage](#usage)) | Paid; `--census` re-reads for free |
+| `generate_config_schemas.py` | Regenerates the committed editor schemas after a config-model change ([Development](#development)) | Free |
+| `smoke_rejection.py` | End-to-end wiring check — real CLI, JAR, and writer; faked LLM ([Verify your setup](#verify-your-setup)) | Free |
+| `smoke_provider_failure.py` | Its sibling for the failed-LLM-call path; run both before a release ([Development](#development)) | Free |
 
 ## Development
 
