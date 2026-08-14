@@ -49,6 +49,18 @@
           "minimum": 1,
           "title": "Max Tokens",
           "type": "integer"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effort"
         }
       },
       "required": [

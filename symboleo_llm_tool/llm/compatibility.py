@@ -119,9 +119,39 @@ def reasoning_models(models_by_provider: dict[str, list[str]]) -> list[str]:
     return flagged
 
 
+def effort_warnings(config: LLMConfig) -> list[str]:
+    """Warn when ``effort`` is set on a model that is not a reasoning model.
+
+    There, ``drop_params=True`` strips ``reasoning_effort`` silently and the run
+    measures nothing effort-related. Deliberate inversion of this module's
+    fail-quiet contract: a model *unknown* to LiteLLM reads as non-reasoning and
+    DOES draw this warning — a spurious advisory on a niche model costs less
+    than a silently-corrupted effort comparison, which is the field's primary
+    (research) use. Not a bug to "fix" back to quiet-on-unknown.
+    """
+    if config.effort is None:
+        return []
+    try:
+        is_reasoning = litellm.supports_reasoning(model=config.litellm_model)
+    except Exception:
+        return []
+    if is_reasoning:
+        return []
+    return [
+        f"effort='{config.effort}' is set, but LiteLLM does not list '{config.model}' as a "
+        "reasoning model — the param will be dropped and the run will silently measure "
+        "nothing effort-related. Remove effort from this stage's config, or if the model "
+        "genuinely supports it, update the pinned litellm."
+    ]
+
+
 def llm_param_warnings(config: LLMConfig) -> list[str]:
     """All per-``LLMConfig`` advisories — the seam future checks join."""
-    return [*reasoning_param_warnings(config), *temperature_range_warnings(config)]
+    return [
+        *reasoning_param_warnings(config),
+        *temperature_range_warnings(config),
+        *effort_warnings(config),
+    ]
 
 
 def pipeline_param_warnings(config: PipelineConfig) -> list[str]:

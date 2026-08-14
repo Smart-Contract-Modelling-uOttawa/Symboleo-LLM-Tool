@@ -12,6 +12,7 @@ from symboleo_llm_tool.config.models import (
 )
 from symboleo_llm_tool.llm.compatibility import (
     _TEMPERATURE_RANGES,
+    effort_warnings,
     llm_param_warnings,
     pipeline_param_warnings,
     reasoning_models,
@@ -168,6 +169,58 @@ def test_reasoning_and_range_warnings_compose() -> None:
 def test_unset_temperature_clears_both_composed_warnings() -> None:
     with patch(_TARGET, return_value=True):
         assert llm_param_warnings(_anthropic_cfg(temperature=None)) == []
+
+
+def _effort_cfg(effort: str | None) -> LLMConfig:
+    return LLMConfig(provider="openai", model="gpt-4o-mini", effort=effort)
+
+
+def test_effort_warning_on_non_reasoning_model() -> None:
+    # drop_params strips an unsupported reasoning_effort silently, so the run
+    # would measure nothing effort-related — the advisory's whole point.
+    with patch(_TARGET, return_value=False):
+        warnings = effort_warnings(_effort_cfg("high"))
+    assert len(warnings) == 1
+    assert "effort='high'" in warnings[0]
+    assert "gpt-4o-mini" in warnings[0]
+
+
+def test_no_effort_warning_on_reasoning_model() -> None:
+    with patch(_TARGET, return_value=True):
+        assert effort_warnings(_effort_cfg("xhigh")) == []
+
+
+def test_no_effort_warning_when_unset() -> None:
+    with patch(_TARGET, return_value=False):
+        assert effort_warnings(_effort_cfg(None)) == []
+
+
+def test_no_effort_warning_when_litellm_raises() -> None:
+    with patch(_TARGET, side_effect=Exception("boom")):
+        assert effort_warnings(_effort_cfg("high")) == []
+
+
+def test_effort_warns_on_unknown_model_against_real_litellm() -> None:
+    # The documented asymmetry with the temperature checks' fail-quiet contract:
+    # an unknown model reads as non-reasoning and DOES draw the effort warning,
+    # because staying quiet would let a silently-dropped effort corrupt the
+    # comparison the field exists for. Unpatched for the same reason as the
+    # temperature unknown-model test: the claim is about real LiteLLM behaviour.
+    warnings = effort_warnings(
+        LLMConfig(provider="openai", model="totally-made-up-model-xyz", effort="high")
+    )
+    assert len(warnings) == 1
+
+
+def test_effort_warning_joins_the_composed_warnings() -> None:
+    # temperature + effort on a non-reasoning model: the range check passes
+    # (1.5 is in openai's range), reasoning check passes (not reasoning), and
+    # the effort advisory still lands via llm_param_warnings.
+    cfg = LLMConfig(provider="openai", model="gpt-4o-mini", temperature=1.5, effort="low")
+    with patch(_TARGET, return_value=False):
+        warnings = llm_param_warnings(cfg)
+    assert len(warnings) == 1
+    assert "effort" in warnings[0]
 
 
 def test_range_table_stays_within_the_hard_envelope() -> None:

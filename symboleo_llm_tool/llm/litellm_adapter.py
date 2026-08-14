@@ -44,6 +44,10 @@ class LiteLLMAdapter(LLMAdapter):
         # reject it, and omitting it is the version-independent fix.
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
+        # Same omission contract for effort; `reasoning_effort` is LiteLLM's
+        # unified name, mapped per provider by its transformations.
+        if self._config.effort is not None:
+            kwargs["reasoning_effort"] = self._config.effort
         # The call AND the response destructuring are wrapped: a provider that
         # returns an empty `choices` raises IndexError here, which is
         # provider-shaped data rather than our bug, and unwrapped it would

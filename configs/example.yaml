@@ -23,6 +23,15 @@ generation:                         # the stage that writes the first draft
                                     # measures sampling noise); OMIT the key entirely
                                     # for reasoning models — they reject it
     max_tokens: 4096
+    # effort: high                  # reasoning models only: depth ladder (Anthropic:
+                                    # low|medium|high|xhigh|max; OpenAI adds minimal;
+                                    # valid levels vary per model). Omitted = provider
+                                    # default. On Anthropic, effort implies thinking,
+                                    # which BILLS AS OUTPUT and counts toward
+                                    # max_tokens — raise max_tokens (16000+) or the
+                                    # thinking can swallow the budget and truncate the
+                                    # contract. Set on a non-reasoning model it is
+                                    # silently dropped (an advisory warns).
   strategy: zero_shot               # zero_shot | few_shot | cot
   strategy_params: {}               # few_shot takes {example_files: [meat_sale, ...]} —
                                     # example NAMES from examples/, never paths. Exclude
