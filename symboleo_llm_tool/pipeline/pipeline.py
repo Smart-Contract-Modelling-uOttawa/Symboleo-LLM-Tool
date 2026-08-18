@@ -191,7 +191,13 @@ def _run_candidate(
             # `final_code` would describe code no iteration accounts for. An
             # empty `errors` is the honest reading — the code was never validated.
             error_history.append(
-                IterationRecord(iteration=0, code=code, errors=errors, usage=gen_result.usage)
+                IterationRecord(
+                    iteration=0,
+                    code=code,
+                    errors=errors,
+                    usage=gen_result.usage,
+                    prompt=gen_prompt,
+                )
             )
         if ctx.on_progress:
             ctx.on_progress(candidate_id, 0, errors, ctx.num_candidates, ctx.max_iterations)
@@ -236,6 +242,7 @@ def _run_candidate(
                         errors=errors,
                         usage=corr_result.usage,
                         rejected_response=rejected,
+                        prompt=corr_prompt,
                     )
                 )
             if ctx.on_progress:

@@ -166,6 +166,47 @@ def test_usage_recorded_on_each_iteration(mock_deps):
     assert [record.usage.cost_usd for record in history] == [0.005, 0.005]
 
 
+def test_each_iteration_records_the_prompt_it_was_sent(mock_deps):
+    mock_wrapper, mock_llm, mock_strategy = mock_deps
+    mock_llm.generate.return_value = make_generation(_CODE)
+    mock_wrapper.validate.return_value = [make_issue()]
+    # Distinct per call: constant prompts could not tell "recorded its own"
+    # from "copied the previous record's".
+    mock_strategy.build_correction_prompt.side_effect = ["corr prompt 1", "corr prompt 2"]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=2))
+
+    history = result.candidates[0].error_history
+    assert [record.prompt for record in history] == [
+        "gen prompt",
+        "corr prompt 1",
+        "corr prompt 2",
+    ]
+    # The record must carry what the adapter was actually sent, not merely what
+    # the strategy produced.
+    assert [c.args[0] for c in mock_llm.generate.call_args_list] == [
+        "gen prompt",
+        "corr prompt 1",
+        "corr prompt 2",
+    ]
+
+
+def test_prompt_is_excluded_from_serialization(mock_deps):
+    # report.json travels whole inside the terminal SSE event, and grammar-bearing
+    # prompts dwarf the code the record already carries; the run directory's
+    # prompt files (writer) are the prompts' only serialized home. Key-level
+    # check — `usage.prompt_tokens` is a different key and must survive.
+    mock_wrapper, mock_llm, _ = mock_deps
+    mock_llm.generate.return_value = make_generation(_CODE)
+    mock_wrapper.validate.return_value = []
+
+    result = pipeline.run("contract text", _make_config())
+
+    dumped = result.model_dump(mode="json")
+    assert "prompt" not in dumped["candidates"][0]["error_history"][0]
+    assert "gen prompt" not in result.model_dump_json()
+
+
 def test_grammar_load_failure_propagates(mock_deps):
     with patch(
         "symboleo_llm_tool.pipeline.pipeline.load_grammar",
@@ -517,6 +558,31 @@ def test_rejected_iteration_is_recorded_with_its_response_and_usage(mock_deps):
     assert history[1].errors == history[0].errors
     assert history[1].usage is not None
     assert history[0].rejected_response is None
+
+
+def test_rejected_iteration_records_the_refused_calls_prompt(mock_deps):
+    # A refused record's prompt is the refused call's own, mirroring `usage` —
+    # distinct side_effect values so a copy from the neighbouring record would
+    # be caught (the real templates make retries byte-identical; the mock must
+    # not rely on that).
+    mock_wrapper, mock_llm, mock_strategy = mock_deps
+    mock_llm.generate.side_effect = [
+        make_generation(_CODE),
+        make_generation("I cannot fix this."),
+        make_generation("still no contract"),
+    ]
+    mock_wrapper.validate.side_effect = [[make_issue()]]
+    mock_strategy.build_correction_prompt.side_effect = ["corr prompt 1", "corr prompt 2"]
+
+    result = pipeline.run("contract text", _make_config(max_iterations=2))
+
+    history = result.candidates[0].error_history
+    assert history[1].rejected_response == "I cannot fix this."
+    assert [record.prompt for record in history] == [
+        "gen prompt",
+        "corr prompt 1",
+        "corr prompt 2",
+    ]
 
 
 def test_rejected_iteration_counts_toward_iterations_used_and_tokens(mock_deps):

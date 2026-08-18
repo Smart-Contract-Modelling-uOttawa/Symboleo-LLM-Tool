@@ -35,6 +35,24 @@ def _write_run(result: PipelineResult, config: PipelineConfig, dest_dir: Path) -
                 candidate.final_code, encoding="utf-8"
             )
 
+        # Always on, unlike intermediates: the rendered prompt is not otherwise
+        # recoverable from the artifact (templates evolve; config records the
+        # strategy name, not the text). Deliberately absent from report.json —
+        # `IterationRecord.prompt` is serialization-excluded — so these files
+        # are the prompts' only home. The `is not None` guard also skips
+        # records reloaded from pre-prompt-era reports.
+        prompts = [r for r in candidate.error_history if r.prompt is not None]
+        if prompts:
+            prompts_dir = dest_dir / f"prompts{suffix}"
+            prompts_dir.mkdir(exist_ok=True)
+            for record in prompts:
+                # `.txt`, not `.symboleo`: a prompt embeds contract-shaped text
+                # (current code, examples) and must not be picked up by a
+                # downstream *.symboleo glob — same reasoning as `_rejected.txt`.
+                (prompts_dir / f"iteration_{record.iteration}_prompt.txt").write_text(
+                    record.prompt or "", encoding="utf-8"
+                )
+
         if config.output.save_intermediates and candidate.error_history:
             inter_dir = dest_dir / f"intermediates{suffix}"
             inter_dir.mkdir(exist_ok=True)

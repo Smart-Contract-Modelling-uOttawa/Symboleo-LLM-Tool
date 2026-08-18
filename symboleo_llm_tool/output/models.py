@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 
 from symboleo_llm_tool.output import metrics
 from symboleo_llm_tool.symboleo.models import SymboleoIssue
@@ -30,7 +30,8 @@ class IterationRecord(BaseModel):
     ``rejected_response`` holds the raw text of a correction that carried no
     contract and was therefore not adopted. On such a record ``code`` and
     ``errors`` repeat the previous record's, while ``usage`` is the refused
-    call's own.
+    call's own — and ``prompt`` is the refused call's own too, so the next
+    record's prompt (the retry) is byte-identical to it by design.
     """
 
     iteration: int
@@ -38,6 +39,13 @@ class IterationRecord(BaseModel):
     errors: list[SymboleoIssue]
     usage: TokenUsage | None = None
     rejected_response: str | None = None
+    # The exact prompt this iteration's LLM call was sent. Excluded from every
+    # dump: grammar-bearing prompts are an order of magnitude larger than the
+    # per-iteration code, and the serialized result travels whole in report.json
+    # and the terminal SSE event. The writer persists prompts as per-iteration
+    # files in the run directory instead; exclusion also keeps the field out of
+    # the OpenAPI serialization schema, so `schema.d.ts` is unaffected.
+    prompt: str | None = Field(default=None, exclude=True)
 
 
 class CandidateResult(BaseModel):

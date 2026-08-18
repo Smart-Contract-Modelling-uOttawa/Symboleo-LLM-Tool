@@ -198,8 +198,9 @@ generation:
 ## Output
 
 Each run — CLI or web UI — writes a timestamped `output/run_*/` directory
-holding the final contract, a full `report.json`, the input contract, and a copy
-of the config used. Layout and how to read the report:
+holding the final contract, a full `report.json`, the input contract, a copy
+of the config used, and the exact prompt sent for every iteration (under
+`prompts/`). Layout and how to read the report:
 [docs/architecture.md](docs/architecture.md).
 
 ## Web UI

@@ -256,7 +256,8 @@ export interface components {
          *     ``rejected_response`` holds the raw text of a correction that carried no
          *     contract and was therefore not adopted. On such a record ``code`` and
          *     ``errors`` repeat the previous record's, while ``usage`` is the refused
-         *     call's own.
+         *     call's own — and ``prompt`` is the refused call's own too, so the next
+         *     record's prompt (the retry) is byte-identical to it by design.
          */
         IterationRecord: {
             /** Iteration */
