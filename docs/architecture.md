@@ -294,13 +294,24 @@ output/run_20260804_131453/
 ├── report.json               # everything below
 ├── config.yaml               # the config as loaded — rerunning replays the same
 │                             #   configuration (generation itself is stochastic)
+├── prompts/                  # always written — iteration_0_prompt.txt (generation),
+│                             #   iteration_1_prompt.txt, ... (corrections): the exact
+│                             #   text each iteration's LLM call was sent
 └── intermediates/            # only with save_intermediates: true —
                               #   iteration_0.symboleo, iteration_1.symboleo, ...
                               #   plus iteration_N_rejected.txt for any refused correction
 ```
 
+The prompt files are the rendered prompts' only home — they are deliberately
+not in `report.json` (grammar-bearing prompts dwarf everything else in it) —
+and the templates evolve, so they are what makes an old run's exact prompt
+text recoverable. Two reading notes: a refused correction's retry re-sends a
+byte-identical prompt, so consecutive duplicate files are honest, not a bug;
+and a call that *failed* (the candidate's `failure` field) has no prompt file,
+since only completed iterations are recorded.
+
 Multi-candidate runs suffix per candidate (`contract_candidate_0_final.symboleo`,
-`intermediates_candidate_0/`). Two runs finishing within the same second get
+`prompts_candidate_0/`, `intermediates_candidate_0/`). Two runs finishing within the same second get
 distinct directories — the later one is suffixed (`run_..._2`), never merged
 into the first.
 

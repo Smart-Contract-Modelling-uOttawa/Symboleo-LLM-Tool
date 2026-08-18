@@ -181,6 +181,86 @@ def test_write_results_saves_a_rejected_response_beside_the_duplicate_iteration(
     assert not (inter_dir / "iteration_0_rejected.txt").exists()
 
 
+def _prompt_result(*, num_candidates: int = 1, with_prompts: bool = True) -> PipelineResult:
+    def history(candidate: int) -> list[IterationRecord]:
+        return [
+            IterationRecord(
+                iteration=0,
+                code="bad code",
+                errors=[make_issue()],
+                prompt=f"GEN PROMPT c{candidate}" if with_prompts else None,
+            ),
+            IterationRecord(
+                iteration=1,
+                code="Contract Fixed() {}",
+                errors=[],
+                prompt=f"CORR PROMPT c{candidate}" if with_prompts else None,
+            ),
+        ]
+
+    return PipelineResult(
+        success=True,
+        timestamp=datetime(2026, 1, 1, 12, 0, 0),
+        input_file="test.txt",
+        candidates=[
+            CandidateResult(
+                candidate_id=i,
+                final_code="Contract Fixed() {}",
+                converged=True,
+                iterations_used=1,
+                error_history=history(i),
+            )
+            for i in range(num_candidates)
+        ],
+    )
+
+
+def test_write_results_saves_prompts_even_without_intermediates(tmp_path: Path) -> None:
+    # Prompts are always on — not gated behind save_intermediates — because the
+    # rendered prompt is not otherwise recoverable from the artifact.
+    run_dir = write_results(_prompt_result(), _config(tmp_path, save_intermediates=False))
+
+    prompts_dir = run_dir / "prompts"
+    assert (prompts_dir / "iteration_0_prompt.txt").read_text(encoding="utf-8") == "GEN PROMPT c0"
+    assert (prompts_dir / "iteration_1_prompt.txt").read_text(encoding="utf-8") == "CORR PROMPT c0"
+    assert not (run_dir / "intermediates").exists()
+
+
+def test_write_results_multi_candidate_prompts_use_suffix(tmp_path: Path) -> None:
+    run_dir = write_results(_prompt_result(num_candidates=2), _config(tmp_path))
+
+    assert (run_dir / "prompts_candidate_0" / "iteration_0_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == "GEN PROMPT c0"
+    assert (run_dir / "prompts_candidate_1" / "iteration_1_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == "CORR PROMPT c1"
+    assert not (run_dir / "prompts").exists()
+
+
+def test_write_results_writes_no_prompts_dir_for_pre_prompt_era_records(tmp_path: Path) -> None:
+    # A result reloaded from an archived report carries no prompts; an empty
+    # prompts/ directory would misread as "this run sent empty prompts".
+    run_dir = write_results(_prompt_result(with_prompts=False), _config(tmp_path))
+
+    assert not (run_dir / "prompts").exists()
+
+
+def test_prompt_never_reaches_report_json(tmp_path: Path) -> None:
+    # `IterationRecord.prompt` is serialization-excluded: report.json travels
+    # whole in the terminal SSE event, and grammar-bearing prompts are an order
+    # of magnitude larger than the code the report already carries. The files
+    # written beside it are the prompts' only home.
+    run_dir = write_results(_prompt_result(), _config(tmp_path))
+
+    raw = (run_dir / "report.json").read_text(encoding="utf-8")
+    assert "GEN PROMPT c0" not in raw
+    report = json.loads(raw)
+    # Key-level too — "prompt" must not appear even as null (usage's
+    # prompt_tokens is a different key and untouched).
+    assert "prompt" not in report["candidates"][0]["error_history"][0]
+
+
 def _suite(tmp_path: Path) -> SuiteConfig:
     return SuiteConfig(
         contract_text="Seller shall deliver the goods.",
